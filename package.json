@@ -1,0 +1,16 @@
+{
+  "name": "localfinance",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Multi-tenant loans and collections platform: API, web admin and Android collection app",
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "build": "pnpm -r --filter ./packages/** --filter ./apps/api --filter ./apps/web build",
+    "build:shared": "pnpm --filter @localfinance/shared build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "dev:api": "pnpm --filter @localfinance/api dev",
+    "dev:web": "pnpm --filter @localfinance/web dev",
+    "dev:mobile": "pnpm --filter @localfinance/mobile start"
+  }
+}

@@ -1,0 +1,592 @@
+// LocalFinance data model. Every tenant-owned table carries tenantId and every query is scoped by it.
+// Money is stored as integer paise. Business dates (due dates, collection dates, day book dates) are
+// 'YYYY-MM-DD' strings in India time; timestamps are DateTime.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id                 String    @id @default(cuid())
+  name               String
+  businessId         String?
+  plan               String    @default("STANDARD")
+  status             String    @default("ACTIVE") // ACTIVE | SUSPENDED | CLOSED
+  maxBranches        Int       @default(10)
+  maxStaff           Int       @default(100)
+  maxActiveLoans     Int       @default(50000)
+  logoUrl            String?
+  settings           Json      @default("{}")
+  supportAccessUntil DateTime?
+  loanSeq            Int       @default(0)
+  receiptSeq         Int       @default(0)
+  voucherSeq         Int       @default(0)
+  customerSeq        Int       @default(0)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  users    User[]
+  branches Branch[]
+  roles    Role[]
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  name        String
+  baseRole    String // one of ROLES
+  permissions String[]
+  system      Boolean  @default(false)
+  users       User[]
+
+  @@unique([tenantId, name])
+}
+
+model User {
+  id            String       @id @default(cuid())
+  tenantId      String?
+  tenant        Tenant?      @relation(fields: [tenantId], references: [id])
+  name          String
+  phone         String
+  email         String?
+  passwordHash  String
+  roleId        String
+  role          Role         @relation(fields: [roleId], references: [id])
+  approvalLimit Int          @default(0)
+  language      String       @default("en")
+  photoUrl      String?
+  idProof       String?
+  active        Boolean      @default(true)
+  deviceId      String?
+  failedLogins  Int          @default(0)
+  lockedUntil   DateTime?
+  tokenVersion  Int          @default(0)
+  lastLat       Float?
+  lastLng       Float?
+  lastSeenAt    DateTime?
+  createdAt     DateTime     @default(now())
+  branches      UserBranch[]
+
+  @@unique([tenantId, phone])
+  @@index([phone])
+  @@index([email])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model UserBranch {
+  userId   String
+  branchId String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch   Branch @relation(fields: [branchId], references: [id])
+
+  @@id([userId, branchId])
+}
+
+model Branch {
+  id        String       @id @default(cuid())
+  tenantId  String
+  tenant    Tenant       @relation(fields: [tenantId], references: [id])
+  name      String
+  code      String
+  address   String?
+  lat       Float?
+  lng       Float?
+  managerId String?
+  active    Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  users     UserBranch[]
+  locations Location[]
+
+  @@unique([tenantId, code])
+}
+
+model Location {
+  id        String   @id @default(cuid())
+  tenantId  String
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  name      String
+  lat       Float?
+  lng       Float?
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  routes    Route[]
+
+  @@index([tenantId, branchId])
+}
+
+model Route {
+  id             String            @id @default(cuid())
+  tenantId       String
+  branchId       String
+  locationId     String
+  location       Location          @relation(fields: [locationId], references: [id])
+  name           String
+  collectionDays Int[]
+  active         Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  assignments    RouteAssignment[]
+
+  @@index([tenantId, branchId])
+}
+
+model RouteAssignment {
+  id       String  @id @default(cuid())
+  tenantId String
+  routeId  String
+  route    Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  userId   String
+  fromDate String
+  toDate   String?
+
+  @@index([tenantId, userId])
+}
+
+model Customer {
+  id                String   @id @default(cuid())
+  tenantId          String
+  branchId          String
+  locationId        String
+  routeId           String?
+  routeSeq          Int?
+  code              String
+  name              String
+  phone             String
+  altPhone          String?
+  address           String
+  landmark          String?
+  lat               Float?
+  lng               Float?
+  photoUrl          String?
+  idType            String?
+  idNumber          String?
+  occupation        String?
+  monthlyIncome     Int?
+  language          String   @default("en")
+  status            String   @default("ACTIVE") // ACTIVE | BLACKLISTED | CLOSED
+  statusReason      String?
+  guarantorName     String?
+  guarantorPhone    String?
+  guarantorRelation String?
+  clientRef         String?
+  createdById       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  loans             Loan[]
+
+  @@unique([tenantId, code])
+  @@unique([tenantId, clientRef])
+  @@index([tenantId, phone])
+  @@index([tenantId, idNumber])
+  @@index([tenantId, routeId])
+}
+
+model Document {
+  id         String   @id @default(cuid())
+  tenantId   String
+  customerId String?
+  loanId     String?
+  investorId String?
+  kind       String
+  fileName   String
+  mimeType   String
+  path       String
+  size       Int
+  createdBy  String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+model LoanProduct {
+  id             String  @id @default(cuid())
+  tenantId       String
+  name           String
+  frequency      String
+  minAmount      Int
+  maxAmount      Int
+  tenure         Int
+  interestMethod String
+  interestRate   Float
+  feePercent     Float   @default(0)
+  feeFlat        Int     @default(0)
+  penaltyType    String  @default("NONE")
+  penaltyValue   Float   @default(0)
+  graceDays      Int     @default(0)
+  active         Boolean @default(true)
+
+  @@unique([tenantId, name])
+}
+
+model Loan {
+  id               String         @id @default(cuid())
+  tenantId         String
+  branchId         String
+  customerId       String
+  customer         Customer       @relation(fields: [customerId], references: [id])
+  productId        String
+  number           String
+  principal        Int
+  frequency        String
+  tenure           Int
+  interestMethod   String
+  interestRate     Float
+  feePercent       Float
+  feeFlat          Int
+  penaltyType      String
+  penaltyValue     Float
+  graceDays        Int
+  purpose          String?
+  notes            String?
+  status           String         @default("REQUESTED")
+  stage            String         @default("BRANCH") // BRANCH | ADMIN while REQUESTED
+  requestedById    String
+  approvedById     String?
+  approvedAt       DateTime?
+  disbursedOn      String?
+  firstDueDate     String?
+  fundId           String?
+  disburseMode     String?
+  fee              Int            @default(0)
+  upfrontInterest  Int            @default(0)
+  netDisbursed     Int            @default(0)
+  totalInterest    Int            @default(0)
+  penaltyPaid      Int            @default(0)
+  penaltyWaived    Int            @default(0)
+  interestWaived   Int            @default(0)
+  writtenOffAmount Int            @default(0)
+  closedOn         String?
+  clientRef        String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  instalments      Instalment[]
+  approvals        LoanApproval[]
+
+  @@unique([tenantId, number])
+  @@unique([tenantId, clientRef])
+  @@index([tenantId, status])
+  @@index([tenantId, branchId])
+  @@index([customerId])
+}
+
+model LoanApproval {
+  id        String   @id @default(cuid())
+  loanId    String
+  loan      Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  step      String // BRANCH | ADMIN
+  userId    String
+  decision  String // APPROVE | RECOMMEND | REJECT | SEND_BACK | RESUBMIT
+  reason    String?
+  createdAt DateTime @default(now())
+}
+
+model Instalment {
+  id            String  @id @default(cuid())
+  tenantId      String
+  loanId        String
+  loan          Loan    @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  seq           Int
+  dueDate       String
+  principalDue  Int
+  interestDue   Int
+  principalPaid Int     @default(0)
+  interestPaid  Int     @default(0)
+  paidOn        String?
+
+  @@unique([loanId, seq])
+  @@index([tenantId, dueDate])
+}
+
+model Collection {
+  id            String                 @id @default(cuid())
+  tenantId      String
+  branchId      String
+  loanId        String
+  customerId    String
+  agentId       String
+  routeId       String?
+  amount        Int
+  principal     Int
+  interest      Int
+  penalty       Int
+  mode          String
+  upiRef        String?
+  date          String
+  collectedAt   DateTime
+  lat           Float?
+  lng           Float?
+  distanceM     Int?
+  flagged       Boolean                @default(false)
+  receiptNo     String
+  note          String?
+  kind          String                 @default("INSTALMENT") // INSTALMENT | FORECLOSURE
+  clientRef     String
+  reversedAt    DateTime?
+  reversedById  String?
+  reverseReason String?
+  createdAt     DateTime               @default(now())
+  allocations   CollectionAllocation[]
+
+  @@unique([tenantId, clientRef])
+  @@index([tenantId, date])
+  @@index([loanId])
+  @@index([agentId, date])
+}
+
+model CollectionAllocation {
+  id           String     @id @default(cuid())
+  collectionId String
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  instalmentId String
+  principal    Int
+  interest     Int
+}
+
+model VisitLog {
+  id          String   @id @default(cuid())
+  tenantId    String
+  customerId  String
+  loanId      String?
+  agentId     String
+  outcome     String
+  promiseDate String?
+  note        String?
+  lat         Float?
+  lng         Float?
+  date        String
+  visitedAt   DateTime
+  clientRef   String
+  createdAt   DateTime @default(now())
+
+  @@unique([tenantId, clientRef])
+  @@index([tenantId, date])
+}
+
+model LedgerEntry {
+  id          String   @id @default(cuid())
+  tenantId    String
+  loanId      String
+  customerId  String
+  date        String
+  type        String
+  description String
+  debit       Int      @default(0)
+  credit      Int      @default(0)
+  balance     Int
+  refId       String?
+  createdAt   DateTime @default(now())
+
+  @@index([loanId, createdAt])
+  @@index([customerId])
+}
+
+model Fund {
+  id         String   @id @default(cuid())
+  tenantId   String
+  branchId   String
+  name       String
+  sourceType String
+  investorId String?
+  balance    Int      @default(0)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  @@unique([tenantId, branchId, name])
+}
+
+model FundTxn {
+  id          String   @id @default(cuid())
+  tenantId    String
+  fundId      String
+  date        String
+  type        String // DEPOSIT | TRANSFER_IN | TRANSFER_OUT | FLOAT_OUT | DISBURSEMENT | COLLECTION | REVERSAL | INVESTOR_IN | INVESTOR_OUT
+  amount      Int // signed: + into the fund, - out of it
+  balance     Int
+  refId       String?
+  note        String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([fundId, createdAt])
+}
+
+model AgentFloat {
+  id          String   @id @default(cuid())
+  tenantId    String
+  branchId    String
+  agentId     String
+  fundId      String
+  date        String
+  amount      Int
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([agentId, date])
+}
+
+model Handover {
+  id           String    @id @default(cuid())
+  tenantId     String
+  branchId     String
+  agentId      String
+  date         String
+  expected     Int
+  received     Int
+  difference   Int
+  note         String?
+  verifiedById String
+  verifiedAt   DateTime  @default(now())
+
+  @@unique([agentId, date])
+  @@index([tenantId, date])
+}
+
+model Investor {
+  id           String       @id @default(cuid())
+  tenantId     String
+  name         String
+  phone        String
+  address      String?
+  idProof      String?
+  bankDetails  String?
+  nominee      String?
+  agreementUrl String?
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  investments  Investment[]
+
+  @@index([tenantId])
+}
+
+model Investment {
+  id                    String      @id @default(cuid())
+  tenantId              String
+  investorId            String
+  investor              Investor    @relation(fields: [investorId], references: [id])
+  branchId              String
+  fundId                String
+  amount                Int
+  date                  String
+  returnType            String
+  returnRate            Float
+  payoutFrequencyMonths Int         @default(1)
+  maturityDate          String?
+  principalWithdrawn    Int         @default(0)
+  status                String      @default("ACTIVE")
+  createdAt             DateTime    @default(now())
+  txns                  InvestorTxn[]
+}
+
+model InvestorTxn {
+  id           String     @id @default(cuid())
+  tenantId     String
+  investmentId String
+  investment   Investment @relation(fields: [investmentId], references: [id])
+  investorId   String
+  type         String // INVESTMENT | RETURN_DUE | PAYOUT | WITHDRAWAL
+  amount       Int
+  date         String
+  periodStart  String?
+  periodEnd    String?
+  mode         String?
+  note         String?
+  createdById  String?
+  createdAt    DateTime   @default(now())
+
+  @@index([investorId])
+  @@index([tenantId, type, date])
+}
+
+model ExpenseCategory {
+  id       String  @id @default(cuid())
+  tenantId String
+  name     String
+  kind     String // EXPENSE | INCOME | DRAWING | BANK
+  active   Boolean @default(true)
+
+  @@unique([tenantId, name])
+}
+
+model DaybookEntry {
+  id             String   @id @default(cuid())
+  tenantId       String
+  branchId       String
+  date           String
+  voucherNo      String
+  direction      String // IN | OUT
+  categoryId     String?
+  systemCategory String?
+  amount         Int
+  mode           String
+  particulars    String
+  billUrl        String?
+  source         String // AUTO | MANUAL
+  refType        String?
+  refId          String?
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId, branchId, date])
+}
+
+model DayClose {
+  id          String   @id @default(cuid())
+  tenantId    String
+  branchId    String
+  date        String
+  openingCash Int
+  openingBank Int
+  closingCash Int
+  closingBank Int
+  closedById  String
+  closedAt    DateTime @default(now())
+
+  @@unique([branchId, date])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  tenantId  String?
+  channel   String // SMS | WHATSAPP | PUSH
+  to        String
+  body      String
+  status    String   @default("QUEUED") // QUEUED | SENT | FAILED | LOGGED
+  error     String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  tenantId  String?
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  before    Json?
+  after     Json?
+  ip        String?
+  device    String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([entity, entityId])
+}

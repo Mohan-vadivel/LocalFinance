@@ -1,0 +1,562 @@
+import { Controller, Get, Injectable, Query } from '@nestjs/common';
+import { ageingBucket, AGEING_BUCKETS, addDays, diffDays, reportFilterSchema, todayIST, type ReportFilter } from '@localfinance/shared';
+import type { Prisma } from '@prisma/client';
+import { z } from 'zod';
+import { positionOf } from '../common/books.service';
+import { CurrentCtx, Perm, type Ctx } from '../common/context';
+import { bad } from '../common/errors';
+import { PrismaService } from '../common/prisma.service';
+import { branchScope } from '../common/scope';
+import { V } from '../common/zod.pipe';
+
+const range = (f: ReportFilter) => {
+  const to = f.to ?? todayIST();
+  const from = f.from ?? to.slice(0, 8) + '01';
+  if (from > to) throw bad('From date is after to date');
+  return { from, to };
+};
+const month = (d: string) => d.slice(0, 7);
+
+/** Customer filters shared by every report: branch, location, route. */
+function customerWhere(ctx: Ctx, f: ReportFilter): Prisma.CustomerWhereInput {
+  return { ...branchScope(ctx, f.branchId), ...(f.locationId ? { locationId: f.locationId } : {}), ...(f.routeId ? { routeId: f.routeId } : {}) };
+}
+
+// =====================================================================
+// Profit and loss
+// =====================================================================
+@Injectable()
+export class ProfitLossService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async compute(ctx: Ctx, f: ReportFilter, opts: { excludeInvestorReturns?: boolean } = {}) {
+    const { from, to } = range(f);
+    const scope = branchScope(ctx, f.branchId);
+    const basis = ctx.settings.plBasis;
+    const productFilter = f.productId ? { productId: f.productId } : {};
+
+    const [collections, disbursed, writeOffs, manual, categories, returns] = await Promise.all([
+      this.prisma.collection.findMany({ where: { ...scope, date: { gte: from, lte: to }, reversedAt: null, ...(f.productId ? { loanId: { in: (await this.prisma.loan.findMany({ where: { tenantId: ctx.tenantId, productId: f.productId }, select: { id: true } })).map((l) => l.id) } } : {}) } }),
+      this.prisma.loan.findMany({ where: { ...scope, ...productFilter, disbursedOn: { gte: from, lte: to } } }),
+      this.prisma.loan.findMany({ where: { ...scope, ...productFilter, status: 'WRITTEN_OFF', closedOn: { gte: from, lte: to } } }),
+      this.prisma.daybookEntry.findMany({ where: { ...scope, date: { gte: from, lte: to }, source: 'MANUAL' } }),
+      this.prisma.expenseCategory.findMany({ where: { tenantId: ctx.tenantId } }),
+      opts.excludeInvestorReturns
+        ? Promise.resolve([])
+        : this.prisma.investorTxn.findMany({
+            where: {
+              tenantId: ctx.tenantId,
+              type: 'RETURN_DUE',
+              periodEnd: { gte: from, lte: to },
+              ...(scope.branchId ? { investment: { branchId: scope.branchId as string | { in: string[] } } } : {}),
+            },
+          }),
+    ]);
+
+    let interestIncome: number;
+    if (basis === 'ACCRUAL') {
+      const due = await this.prisma.instalment.aggregate({
+        where: { tenantId: ctx.tenantId, dueDate: { gte: from, lte: to }, loan: { ...scope, ...productFilter, status: { in: ['ACTIVE', 'CLOSED', 'FORECLOSED'] } } },
+        _sum: { interestDue: true },
+      });
+      interestIncome = due._sum.interestDue ?? 0;
+    } else {
+      interestIncome = collections.reduce((s, c) => s + c.interest, 0);
+    }
+    interestIncome += disbursed.reduce((s, l) => s + l.upfrontInterest, 0);
+    const feeIncome = disbursed.reduce((s, l) => s + l.fee, 0);
+    const penaltyIncome = collections.reduce((s, c) => s + c.penalty, 0);
+    const kindOf = (id: string | null) => categories.find((c) => c.id === id)?.kind;
+    const otherIncome = manual.filter((e) => e.direction === 'IN' && kindOf(e.categoryId) === 'INCOME').reduce((s, e) => s + e.amount, 0);
+    const expenseRows = manual.filter((e) => e.direction === 'OUT' && kindOf(e.categoryId) === 'EXPENSE');
+    const expenses = expenseRows.reduce((s, e) => s + e.amount, 0);
+    const byCategory = categories
+      .filter((c) => c.kind === 'EXPENSE')
+      .map((c) => ({ category: c.name, amount: expenseRows.filter((e) => e.categoryId === c.id).reduce((s, e) => s + e.amount, 0) }))
+      .filter((r) => r.amount > 0)
+      .sort((a, b) => b.amount - a.amount);
+    const investorReturns = (returns as { amount: number }[]).reduce((s, r) => s + r.amount, 0);
+    const badDebts = writeOffs.reduce((s, l) => s + l.writtenOffAmount, 0);
+    const totalIncome = interestIncome + feeIncome + penaltyIncome + otherIncome;
+    return {
+      from,
+      to,
+      basis,
+      interestIncome,
+      feeIncome,
+      penaltyIncome,
+      otherIncome,
+      totalIncome,
+      investorReturns,
+      expenses,
+      badDebts,
+      netProfit: totalIncome - investorReturns - expenses - badDebts,
+      expenseBreakdown: byCategory,
+    };
+  }
+
+  /** P&L for the period, month by month, and the same-length previous period for comparison. */
+  async report(ctx: Ctx, f: ReportFilter) {
+    const { from, to } = range(f);
+    const current = await this.compute(ctx, { ...f, from, to });
+    const len = diffDays(to, from);
+    const prevTo = addDays(from, -1);
+    const previous = await this.compute(ctx, { ...f, from: addDays(prevTo, -len), to: prevTo });
+    const months: (Awaited<ReturnType<ProfitLossService['compute']>> & { month: string })[] = [];
+    let cursor = from;
+    while (cursor <= to) {
+      const m = month(cursor);
+      const nextMonthStart = new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 1)).toISOString().slice(0, 10);
+      const end = addDays(nextMonthStart, -1) < to ? addDays(nextMonthStart, -1) : to;
+      months.push({ month: m, ...(await this.compute(ctx, { ...f, from: cursor, to: end })) });
+      cursor = nextMonthStart;
+      if (months.length > 36) break;
+    }
+    return { current, previous, months };
+  }
+}
+
+// =====================================================================
+// Operational reports
+// =====================================================================
+@Injectable()
+export class ReportsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  private async activeLoans(ctx: Ctx, f: ReportFilter, statuses = ['ACTIVE']) {
+    return this.prisma.loan.findMany({
+      where: { ...branchScope(ctx, f.branchId), status: { in: statuses }, ...(f.productId ? { productId: f.productId } : {}), customer: customerWhere(ctx, f) },
+      include: { instalments: true, customer: { select: { id: true, name: true, code: true, phone: true, locationId: true, routeId: true } } },
+    });
+  }
+
+  private async names(ctx: Ctx) {
+    const [branches, locations, routes, users, products] = await Promise.all([
+      this.prisma.branch.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, name: true } }),
+      this.prisma.location.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, name: true } }),
+      this.prisma.route.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, name: true } }),
+      this.prisma.user.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, name: true } }),
+      this.prisma.loanProduct.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, name: true } }),
+    ]);
+    const n = (list: { id: string; name: string }[]) => (id?: string | null) => list.find((x) => x.id === id)?.name ?? '';
+    return { branch: n(branches), location: n(locations), route: n(routes), user: n(users), product: n(products) };
+  }
+
+  private collectionWhere(ctx: Ctx, f: ReportFilter, from: string, to: string): Prisma.CollectionWhereInput {
+    return {
+      ...branchScope(ctx, f.branchId),
+      date: { gte: from, lte: to },
+      reversedAt: null,
+      ...(f.agentId ? { agentId: f.agentId } : {}),
+      ...(f.routeId ? { routeId: f.routeId } : {}),
+    };
+  }
+
+  /** Per route and day: due, collected (cash and UPI), customers missed. */
+  async dailyCollection(ctx: Ctx, f: ReportFilter) {
+    const { from, to } = range(f);
+    const n = await this.names(ctx);
+    const loans = await this.activeLoans(ctx, f, ['ACTIVE', 'CLOSED', 'FORECLOSED']);
+    const cols = await this.prisma.collection.findMany({ where: this.collectionWhere(ctx, f, from, to) });
+    const rows = new Map<string, { date: string; routeId: string | null; due: number; collected: number; cash: number; upi: number; customersDue: Set<string>; customersPaid: Set<string> }>();
+    const key = (d: string, r: string | null) => `${d}|${r}`;
+    const get = (d: string, r: string | null) => {
+      if (!rows.has(key(d, r))) rows.set(key(d, r), { date: d, routeId: r, due: 0, collected: 0, cash: 0, upi: 0, customersDue: new Set(), customersPaid: new Set() });
+      return rows.get(key(d, r))!;
+    };
+    for (const l of loans) {
+      for (const i of l.instalments) {
+        if (i.dueDate < from || i.dueDate > to) continue;
+        const r = get(i.dueDate, l.customer.routeId);
+        r.due += i.principalDue + i.interestDue;
+        r.customersDue.add(l.customerId);
+      }
+    }
+    for (const c of cols) {
+      const r = get(c.date, c.routeId);
+      r.collected += c.amount;
+      if (c.mode === 'CASH') r.cash += c.amount;
+      else r.upi += c.amount;
+      r.customersPaid.add(c.customerId);
+    }
+    return [...rows.values()]
+      .sort((a, b) => b.date.localeCompare(a.date) || n.route(a.routeId).localeCompare(n.route(b.routeId)))
+      .map((r) => ({
+        date: r.date,
+        route: n.route(r.routeId) || '-',
+        due: r.due,
+        collected: r.collected,
+        cash: r.cash,
+        upi: r.upi,
+        customersDue: r.customersDue.size,
+        missed: [...r.customersDue].filter((c) => !r.customersPaid.has(c)).length,
+        rate: r.due ? Math.round((r.collected / r.due) * 1000) / 10 : null,
+      }));
+  }
+
+  async disbursements(ctx: Ctx, f: ReportFilter) {
+    const { from, to } = range(f);
+    const n = await this.names(ctx);
+    const loans = await this.prisma.loan.findMany({
+      where: { ...branchScope(ctx, f.branchId), disbursedOn: { gte: from, lte: to }, ...(f.productId ? { productId: f.productId } : {}), customer: customerWhere(ctx, f) },
+      include: { customer: { select: { name: true, code: true } } },
+      orderBy: { disbursedOn: 'desc' },
+    });
+    return loans.map((l) => ({
+      date: l.disbursedOn,
+      loan: l.number,
+      customer: `${l.customer.name} (${l.customer.code})`,
+      branch: n.branch(l.branchId),
+      product: n.product(l.productId),
+      principal: l.principal,
+      fee: l.fee,
+      upfrontInterest: l.upfrontInterest,
+      netDisbursed: l.netDisbursed,
+      mode: l.disburseMode,
+    }));
+  }
+
+  async outstanding(ctx: Ctx, f: ReportFilter) {
+    const asOf = f.to ?? todayIST();
+    const n = await this.names(ctx);
+    const loans = await this.activeLoans(ctx, f);
+    return loans
+      .map((l) => {
+        const p = positionOf(l, asOf);
+        return {
+          loan: l.number,
+          customer: `${l.customer.name} (${l.customer.code})`,
+          phone: l.customer.phone,
+          branch: n.branch(l.branchId),
+          location: n.location(l.customer.locationId),
+          route: n.route(l.customer.routeId),
+          product: n.product(l.productId),
+          disbursedOn: l.disbursedOn,
+          principal: l.principal,
+          principalOutstanding: p.principalOutstanding,
+          interestOutstanding: p.interestOutstanding,
+          penalty: p.penaltyOutstanding,
+          totalOutstanding: p.totalOutstanding,
+          overdue: p.overdue,
+          daysPastDue: p.daysPastDue,
+        };
+      })
+      .sort((a, b) => b.daysPastDue - a.daysPastDue);
+  }
+
+  async ageing(ctx: Ctx, f: ReportFilter) {
+    const rows = await this.outstanding(ctx, f);
+    const buckets = AGEING_BUCKETS.map((b) => ({ bucket: b.key, loans: 0, overdue: 0, outstanding: 0 }));
+    for (const r of rows) {
+      const k = ageingBucket(r.daysPastDue);
+      if (!k) continue;
+      const b = buckets.find((x) => x.bucket === k)!;
+      b.loans++;
+      b.overdue += r.overdue;
+      b.outstanding += r.totalOutstanding;
+    }
+    return { buckets, loans: rows.filter((r) => r.daysPastDue > 0) };
+  }
+
+  async demandVsCollection(ctx: Ctx, f: ReportFilter) {
+    const daily = await this.dailyCollection(ctx, f);
+    const byDate = new Map<string, { date: string; demand: number; collected: number }>();
+    for (const r of daily) {
+      const d = byDate.get(r.date) ?? { date: r.date, demand: 0, collected: 0 };
+      d.demand += r.due;
+      d.collected += r.collected;
+      byDate.set(r.date, d);
+    }
+    return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)).map((d) => ({ ...d, rate: d.demand ? Math.round((d.collected / d.demand) * 1000) / 10 : null }));
+  }
+
+  async agentPerformance(ctx: Ctx, f: ReportFilter) {
+    const { from, to } = range(f);
+    const n = await this.names(ctx);
+    const [cols, visits, handovers] = await Promise.all([
+      this.prisma.collection.findMany({ where: this.collectionWhere(ctx, f, from, to) }),
+      this.prisma.visitLog.findMany({ where: { tenantId: ctx.tenantId, date: { gte: from, lte: to }, ...(f.agentId ? { agentId: f.agentId } : {}) } }),
+      this.prisma.handover.findMany({ where: { ...branchScope(ctx, f.branchId), date: { gte: from, lte: to } } }),
+    ]);
+    const agents = [...new Set([...cols.map((c) => c.agentId), ...visits.map((v) => v.agentId)])];
+    return agents.map((a) => {
+      const mine = cols.filter((c) => c.agentId === a);
+      const myVisits = visits.filter((v) => v.agentId === a);
+      return {
+        agent: n.user(a),
+        collections: mine.length,
+        amount: mine.reduce((s, c) => s + c.amount, 0),
+        cash: mine.filter((c) => c.mode === 'CASH').reduce((s, c) => s + c.amount, 0),
+        upi: mine.filter((c) => c.mode !== 'CASH').reduce((s, c) => s + c.amount, 0),
+        customersVisited: new Set([...mine.map((c) => c.customerId), ...myVisits.map((v) => v.customerId)]).size,
+        noPaymentVisits: myVisits.filter((v) => !['PAID', 'PARTIAL'].includes(v.outcome)).length,
+        flagged: mine.filter((c) => c.flagged).length,
+        cashDifference: handovers.filter((h) => h.agentId === a).reduce((s, h) => s + h.difference, 0),
+      };
+    }).sort((x, y) => y.amount - x.amount);
+  }
+
+  async cashDifferences(ctx: Ctx, f: ReportFilter) {
+    const { from, to } = range(f);
+    const n = await this.names(ctx);
+    const rows = await this.prisma.handover.findMany({ where: { ...branchScope(ctx, f.branchId), date: { gte: from, lte: to }, difference: { not: 0 }, ...(f.agentId ? { agentId: f.agentId } : {}) }, orderBy: { date: 'desc' } });
+    return rows.map((h) => ({ date: h.date, branch: n.branch(h.branchId), agent: n.user(h.agentId), expected: h.expected, received: h.received, difference: h.difference, note: h.note, verifiedBy: n.user(h.verifiedById) }));
+  }
+
+  async fundUtilisation(ctx: Ctx, f: ReportFilter) {
+    const n = await this.names(ctx);
+    const funds = await this.prisma.fund.findMany({ where: branchScope(ctx, f.branchId) });
+    const loans = await this.prisma.loan.findMany({ where: { tenantId: ctx.tenantId, status: 'ACTIVE', fundId: { in: funds.map((x) => x.id) } }, include: { instalments: true } });
+    return funds.map((fund) => {
+      const mine = loans.filter((l) => l.fundId === fund.id);
+      const principalOut = mine.reduce((s, l) => s + positionOf(l).principalOutstanding, 0);
+      const total = fund.balance + principalOut;
+      return {
+        fund: fund.name,
+        branch: n.branch(fund.branchId),
+        source: fund.sourceType,
+        available: fund.balance,
+        lentOut: principalOut,
+        activeLoans: mine.length,
+        utilisation: total ? Math.round((principalOut / total) * 1000) / 10 : 0,
+      };
+    });
+  }
+
+  async income(ctx: Ctx, f: ReportFilter) {
+    const { from, to } = range(f);
+    const scope = branchScope(ctx, f.branchId);
+    const [cols, loans] = await Promise.all([
+      this.prisma.collection.findMany({ where: { ...scope, date: { gte: from, lte: to }, reversedAt: null } }),
+      this.prisma.loan.findMany({ where: { ...scope, disbursedOn: { gte: from, lte: to } } }),
+    ]);
+    const months = new Map<string, { month: string; interest: number; fees: number; penalty: number; upfront: number }>();
+    const m = (d: string) => {
+      const k = month(d);
+      if (!months.has(k)) months.set(k, { month: k, interest: 0, fees: 0, penalty: 0, upfront: 0 });
+      return months.get(k)!;
+    };
+    cols.forEach((c) => {
+      m(c.date).interest += c.interest;
+      m(c.date).penalty += c.penalty;
+    });
+    loans.forEach((l) => {
+      m(l.disbursedOn!).fees += l.fee;
+      m(l.disbursedOn!).upfront += l.upfrontInterest;
+    });
+    return [...months.values()].sort((a, b) => a.month.localeCompare(b.month)).map((r) => ({ ...r, total: r.interest + r.fees + r.penalty + r.upfront }));
+  }
+
+  async closedLoans(ctx: Ctx, f: ReportFilter) {
+    const { from, to } = range(f);
+    const n = await this.names(ctx);
+    const loans = await this.prisma.loan.findMany({
+      where: { ...branchScope(ctx, f.branchId), status: { in: ['CLOSED', 'FORECLOSED', 'WRITTEN_OFF'] }, closedOn: { gte: from, lte: to }, customer: customerWhere(ctx, f) },
+      include: { customer: { select: { name: true, code: true } } },
+      orderBy: { closedOn: 'desc' },
+    });
+    return loans.map((l) => ({ closedOn: l.closedOn, loan: l.number, customer: `${l.customer.name} (${l.customer.code})`, branch: n.branch(l.branchId), status: l.status, principal: l.principal, interestWaived: l.interestWaived, writtenOff: l.writtenOffAmount }));
+  }
+
+  /** Per location: customers, active loans, outstanding, collected in the period. */
+  async locationWise(ctx: Ctx, f: ReportFilter) {
+    const { from, to } = range(f);
+    const n = await this.names(ctx);
+    const locations = await this.prisma.location.findMany({ where: branchScope(ctx, f.branchId) });
+    const [loans, customers, cols] = await Promise.all([
+      this.activeLoans(ctx, f),
+      this.prisma.customer.groupBy({ by: ['locationId'], where: { ...branchScope(ctx, f.branchId), status: 'ACTIVE' }, _count: true }),
+      this.prisma.collection.findMany({ where: this.collectionWhere(ctx, f, from, to), select: { amount: true, customerId: true } }),
+    ]);
+    const custLoc = new Map((await this.prisma.customer.findMany({ where: { id: { in: [...new Set(cols.map((c) => c.customerId))] } }, select: { id: true, locationId: true } })).map((c) => [c.id, c.locationId]));
+    return locations.map((loc) => {
+      const mine = loans.filter((l) => l.customer.locationId === loc.id);
+      const positions = mine.map((l) => positionOf(l));
+      return {
+        location: loc.name,
+        branch: n.branch(loc.branchId),
+        customers: customers.find((c) => c.locationId === loc.id)?._count ?? 0,
+        activeLoans: mine.length,
+        outstanding: positions.reduce((s, p) => s + p.totalOutstanding, 0),
+        overdue: positions.reduce((s, p) => s + p.overdue, 0),
+        collected: cols.filter((c) => custLoc.get(c.customerId) === loc.id).reduce((s, c) => s + c.amount, 0),
+      };
+    });
+  }
+
+  async investorStatement(ctx: Ctx, f: ReportFilter & { investorId?: string }) {
+    const { from, to } = range(f);
+    const txns = await this.prisma.investorTxn.findMany({
+      where: { tenantId: ctx.tenantId, date: { gte: from, lte: to }, ...(f.investorId ? { investorId: f.investorId } : {}) },
+      orderBy: { date: 'asc' },
+    });
+    const investors = await this.prisma.investor.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, name: true } });
+    return txns.map((t) => ({ date: t.date, investor: investors.find((i) => i.id === t.investorId)?.name, type: t.type, amount: t.amount, period: t.periodStart ? `${t.periodStart} to ${t.periodEnd}` : '', mode: t.mode, note: t.note }));
+  }
+}
+
+// =====================================================================
+// Dashboard
+// =====================================================================
+@Injectable()
+export class DashboardService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly reports: ReportsService,
+  ) {}
+
+  async get(ctx: Ctx, branchId?: string) {
+    const today = todayIST();
+    const scope = branchScope(ctx, branchId);
+    const loans = await this.prisma.loan.findMany({ where: { ...scope, status: 'ACTIVE' }, include: { instalments: true } });
+    let dueToday = 0;
+    let overdueStart = 0;
+    let portfolio = 0;
+    const ageing = AGEING_BUCKETS.map((b) => ({ bucket: b.key, loans: 0, amount: 0 }));
+    for (const l of loans) {
+      const p = positionOf(l, today);
+      portfolio += p.totalOutstanding;
+      const todayDue = l.instalments.filter((i) => i.dueDate === today).reduce((s, i) => s + i.principalDue + i.interestDue, 0);
+      dueToday += todayDue;
+      overdueStart += p.overdue;
+      const k = ageingBucket(p.daysPastDue);
+      if (k) {
+        const b = ageing.find((x) => x.bucket === k)!;
+        b.loans++;
+        b.amount += p.overdue;
+      }
+    }
+    const [collected, newLoans, pending, agents, routes] = await Promise.all([
+      this.prisma.collection.groupBy({ by: ['mode'], where: { ...scope, date: today, reversedAt: null }, _sum: { amount: true } }),
+      this.prisma.loan.aggregate({ where: { ...scope, disbursedOn: today }, _count: true, _sum: { netDisbursed: true } }),
+      this.prisma.loan.count({ where: { ...scope, status: 'REQUESTED', ...(ctx.role === 'TENANT_ADMIN' ? {} : { stage: 'BRANCH' }) } }),
+      this.agentsToday(ctx, branchId, today),
+      this.routeProgress(ctx, branchId, today),
+    ]);
+    const collectedToday = collected.reduce((s, c) => s + (c._sum.amount ?? 0), 0);
+    return {
+      date: today,
+      dueToday,
+      overdueAtStart: overdueStart,
+      collectedToday,
+      collectedCash: collected.find((c) => c.mode === 'CASH')?._sum.amount ?? 0,
+      collectedUpi: collected.filter((c) => c.mode !== 'CASH').reduce((s, c) => s + (c._sum.amount ?? 0), 0),
+      collectionRate: dueToday ? Math.round((collectedToday / dueToday) * 1000) / 10 : null,
+      newLoans: newLoans._count,
+      disbursedToday: newLoans._sum.netDisbursed ?? 0,
+      activeLoans: loans.length,
+      portfolio,
+      pendingApprovals: pending,
+      ageing,
+      agents,
+      routes,
+    };
+  }
+
+  private async agentsToday(ctx: Ctx, branchId: string | undefined, date: string) {
+    const scope = branchScope(ctx, branchId);
+    const [cols, floats, handovers] = await Promise.all([
+      this.prisma.collection.groupBy({ by: ['agentId', 'mode'], where: { ...scope, date, reversedAt: null }, _sum: { amount: true }, _count: true }),
+      this.prisma.agentFloat.groupBy({ by: ['agentId'], where: { ...scope, date }, _sum: { amount: true } }),
+      this.prisma.handover.findMany({ where: { ...scope, date } }),
+    ]);
+    const ids = [...new Set([...cols.map((c) => c.agentId), ...floats.map((f) => f.agentId)])];
+    const users = await this.prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, lastLat: true, lastLng: true, lastSeenAt: true } });
+    return ids.map((id) => {
+      const cash = cols.filter((c) => c.agentId === id && c.mode === 'CASH').reduce((s, c) => s + (c._sum.amount ?? 0), 0);
+      const all = cols.filter((c) => c.agentId === id).reduce((s, c) => s + (c._sum.amount ?? 0), 0);
+      const float = floats.find((f) => f.agentId === id)?._sum.amount ?? 0;
+      const u = users.find((x) => x.id === id);
+      return { agentId: id, name: u?.name, collected: all, cashInHand: handovers.some((h) => h.agentId === id) ? 0 : cash + float, handedOver: handovers.some((h) => h.agentId === id), lastLat: u?.lastLat, lastLng: u?.lastLng, lastSeenAt: u?.lastSeenAt };
+    });
+  }
+
+  async routeProgress(ctx: Ctx, branchId: string | undefined, date: string) {
+    const routes = await this.prisma.route.findMany({ where: { ...branchScope(ctx, branchId), active: true }, include: { assignments: true } });
+    const active = routes.filter((r) => r.assignments.some((a) => a.fromDate <= date && (!a.toDate || a.toDate >= date)));
+    const [customers, cols, visits] = await Promise.all([
+      this.prisma.customer.groupBy({ by: ['routeId'], where: { routeId: { in: active.map((r) => r.id) }, status: 'ACTIVE' }, _count: true }),
+      this.prisma.collection.findMany({ where: { tenantId: ctx.tenantId, date, routeId: { in: active.map((r) => r.id) }, reversedAt: null }, select: { routeId: true, customerId: true } }),
+      this.prisma.visitLog.findMany({ where: { tenantId: ctx.tenantId, date }, select: { customerId: true } }),
+    ]);
+    const visitCustomers = await this.prisma.customer.findMany({ where: { id: { in: visits.map((v) => v.customerId) } }, select: { id: true, routeId: true } });
+    const users = await this.prisma.user.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, name: true } });
+    return active.map((r) => {
+      const visited = new Set([...cols.filter((c) => c.routeId === r.id).map((c) => c.customerId), ...visitCustomers.filter((v) => v.routeId === r.id).map((v) => v.id)]);
+      return {
+        routeId: r.id,
+        name: r.name,
+        agents: r.assignments.filter((a) => a.fromDate <= date && (!a.toDate || a.toDate >= date)).map((a) => users.find((u) => u.id === a.userId)?.name),
+        customers: customers.find((c) => c.routeId === r.id)?._count ?? 0,
+        visited: visited.size,
+      };
+    });
+  }
+}
+
+const filter = reportFilterSchema.extend({ investorId: z.string().optional() });
+type Filter = z.infer<typeof filter>;
+
+@Controller()
+export class ReportsController {
+  constructor(
+    private readonly reports: ReportsService,
+    private readonly pl: ProfitLossService,
+    private readonly dashboard: DashboardService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  @Get('dashboard') @Perm('report.view') dash(@CurrentCtx() ctx: Ctx, @Query('branchId') branchId?: string) {
+    return this.dashboard.get(ctx, branchId);
+  }
+  @Get('reports/daily-collection') @Perm('report.view') daily(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
+    return this.reports.dailyCollection(ctx, f);
+  }
+  @Get('reports/disbursements') @Perm('report.view') disb(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
+    return this.reports.disbursements(ctx, f);
+  }
+  @Get('reports/outstanding') @Perm('report.view') out(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
+    return this.reports.outstanding(ctx, f);
+  }
+  @Get('reports/ageing') @Perm('report.view') ageing(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
+    return this.reports.ageing(ctx, f);
+  }
+  @Get('reports/demand-vs-collection') @Perm('report.view') dvc(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
+    return this.reports.demandVsCollection(ctx, f);
+  }
+  @Get('reports/agent-performance') @Perm('report.view') agents(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
+    return this.reports.agentPerformance(ctx, f);
+  }
+  @Get('reports/cash-differences') @Perm('report.view') cash(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
+    return this.reports.cashDifferences(ctx, f);
+  }
+  @Get('reports/fund-utilisation') @Perm('report.view') funds(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
+    return this.reports.fundUtilisation(ctx, f);
+  }
+  @Get('reports/income') @Perm('pl.view') income(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
+    return this.reports.income(ctx, f);
+  }
+  @Get('reports/closed-loans') @Perm('report.view') closed(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
+    return this.reports.closedLoans(ctx, f);
+  }
+  @Get('reports/location-wise') @Perm('report.view') loc(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
+    return this.reports.locationWise(ctx, f);
+  }
+  @Get('reports/investor-statement') @Perm('investor.manage', 'pl.view') inv(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
+    return this.reports.investorStatement(ctx, f);
+  }
+  @Get('reports/profit-loss') @Perm('pl.view') profitLoss(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
+    return this.pl.report(ctx, f);
+  }
+
+  @Get('audit') @Perm('audit.view', 'staff.manage') async audit(@CurrentCtx() ctx: Ctx, @Query('entity') entity?: string, @Query('entityId') entityId?: string, @Query('page') page = '1') {
+    const take = 100;
+    const where = { tenantId: ctx.tenantId, ...(entity ? { entity } : {}), ...(entityId ? { entityId } : {}) };
+    const [rows, total] = await Promise.all([
+      this.prisma.auditLog.findMany({ where, orderBy: { createdAt: 'desc' }, take, skip: (Math.max(1, Number(page)) - 1) * take }),
+      this.prisma.auditLog.count({ where }),
+    ]);
+    const users = await this.prisma.user.findMany({ where: { id: { in: rows.map((r) => r.userId!).filter(Boolean) } }, select: { id: true, name: true } });
+    return { total, rows: rows.map((r) => ({ ...r, userName: users.find((u) => u.id === r.userId)?.name })) };
+  }
+}
