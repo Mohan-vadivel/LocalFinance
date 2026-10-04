@@ -200,6 +200,7 @@ export class StructureService {
       name: r.name,
       location: r.location.name,
       branchId: r.branchId,
+      locationId: r.locationId,
       collectsToday: r.collectionDays.includes(wd),
       customerCount: counts.find((c) => c.routeId === r.id)?._count ?? 0,
     }));

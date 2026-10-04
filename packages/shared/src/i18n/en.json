@@ -451,7 +451,31 @@
     "pinMissed": "Missed",
     "pinPending": "Not visited",
     "managerView": "Team today",
-    "liveAgents": "Agents on route"
+    "liveAgents": "Agents on route",
+    "paidToday": "Paid today",
+    "lastVisit": "Last visit",
+    "days": "days",
+    "noActiveLoan": "No active loan for this customer",
+    "enterAmount": "Enter the amount collected",
+    "dateFormat": "Enter a date from today onwards as YYYY-MM-DD",
+    "chooseRoute": "Choose a route",
+    "gpsHelp": "Stand at the customer's door when you capture the location; it sets their pin on the route map.",
+    "allSynced": "Everything is synced",
+    "failedItems": "{{count}} could not be saved; tap to see",
+    "offlineCopy": "Offline: showing the last downloaded copy. New entries are saved on the phone.",
+    "notToday": "Not today",
+    "submitDayHelp": "Connect to the internet so everything is sent before you hand over cash.",
+    "failedTitle": "Not accepted by the office",
+    "dismiss": "Dismiss",
+    "logoutPending": "{{count}} entries are still on this phone. Sync before logging out.",
+    "noGps": "No GPS",
+    "pins": {
+      "PAID": "Paid",
+      "PARTIAL": "Part paid",
+      "MISSED": "Missed",
+      "NOTHING_DUE": "Nothing due",
+      "PENDING": "Not visited"
+    }
   },
   "fund": {
     "title": "Funds",

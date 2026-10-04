@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "LocalFinance Collect",
+    "slug": "localfinance-collect",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": ["android"],
+    "android": {
+      "package": "com.witstech.localfinance",
+      "versionCode": 1,
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"],
+      "usesCleartextTraffic": true
+    },
+    "plugins": [
+      ["expo-location", { "locationWhenInUsePermission": "Location is saved with each collection and new customer." }],
+      "expo-secure-store"
+    ]
+  }
+}

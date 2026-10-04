@@ -10,3 +10,4 @@ coverage/
 android/
 ios/
 *.test-uploads
+dist-check/

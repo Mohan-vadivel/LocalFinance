@@ -1,4 +1,5 @@
 import { addDays, addMonthsClamped, diffDays, parseDate, weekday } from './dates';
+import { formatINR } from './money';
 import type { Frequency, InterestMethod, PenaltyType } from './enums';
 
 export interface LoanTerms {
@@ -210,7 +211,7 @@ export function allocatePayment(
 ): Allocation {
   if (!Number.isInteger(amount) || amount <= 0) throw new Error('Amount must be a positive amount in paise');
   const owed = instalments.reduce((s, i) => s + instalmentDue(i), 0) + Math.max(0, penaltyOutstanding);
-  if (amount > owed) throw new Error(`Amount exceeds the outstanding balance of ${owed} paise`);
+  if (amount > owed) throw new Error(`Amount is more than the outstanding balance of ${formatINR(owed)}`);
 
   let left = amount;
   const res: Allocation = { penalty: 0, interest: 0, principal: 0, perInstalment: [] };

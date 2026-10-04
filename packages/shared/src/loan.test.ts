@@ -74,7 +74,7 @@ describe('payments', () => {
   });
 
   it('refuses overpayment', () => {
-    expect(() => allocatePayment(200_000, rows, 0)).toThrow(/exceeds/);
+    expect(() => allocatePayment(200_000, rows, 0)).toThrow(/more than the outstanding balance of ₹1,200.00/);
   });
 
   it('penalty per day after grace, stops when paid', () => {
