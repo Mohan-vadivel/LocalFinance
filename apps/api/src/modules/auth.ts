@@ -164,8 +164,18 @@ export class AuthController {
 
   @AnyUser()
   @Get('me')
-  me(@CurrentCtx() ctx: Ctx) {
-    return this.auth.profile(ctx.userId);
+  async me(@CurrentCtx() ctx: Ctx) {
+    const p = await this.auth.profile(ctx.userId);
+    // A Super Admin viewing a business under support access sees it read-only, with the view rights the guard gave.
+    if (ctx.role === 'SUPER_ADMIN' && ctx.tenantId) {
+      return {
+        ...p,
+        permissions: [...ctx.permissions],
+        readOnly: true,
+        tenant: { id: ctx.tenantId, name: ctx.tenantName, status: ctx.tenantStatus, logoUrl: null, settings: ctx.settings },
+      };
+    }
+    return { ...p, readOnly: ctx.readOnly };
   }
 
   @AnyUser()

@@ -10,7 +10,7 @@ import { PrismaService } from './common/prisma.service';
 import { CollectionsService } from './modules/collections';
 import { CustomersService } from './modules/customers';
 import { LoansService } from './modules/loans';
-import { FundsService, InvestorsService } from './modules/money';
+import { DaybookService, FundsService, InvestorsService } from './modules/money';
 import { StaffService } from './modules/staff';
 import { StructureService } from './modules/structure';
 import { TenantsService } from './modules/tenants';
@@ -86,6 +86,12 @@ async function main() {
   const funds = app.get(FundsService);
   const owner = await funds.create(A, { name: 'Owner capital', sourceType: 'OWNER_CAPITAL', branchId: branch.id });
   await funds.deposit(A, owner.id, { amount: 100_000_000, date: addDays(today, -40), mode: 'BANK', note: 'Opening capital' });
+  // Cash for the day's loans comes out of the bank (a contra entry: bank out, cash in).
+  const withdrawal = await prisma.expenseCategory.findFirstOrThrow({ where: { tenantId: tenant.id, name: 'Bank withdrawal' } });
+  const daybook = app.get(DaybookService);
+  for (const [direction, mode] of [['OUT', 'BANK'], ['IN', 'CASH']] as const) {
+    await daybook.addEntry(A, { branchId: branch.id, date: addDays(today, -13), direction, categoryId: withdrawal.id, amount: 30_000_000, mode, particulars: 'Cash withdrawn from bank', billUrl: null });
+  }
   const invFund = await funds.create(A, { name: 'Investor pool', sourceType: 'INVESTOR', branchId: branch.id });
   const investors = app.get(InvestorsService);
   const investor = await investors.save(A, { name: 'Sundaram', phone: '9000000010', address: 'Madurai', bankDetails: 'SBI XXXX1234', nominee: 'Meena' });

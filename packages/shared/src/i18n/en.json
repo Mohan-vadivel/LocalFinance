@@ -53,7 +53,11 @@
     "customer": "Customer",
     "loan": "Loan",
     "today": "Today",
-    "modes": { "CASH": "Cash", "UPI": "UPI", "BANK": "Bank" }
+    "modes": {
+      "CASH": "Cash",
+      "UPI": "UPI",
+      "BANK": "Bank"
+    }
   },
   "auth": {
     "login": "Log in",
@@ -111,7 +115,11 @@
     "maxBranches": "Max branches",
     "maxStaff": "Max staff",
     "maxActiveLoans": "Max active loans",
-    "statuses": { "ACTIVE": "Active", "SUSPENDED": "Suspended", "CLOSED": "Closed" },
+    "statuses": {
+      "ACTIVE": "Active",
+      "SUSPENDED": "Suspended",
+      "CLOSED": "Closed"
+    },
     "suspend": "Suspend",
     "activate": "Activate"
   },
@@ -155,7 +163,15 @@
     "customersOnRoute": "Customers on route",
     "map": "Map"
   },
-  "weekdays": { "0": "Sun", "1": "Mon", "2": "Tue", "3": "Wed", "4": "Thu", "5": "Fri", "6": "Sat" },
+  "weekdays": {
+    "0": "Sun",
+    "1": "Mon",
+    "2": "Tue",
+    "3": "Wed",
+    "4": "Thu",
+    "5": "Fri",
+    "6": "Sat"
+  },
   "staff": {
     "title": "Staff",
     "new": "New staff member",
@@ -165,7 +181,13 @@
     "resetPassword": "Reset password",
     "resetDevice": "Re-bind phone",
     "forceLogout": "Force log out",
-    "deactivate": "Deactivate"
+    "deactivate": "Deactivate",
+    "passwordKeep": "Leave empty to keep",
+    "passwordAuto": "Leave empty to create one",
+    "lastSeen": "Last seen",
+    "device": "Phone bound",
+    "temporaryPassword": "Temporary password",
+    "temporaryPasswordHelp": "Share this password with the staff member. They should change it after logging in."
   },
   "role": {
     "title": "Roles and rights",
@@ -218,10 +240,39 @@
     "riskGrade": "Risk grade",
     "duplicate": "A customer with this phone or ID already exists",
     "blacklist": "Blacklist",
-    "statuses": { "ACTIVE": "Active", "BLACKLISTED": "Blacklisted", "CLOSED": "Closed" },
+    "statuses": {
+      "ACTIVE": "Active",
+      "BLACKLISTED": "Blacklisted",
+      "CLOSED": "Closed"
+    },
     "ledger": "Ledger",
     "statement": "Statement",
-    "idTypes": { "AADHAAR": "Aadhaar", "PAN": "PAN", "VOTER_ID": "Voter ID", "DRIVING_LICENCE": "Driving licence", "OTHER": "Other" }
+    "idTypes": {
+      "AADHAAR": "Aadhaar",
+      "PAN": "PAN",
+      "VOTER_ID": "Voter ID",
+      "DRIVING_LICENCE": "Driving licence",
+      "OTHER": "Other"
+    },
+    "saveAnyway": "Save anyway",
+    "searchHint": "Name, phone, code, ID or loan number",
+    "code": "Code",
+    "reactivate": "Make active",
+    "since": "Customer since",
+    "noGps": "No GPS location saved for this customer",
+    "documents": "Documents",
+    "debit": "Debit",
+    "credit": "Credit",
+    "docKind": "Document type",
+    "docKinds": {
+      "PHOTO": "Photo",
+      "ID_PROOF": "ID proof",
+      "ADDRESS_PROOF": "Address proof",
+      "AGREEMENT": "Agreement",
+      "OTHER": "Other"
+    },
+    "blacklistWarning": "This customer, or the same person under another record, is blacklisted.",
+    "closedOn": "Closed on"
   },
   "history": {
     "pastLoans": "Past loans",
@@ -231,26 +282,45 @@
     "missed": "Missed instalments",
     "writtenOff": "Written off",
     "matches": "Same person under other records",
-    "grades": { "A": "A: excellent", "B": "B: good", "C": "C: watch", "D": "D: high risk", "NEW": "New customer" }
+    "grades": {
+      "A": "A: excellent",
+      "B": "B: good",
+      "C": "C: watch",
+      "D": "D: high risk",
+      "NEW": "New customer"
+    }
   },
   "product": {
     "title": "Loan products",
     "new": "New product",
     "frequency": "Frequency",
-    "frequencies": { "DAILY": "Daily", "WEEKLY": "Weekly", "MONTHLY": "Monthly" },
+    "frequencies": {
+      "DAILY": "Daily",
+      "WEEKLY": "Weekly",
+      "MONTHLY": "Monthly"
+    },
     "minAmount": "Minimum amount",
     "maxAmount": "Maximum amount",
     "tenure": "Number of instalments",
     "interestMethod": "Interest method",
-    "methods": { "FLAT": "Flat", "REDUCING": "Reducing balance", "UPFRONT": "Upfront deduction" },
+    "methods": {
+      "FLAT": "Flat",
+      "REDUCING": "Reducing balance",
+      "UPFRONT": "Upfront deduction"
+    },
     "interestRate": "Interest rate %",
     "interestRateHelp": "Flat and upfront: % of the loan for the whole term. Reducing: % per year.",
     "feePercent": "Processing fee %",
     "feeFlat": "Processing fee (flat)",
     "penaltyType": "Penalty",
-    "penaltyTypes": { "NONE": "None", "FIXED_PER_DAY": "Fixed per day", "PERCENT_PER_DAY": "% of instalment per day" },
+    "penaltyTypes": {
+      "NONE": "None",
+      "FIXED_PER_DAY": "Fixed per day",
+      "PERCENT_PER_DAY": "% of instalment per day"
+    },
     "penaltyValue": "Penalty value",
-    "graceDays": "Grace days"
+    "graceDays": "Grace days",
+    "example": "Example at the minimum amount"
   },
   "loanMod": {
     "title": "Loans",
@@ -295,7 +365,37 @@
       "CLOSED": "Closed",
       "FORECLOSED": "Foreclosed",
       "WRITTEN_OFF": "Written off"
-    }
+    },
+    "lastDue": "Last due date",
+    "resubmit": "Correct and resubmit",
+    "chooseCustomer": "Choose a customer",
+    "searchHint": "Loan number, customer name or phone",
+    "allLoans": "All loans",
+    "atAdmin": "With Tenant Admin",
+    "waitingDecision": "Waiting for a decision",
+    "waitingDisbursal": "Approved, waiting for disbursement",
+    "requestedBy": "Requested by",
+    "approvedBy": "Approved by",
+    "waived": "Waived",
+    "paidOn": "Paid on",
+    "step": "Step",
+    "steps": {
+      "REQUEST": "Request",
+      "BRANCH": "Branch",
+      "ADMIN": "Tenant Admin"
+    },
+    "decisions": {
+      "APPROVE": "Approved",
+      "RECOMMEND": "Recommended",
+      "REJECT": "Rejected",
+      "SEND_BACK": "Sent back",
+      "RESUBMIT": "Resubmitted",
+      "REQUEST": "Requested"
+    },
+    "reference": "Reference",
+    "interestWaived": "Interest waived",
+    "amountToCollect": "Amount to collect",
+    "writeOffWarning": "{{amount}} principal will be written off as a bad debt. This cannot be undone."
   },
   "collection": {
     "title": "Collections",
@@ -308,7 +408,13 @@
     "reverse": "Reverse",
     "reversed": "Reversed",
     "noPayment": "No payment",
-    "outcomes": { "PAID": "Paid", "PARTIAL": "Part paid", "NOT_HOME": "Not at home", "REFUSED": "Refused", "PROMISED": "Promised to pay" },
+    "outcomes": {
+      "PAID": "Paid",
+      "PARTIAL": "Part paid",
+      "NOT_HOME": "Not at home",
+      "REFUSED": "Refused",
+      "PROMISED": "Promised to pay"
+    },
     "promiseDate": "Promised date",
     "farFromCustomer": "Recorded far from the customer's location",
     "lastPayments": "Last payments",
@@ -316,7 +422,9 @@
     "arrears": "Arrears",
     "saved": "Collection saved",
     "savedOffline": "Saved on phone; will sync when online",
-    "tooMuch": "Amount is more than the outstanding balance"
+    "tooMuch": "Amount is more than the outstanding balance",
+    "receiptSent": "Receipt sent again",
+    "resend": "Resend receipt"
   },
   "mobile": {
     "myRoutes": "My routes today",
@@ -349,7 +457,12 @@
     "title": "Funds",
     "new": "New fund",
     "sourceType": "Source",
-    "sourceTypes": { "OWNER_CAPITAL": "Owner capital", "INVESTOR": "Investor", "BANK_LOAN": "Bank loan", "OTHER": "Other" },
+    "sourceTypes": {
+      "OWNER_CAPITAL": "Owner capital",
+      "INVESTOR": "Investor",
+      "BANK_LOAN": "Bank loan",
+      "OTHER": "Other"
+    },
     "balance": "Balance",
     "deposit": "Add money",
     "transfer": "Transfer",
@@ -357,7 +470,24 @@
     "toAgent": "To agent (cash float)",
     "insufficient": "Not enough money in this fund",
     "investorShare": "Investor money",
-    "ownerShare": "Owner capital"
+    "ownerShare": "Owner capital",
+    "available": "Available in funds",
+    "lentOut": "Lent out",
+    "transactions": "Transactions",
+    "transferTo": "Transfer to",
+    "floatHelp": "The float comes back to this fund when the agent's handover is confirmed.",
+    "txnTypes": {
+      "DEPOSIT": "Money added",
+      "TRANSFER_IN": "Transfer in",
+      "TRANSFER_OUT": "Transfer out",
+      "FLOAT_OUT": "Float to agent",
+      "FLOAT_RETURN": "Float returned",
+      "DISBURSEMENT": "Loan disbursed",
+      "COLLECTION": "Collection",
+      "REVERSAL": "Reversal",
+      "INVESTOR_IN": "Investor money in",
+      "INVESTOR_OUT": "Investor payout"
+    }
   },
   "investor": {
     "title": "Investors",
@@ -369,7 +499,10 @@
     "nominee": "Nominee",
     "agreement": "Agreement",
     "returnType": "Return type",
-    "returnTypes": { "FIXED_MONTHLY": "Fixed % per month", "PROFIT_SHARE": "Share of profit" },
+    "returnTypes": {
+      "FIXED_MONTHLY": "Fixed % per month",
+      "PROFIT_SHARE": "Share of profit"
+    },
     "returnRate": "Return rate %",
     "payoutEvery": "Payout every (months)",
     "maturityDate": "Maturity date",
@@ -381,7 +514,19 @@
     "payout": "Record payout",
     "withdrawal": "Withdraw principal",
     "statement": "Investor statement",
-    "txnTypes": { "INVESTMENT": "Investment", "RETURN_DUE": "Return due", "PAYOUT": "Payout", "WITHDRAWAL": "Withdrawal" }
+    "txnTypes": {
+      "INVESTMENT": "Investment",
+      "RETURN_DUE": "Return due",
+      "PAYOUT": "Payout",
+      "WITHDRAWAL": "Withdrawal"
+    },
+    "runHelp": "Works out each active investment's return for the period. Running the same period twice does nothing.",
+    "payoutsDue": "Payouts due",
+    "nextPayout": "Next payout",
+    "dueNow": "Due now",
+    "returnsCreated": "{{count}} returns calculated",
+    "adminOnly": "Payouts and withdrawals are approved by the Tenant Admin.",
+    "period": "Period"
   },
   "daybook": {
     "title": "Day book",
@@ -404,7 +549,12 @@
     "bill": "Bill photo",
     "categories": "Categories",
     "newCategory": "New category",
-    "kinds": { "EXPENSE": "Expense", "INCOME": "Other income", "DRAWING": "Owner drawing", "BANK": "Bank deposit or withdrawal" },
+    "kinds": {
+      "EXPENSE": "Expense",
+      "INCOME": "Other income",
+      "DRAWING": "Owner drawing",
+      "BANK": "Bank deposit or withdrawal"
+    },
     "system": {
       "LOAN_DISBURSEMENT": "Loan disbursed",
       "COLLECTION": "Collection",
@@ -417,7 +567,13 @@
       "FUND_TRANSFER_IN": "Fund transfer in",
       "FUND_TRANSFER_OUT": "Fund transfer out",
       "REVERSAL": "Reversal"
-    }
+    },
+    "reopen": "Reopen day",
+    "closeHelp": "Close the day after every agent has handed over cash. Closed days cannot be changed.",
+    "allBranches": "Showing all branches together. Choose a branch to close a day.",
+    "auto": "auto",
+    "contraWithdraw": "Bank to cash (withdrawal)",
+    "contraDeposit": "Cash to bank (deposit)"
   },
   "handover": {
     "title": "Cash handover",
@@ -428,7 +584,11 @@
     "excess": "Excess",
     "verify": "Confirm handover",
     "verifiedBy": "Verified by",
-    "pending": "Waiting for handover"
+    "pending": "Waiting for handover",
+    "float": "Float given",
+    "done": "Handed over",
+    "notSelf": "Another person must confirm",
+    "history": "Handovers this month"
   },
   "report": {
     "title": "Reports",
@@ -450,7 +610,12 @@
     "collected": "Collected",
     "missed": "Missed",
     "run": "Run report",
-    "buckets": { "d1_7": "1 to 7 days", "d8_30": "8 to 30 days", "d31_90": "31 to 90 days", "d90_plus": "Over 90 days" }
+    "buckets": {
+      "d1_7": "1 to 7 days",
+      "d8_30": "8 to 30 days",
+      "d31_90": "31 to 90 days",
+      "d90_plus": "Over 90 days"
+    }
   },
   "pl": {
     "title": "Profit and loss",
@@ -464,17 +629,22 @@
     "badDebts": "Less: bad debts",
     "netProfit": "Net profit or loss",
     "basis": "Basis",
-    "bases": { "CASH": "Cash basis", "ACCRUAL": "Accrual basis" },
+    "bases": {
+      "CASH": "Cash basis",
+      "ACCRUAL": "Accrual basis"
+    },
     "byMonth": "By month",
     "previousPeriod": "Previous period",
-    "expenseBreakdown": "Expenses by category"
+    "expenseBreakdown": "Expenses by category",
+    "month": "Month"
   },
   "audit": {
     "title": "Audit log",
     "actor": "Who",
     "action": "Action",
     "entity": "Record",
-    "time": "When"
+    "time": "When",
+    "details": "Details"
   },
   "settings": {
     "title": "Business settings",
@@ -484,10 +654,27 @@
     "workingDays": "Working days",
     "holidays": "Holidays",
     "paymentOrder": "Apply payments",
-    "paymentOrders": { "PENALTY_FIRST": "Penalty first, then interest, then principal", "PENALTY_LAST": "Interest, then principal, then penalty" },
+    "paymentOrders": {
+      "PENALTY_FIRST": "Penalty first, then interest, then principal",
+      "PENALTY_LAST": "Interest, then principal, then penalty"
+    },
     "plBasis": "Profit and loss basis",
     "geoCheck": "Flag collections farther than (metres)",
-    "receiptFooter": "Receipt footer"
+    "receiptFooter": "Receipt footer",
+    "holidayHelp": "Instalments falling on a holiday or non-working day move to the next working day.",
+    "smsTemplates": "SMS templates",
+    "smsHelp": "Leave empty to use the standard message in the customer's language.",
+    "sms": {
+      "collection": "After a collection",
+      "disbursement": "After disbursement",
+      "reminder": "Due reminder"
+    },
+    "supportAccess": "Support access",
+    "supportHelp": "Lets the platform support team view your business read-only for a number of days.",
+    "supportUntil": "Support can view until",
+    "supportOff": "Support access is off",
+    "grantSupport": "Allow for days",
+    "revokeSupport": "Turn off"
   },
   "receipt": {
     "title": "Payment receipt",
@@ -506,5 +693,67 @@
     "dayClosed": "That day is already closed",
     "validation": "Please check the highlighted fields",
     "network": "Cannot reach the server"
+  },
+  "reportCols": {
+    "date": "Date",
+    "route": "Route",
+    "due": "Due",
+    "collected": "Collected",
+    "cash": "Cash",
+    "upi": "UPI / bank",
+    "customersDue": "Customers due",
+    "missed": "Missed",
+    "rate": "Collection %",
+    "demand": "Demand",
+    "loan": "Loan",
+    "customer": "Customer",
+    "branch": "Branch",
+    "product": "Product",
+    "principal": "Loan amount",
+    "fee": "Fee",
+    "upfrontInterest": "Upfront interest",
+    "netDisbursed": "Cash paid",
+    "mode": "Mode",
+    "phone": "Phone",
+    "location": "Location",
+    "disbursedOn": "Disbursed on",
+    "principalOutstanding": "Principal due",
+    "interestOutstanding": "Interest due",
+    "penalty": "Penalty",
+    "totalOutstanding": "Total outstanding",
+    "overdue": "Overdue",
+    "daysPastDue": "Days past due",
+    "agent": "Agent",
+    "collections": "Collections",
+    "amount": "Amount",
+    "customersVisited": "Customers visited",
+    "noPaymentVisits": "No-payment visits",
+    "flagged": "Far from customer",
+    "cashDifference": "Cash difference",
+    "expected": "Expected",
+    "received": "Received",
+    "difference": "Difference",
+    "note": "Note",
+    "verifiedBy": "Verified by",
+    "fund": "Fund",
+    "source": "Source",
+    "available": "Available",
+    "lentOut": "Lent out",
+    "activeLoans": "Active loans",
+    "utilisation": "Utilisation",
+    "month": "Month",
+    "interest": "Interest",
+    "fees": "Fees",
+    "upfront": "Upfront interest",
+    "total": "Total",
+    "closedOn": "Closed on",
+    "status": "Status",
+    "interestWaived": "Interest waived",
+    "writtenOff": "Written off",
+    "customers": "Customers",
+    "outstanding": "Outstanding",
+    "investor": "Investor",
+    "type": "Type",
+    "period": "Period"
   }
 }

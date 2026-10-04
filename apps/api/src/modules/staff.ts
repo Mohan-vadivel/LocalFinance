@@ -40,8 +40,10 @@ export class StaffService {
       where: {
         tenantId: ctx.tenantId,
         ...(q.role ? { role: { baseRole: q.role } } : {}),
-        ...(q.branchId ? { branches: { some: { branchId: q.branchId } } } : {}),
-        ...(ctx.branchIds ? { branches: { some: { branchId: { in: ctx.branchIds } } } } : {}),
+        AND: [
+          ...(q.branchId ? [{ branches: { some: { branchId: q.branchId } } }] : []),
+          ...(ctx.branchIds ? [{ branches: { some: { branchId: { in: ctx.branchIds } } } }] : []),
+        ],
       },
       select: PUBLIC_USER,
       orderBy: { name: 'asc' },
