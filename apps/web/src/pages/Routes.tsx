@@ -185,12 +185,13 @@ export function RouteDetail() {
             <button className="btn small" onClick={() => void suggest()}>{t('routeMod.optimise')}</button>
             <button className="btn small primary" disabled={!order} onClick={() => void saveOrder()}>{t('routeMod.saveOrder')}</button>
           </div>
+          <div className="table-wrap">
           <table className="data">
             <tbody>
               {list.map((c, i) => (
                 <tr key={c.id}>
                   <td className="num">{i + 1}</td>
-                  <td>
+                  <td className="wrap">
                     <strong>{c.name}</strong> <span className="muted">{c.code}</span>
                     <div className="muted">{c.address}{c.landmark ? ` · ${c.landmark}` : ''}</div>
                     {c.lat == null && <span className="badge warn">{t('customerMod.gps')} -</span>}
@@ -206,6 +207,7 @@ export function RouteDetail() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
         <div className="card">
           <h2>{t('routeMod.map')}</h2>

@@ -63,11 +63,15 @@ export default function CollectionSummary() {
           ]}
         />
         <div className="row" style={{ marginTop: 12 }}>
-          <button className="btn" onClick={() => setDate(addDays(range.from, -1))}>‹ {t('collSummary.prev')}</button>
-          <strong style={{ minWidth: 200, textAlign: 'center' }}>{label}</strong>
-          <button className="btn" disabled={atCurrent} onClick={() => setDate(addDays(range.to, 1))}>{t('collSummary.next')} ›</button>
-          <button className="btn" disabled={atCurrent} onClick={() => setDate(today())}>{t('collSummary.current')}</button>
-          <input type="date" value={date} max={today()} onChange={(e) => e.target.value && setDate(e.target.value)} />
+          <div className="period-nav">
+            <button className="btn" onClick={() => setDate(addDays(range.from, -1))}>‹ {t('collSummary.prev')}</button>
+            <strong>{label}</strong>
+            <button className="btn" disabled={atCurrent} onClick={() => setDate(addDays(range.to, 1))}>{t('collSummary.next')} ›</button>
+          </div>
+          <div className="row">
+            <button className="btn" disabled={atCurrent} onClick={() => setDate(today())}>{t('collSummary.current')}</button>
+            <input type="date" value={date} max={today()} onChange={(e) => e.target.value && setDate(e.target.value)} />
+          </div>
         </div>
         <div className="row" style={{ marginTop: 12 }}>
           <BranchPicker value={branchId} onChange={setBranchId} allowAll />
