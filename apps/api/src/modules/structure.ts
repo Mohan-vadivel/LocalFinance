@@ -14,7 +14,7 @@ import { AuditService } from '../common/audit.service';
 import { CurrentCtx, Perm, type Ctx } from '../common/context';
 import { bad, conflict, notFound } from '../common/errors';
 import { PrismaService } from '../common/prisma.service';
-import { assertBranch, branchScope } from '../common/scope';
+import { assertBranch, assertOwned, branchScope } from '../common/scope';
 import { V } from '../common/zod.pipe';
 
 @Injectable()
@@ -37,6 +37,7 @@ export class StructureService {
     const count = await this.prisma.branch.count({ where: { tenantId: ctx.tenantId } });
     if (count >= t.maxBranches) throw bad(`Your plan allows ${t.maxBranches} branches`);
     if (await this.prisma.branch.findFirst({ where: { tenantId: ctx.tenantId, code: input.code } })) throw conflict('Branch code already used');
+    await assertOwned(this.prisma.user, ctx, input.managerId, 'Manager');
     const b = await this.prisma.branch.create({ data: { ...input, tenantId: ctx.tenantId } });
     await this.audit.log(ctx, 'CREATE', 'Branch', b.id, undefined, input);
     return b;
@@ -46,6 +47,7 @@ export class StructureService {
     const b = await this.prisma.branch.findFirst({ where: { id, tenantId: ctx.tenantId } });
     if (!b) throw notFound('Branch');
     assertBranch(ctx, id);
+    await assertOwned(this.prisma.user, ctx, input.managerId, 'Manager');
     const u = await this.prisma.branch.update({ where: { id }, data: input });
     await this.audit.log(ctx, 'UPDATE', 'Branch', id, b, input);
     return u;

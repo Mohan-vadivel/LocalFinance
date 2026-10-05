@@ -30,7 +30,9 @@ export class AuthGuard implements CanActivate {
     if (this.reflector.getAllAndOverride<boolean>(PUBLIC_KEY, targets)) return true;
     const req = ec.switchToHttp().getRequest();
     const header: string | undefined = req.headers.authorization;
-    const token = header?.startsWith('Bearer ') ? header.slice(7) : (req.query?.access_token as string | undefined);
+    // A token in the URL is accepted only for opening a file (image or PDF links), never for other calls.
+    const fileGet = req.method === 'GET' && String(req.path ?? req.url ?? '').startsWith('/files/');
+    const token = header?.startsWith('Bearer ') ? header.slice(7) : fileGet ? (req.query?.access_token as string | undefined) : undefined;
     if (!token) throw new UnauthorizedException({ message: 'Please log in', code: 'auth.login' });
 
     let payload: JwtPayload;
@@ -89,6 +91,7 @@ export class AuthGuard implements CanActivate {
       throw forbidden('Open a business with support access first');
     }
 
+    if (tenant && tenant.status === 'CLOSED' && role !== 'SUPER_ADMIN') throw forbidden('This business is closed');
     const isWrite = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
     if (isWrite && readOnly) throw forbidden('Support access is read only');
     if (isWrite && tenant && tenant.status !== 'ACTIVE' && role !== 'SUPER_ADMIN') {

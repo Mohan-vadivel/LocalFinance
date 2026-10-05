@@ -438,6 +438,37 @@ describe('multi-tenancy', () => {
     assert.equal(roles.length, 6);
   });
 
+  test('a business cannot touch, link to or message another business\'s records', async () => {
+    const demoBranch = (await ok(api('GET', '/branches', { token: owner })))[0];
+    const demoCollection = (await ok(api('GET', `/collections?from=2020-01-01&to=${today()}`, { token: owner }))).rows[0];
+    const demoAgent = (await ok(api('GET', '/staff', { token: owner }))).find((s) => s.phone === '9000000004');
+    const demoLoan = (await ok(api('GET', '/loans', { token: owner }))).rows[0];
+    const demoInvestor = (await ok(api('GET', '/investors', { token: owner })))[0];
+    const own = (await ok(api('GET', '/branches', { token: otherAdmin })))[0] ?? (await ok(api('POST', '/branches', { token: otherAdmin, body: { name: 'Other Main', code: 'OM' } })));
+    const cat = (await ok(api('GET', '/daybook/categories', { token: otherAdmin })))[0];
+    const refused = async (method, path, body) => {
+      const r = await api(method, path, { token: otherAdmin, body });
+      assert.ok(r.status >= 400, `${method} ${path} should be refused, got ${r.status}: ${JSON.stringify(r.data).slice(0, 200)}`);
+    };
+    // Resending a receipt would text the other business's customer.
+    await refused('POST', `/collections/${demoCollection.id}/resend-receipt`, {});
+    // Day book lines and day close in another business's branch would shift its balances or lock its day.
+    await refused('POST', '/daybook/entries', { branchId: demoBranch.id, date: today(), direction: 'OUT', categoryId: cat.id, amount: 100, mode: 'CASH', particulars: 'probe' });
+    await refused('POST', '/daybook/close', { branchId: demoBranch.id, date: today() });
+    await refused('POST', '/daybook/reopen', { branchId: demoBranch.id, date: today() });
+    // Links from this business's rows to the other business's people and records.
+    await refused('POST', '/branches', { name: 'Linked', code: 'LK', managerId: demoAgent.id });
+    await refused('PUT', `/branches/${own.id}`, { name: own.name, code: own.code, managerId: demoAgent.id });
+    if (demoInvestor) await refused('POST', '/funds', { name: 'Linked fund', sourceType: 'INVESTOR', branchId: own.id, investorId: demoInvestor.id });
+    const fd = new FormData();
+    fd.append('file', new Blob(['%PDF-1.4'], { type: 'application/pdf' }), 'a.pdf');
+    fd.append('loanId', demoLoan.id);
+    const up = await fetch(BASE + '/files', { method: 'POST', headers: { authorization: `Bearer ${otherAdmin}` }, body: fd });
+    assert.equal(up.status, 404);
+    // A token in the address is only for opening files.
+    assert.equal((await api('GET', `/customers?access_token=${otherAdmin}`)).status, 401);
+  });
+
   test('support access is read-only and needs the tenant\'s consent', async () => {
     const demo = (await ok(api('GET', '/auth/me', { token: owner }))).tenant.id;
     assert.equal((await api('GET', '/customers', { token: superAdmin, headers: { 'x-tenant-id': demo } })).status, 403);

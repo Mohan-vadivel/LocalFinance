@@ -246,11 +246,11 @@ export class ReportsService {
   }
 
   /** Cash and bank carried into `date` for the given branches: last day close before it plus later entries. */
-  private async bookOpening(branchIds: string[], date: string) {
+  private async bookOpening(tenantId: string, branchIds: string[], date: string) {
     const bal = { cash: 0, bank: 0 };
     for (const branchId of branchIds) {
-      const lastClose = await this.prisma.dayClose.findFirst({ where: { branchId, date: { lt: date } }, orderBy: { date: 'desc' } });
-      const entries = await this.prisma.daybookEntry.findMany({ where: { branchId, date: { lt: date, ...(lastClose ? { gt: lastClose.date } : {}) } }, select: { amount: true, mode: true, direction: true } });
+      const lastClose = await this.prisma.dayClose.findFirst({ where: { tenantId, branchId, date: { lt: date } }, orderBy: { date: 'desc' } });
+      const entries = await this.prisma.daybookEntry.findMany({ where: { tenantId, branchId, date: { lt: date, ...(lastClose ? { gt: lastClose.date } : {}) } }, select: { amount: true, mode: true, direction: true } });
       bal.cash += lastClose?.closingCash ?? 0;
       bal.bank += lastClose?.closingBank ?? 0;
       for (const e of entries) bal[e.mode === 'CASH' ? 'cash' : 'bank'] += e.direction === 'IN' ? e.amount : -e.amount;
@@ -289,7 +289,7 @@ export class ReportsService {
       this.prisma.handover.findMany({ where: { ...scope, date: { gte: from, lte: to } }, select: { date: true, difference: true } }),
       this.prisma.daybookEntry.findMany({ where: { ...scope, date: { gte: from, lte: to } }, select: { date: true, amount: true, mode: true, direction: true, categoryId: true, source: true } }),
       this.prisma.expenseCategory.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, kind: true } }),
-      this.bookOpening(ids, from),
+      this.bookOpening(ctx.tenantId, ids, from),
     ]);
     const kind = new Map(categories.map((c) => [c.id, c.kind]));
     const ledger = await this.ledgerByDay(allLoans.map((l) => l.id), to);
@@ -386,7 +386,7 @@ export class ReportsService {
       this.prisma.collection.findMany({ where: { ...scope, date: { gte: from, lte: to }, reversedAt: null, ...(f.routeId ? { routeId: f.routeId } : {}) }, select: { routeId: true, amount: true, mode: true, interest: true, penalty: true, loanId: true } }),
       this.prisma.daybookEntry.findMany({ where: { ...scope, date: { gte: from, lte: to } }, select: { amount: true, mode: true, direction: true, categoryId: true, systemCategory: true } }),
       this.prisma.expenseCategory.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, name: true } }),
-      this.bookOpening(ids, from),
+      this.bookOpening(ctx.tenantId, ids, from),
     ]);
     const balances = loans.length
       ? await this.prisma.ledgerEntry.groupBy({ by: ['loanId'], where: { loanId: { in: loans.map((l) => l.id) }, date: { lte: to } }, _sum: { debit: true, credit: true } })

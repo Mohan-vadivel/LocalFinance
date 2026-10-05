@@ -84,7 +84,11 @@ export class BooksService {
   }
 
   async isClosed(tx: Tx, branchId: string, date: string) {
-    return !!(await tx.dayClose.findUnique({ where: { branchId_date: { branchId, date } } }));
+    // Branch ids reach here only after the caller's ownership checks; the close must also be in the branch's own business.
+    const c = await tx.dayClose.findUnique({ where: { branchId_date: { branchId, date } } });
+    if (!c) return false;
+    const branch = await tx.branch.findUnique({ where: { id: branchId }, select: { tenantId: true } });
+    return branch?.tenantId === c.tenantId;
   }
 
   /**

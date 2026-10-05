@@ -87,8 +87,8 @@ export class AuthService {
   async refresh(token: string) {
     const row = await this.prisma.refreshToken.findUnique({ where: { tokenHash: sha(token) } });
     if (!row || row.revoked || row.expiresAt < new Date()) throw new UnauthorizedException({ message: 'Session expired', code: 'auth.login' });
-    const user = await this.prisma.user.findUnique({ where: { id: row.userId } });
-    if (!user || !user.active) throw new UnauthorizedException({ message: 'Session expired', code: 'auth.login' });
+    const user = await this.prisma.user.findUnique({ where: { id: row.userId }, include: { tenant: true } });
+    if (!user || !user.active || user.tenant?.status === 'CLOSED') throw new UnauthorizedException({ message: 'Session expired', code: 'auth.login' });
     await this.prisma.refreshToken.update({ where: { id: row.id }, data: { revoked: true } });
     return this.issue(user.id, user.tenantId, user.tokenVersion);
   }

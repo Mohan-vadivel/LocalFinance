@@ -21,7 +21,7 @@ import { BooksService } from '../common/books.service';
 import { CurrentCtx, Perm, type Ctx } from '../common/context';
 import { bad, conflict, forbidden, notFound } from '../common/errors';
 import { PrismaService } from '../common/prisma.service';
-import { assertBranch, branchScope } from '../common/scope';
+import { assertBranch, assertOwned, branchScope } from '../common/scope';
 import { V } from '../common/zod.pipe';
 import { ProfitLossService } from './reports';
 
@@ -58,6 +58,7 @@ export class FundsService {
     assertBranch(ctx, input.branchId);
     if (!(await this.prisma.branch.findFirst({ where: { id: input.branchId, tenantId: ctx.tenantId } }))) throw notFound('Branch');
     if (await this.prisma.fund.findFirst({ where: { tenantId: ctx.tenantId, branchId: input.branchId, name: input.name } })) throw conflict('A fund with this name exists in the branch');
+    await assertOwned(this.prisma.investor, ctx, input.investorId, 'Investor');
     const f = await this.prisma.fund.create({ data: { ...input, tenantId: ctx.tenantId } });
     await this.audit.log(ctx, 'CREATE', 'Fund', f.id, undefined, input);
     return f;
@@ -370,10 +371,10 @@ export class DaybookService {
   }
 
   /** Balances carried into a date: from the last close before it, plus entries after that close. */
-  async opening(branchId: string, date: string) {
-    const lastClose = await this.prisma.dayClose.findFirst({ where: { branchId, date: { lt: date } }, orderBy: { date: 'desc' } });
+  async opening(tenantId: string, branchId: string, date: string) {
+    const lastClose = await this.prisma.dayClose.findFirst({ where: { tenantId, branchId, date: { lt: date } }, orderBy: { date: 'desc' } });
     const since = lastClose?.date;
-    const entries = await this.prisma.daybookEntry.findMany({ where: { branchId, date: { lt: date, ...(since ? { gt: since } : {}) } } });
+    const entries = await this.prisma.daybookEntry.findMany({ where: { tenantId, branchId, date: { lt: date, ...(since ? { gt: since } : {}) } } });
     const bal = { cash: lastClose?.closingCash ?? 0, bank: lastClose?.closingBank ?? 0 };
     for (const e of entries) bal[bankSide(e.mode)] += e.direction === 'IN' ? e.amount : -e.amount;
     return bal;
@@ -386,7 +387,7 @@ export class DaybookService {
     const branches = await this.prisma.branch.findMany({ where: { tenantId: ctx.tenantId, ...(scope.branchId ? { id: scope.branchId as string | { in: string[] } } : {}) } });
     const opening = { cash: 0, bank: 0 };
     for (const b of branches) {
-      const o = await this.opening(b.id, q.from);
+      const o = await this.opening(ctx.tenantId, b.id, q.from);
       opening.cash += o.cash;
       opening.bank += o.bank;
     }
@@ -423,6 +424,7 @@ export class DaybookService {
 
   async addEntry(ctx: Ctx, input: z.infer<typeof daybookEntrySchema>) {
     assertBranch(ctx, input.branchId);
+    await assertOwned(this.prisma.branch, ctx, input.branchId, 'Branch');
     const cat = await this.prisma.expenseCategory.findFirst({ where: { id: input.categoryId, tenantId: ctx.tenantId } });
     if (!cat) throw notFound('Category');
     if (input.date > todayIST()) throw bad('Entries cannot be in the future');
@@ -448,12 +450,13 @@ export class DaybookService {
   /** Locks a day. Blocked until every agent who collected cash that day has handed over. */
   async close(ctx: Ctx, input: z.infer<typeof dayCloseSchema>) {
     assertBranch(ctx, input.branchId);
+    await assertOwned(this.prisma.branch, ctx, input.branchId, 'Branch');
     if (input.date > todayIST()) throw bad('Cannot close a future day');
     if (await this.prisma.dayClose.findUnique({ where: { branchId_date: input } })) throw bad('That day is already closed', 'errors.dayClosed');
     const agents = await this.prisma.collection.groupBy({ by: ['agentId'], where: { tenantId: ctx.tenantId, branchId: input.branchId, date: input.date, reversedAt: null, mode: 'CASH' } });
     const floats = await this.prisma.agentFloat.groupBy({ by: ['agentId'], where: { tenantId: ctx.tenantId, branchId: input.branchId, date: input.date } });
     const agentIds = [...new Set([...agents.map((a) => a.agentId), ...floats.map((f) => f.agentId)])];
-    const handovers = await this.prisma.handover.findMany({ where: { agentId: { in: agentIds }, date: input.date } });
+    const handovers = await this.prisma.handover.findMany({ where: { tenantId: ctx.tenantId, agentId: { in: agentIds }, date: input.date } });
     const pending = agentIds.filter((a) => !handovers.some((h) => h.agentId === a));
     if (pending.length) {
       const names = await this.prisma.user.findMany({ where: { id: { in: pending } }, select: { name: true } });
@@ -479,6 +482,7 @@ export class DaybookService {
   /** Reopens a closed day for a correction; Tenant Admin only, always logged. Later closes are reopened too. */
   async reopen(ctx: Ctx, input: z.infer<typeof dayCloseSchema>) {
     if (ctx.role !== 'TENANT_ADMIN') throw forbidden('Only the Tenant Admin can reopen a closed day');
+    await assertOwned(this.prisma.branch, ctx, input.branchId, 'Branch');
     const closes = await this.prisma.dayClose.findMany({ where: { tenantId: ctx.tenantId, branchId: input.branchId, date: { gte: input.date } } });
     if (!closes.length) throw bad('That day is not closed');
     await this.prisma.dayClose.deleteMany({ where: { id: { in: closes.map((c) => c.id) } } });

@@ -6,6 +6,7 @@ import { join, resolve } from 'path';
 import { randomUUID } from 'crypto';
 import { CurrentCtx, type Ctx } from '../common/context';
 import { bad, notFound } from '../common/errors';
+import { assertOwned } from '../common/scope';
 import { PrismaService } from '../common/prisma.service';
 
 const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
@@ -29,6 +30,9 @@ export class FilesController {
   ) {
     if (!file) throw bad('Choose a file');
     if (!ALLOWED.includes(file.mimetype)) throw bad('Only JPG, PNG, WEBP or PDF files');
+    await assertOwned(this.prisma.customer, ctx, body.customerId, 'Customer');
+    await assertOwned(this.prisma.loan, ctx, body.loanId, 'Loan');
+    await assertOwned(this.prisma.investor, ctx, body.investorId, 'Investor');
     const id = randomUUID();
     const tenantDir = join(dir(), ctx.tenantId);
     mkdirSync(tenantDir, { recursive: true });

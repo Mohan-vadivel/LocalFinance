@@ -19,7 +19,7 @@ import { CurrentCtx, Perm, type Ctx } from '../common/context';
 import { bad, forbidden, notFound, rule } from '../common/errors';
 import { NotifyService } from '../common/notify.service';
 import { PrismaService, type Tx } from '../common/prisma.service';
-import { assertBranch, branchScope } from '../common/scope';
+import { assertBranch, assertOwned, branchScope } from '../common/scope';
 import { V } from '../common/zod.pipe';
 
 type CollectionInput = z.infer<typeof collectionSchema>;
@@ -182,8 +182,11 @@ export class CollectionsService {
   }
 
   async sendReceipt(ctx: Ctx, collectionId: string) {
-    const c = await this.prisma.collection.findUniqueOrThrow({ where: { id: collectionId } });
-    const loan = await this.prisma.loan.findUniqueOrThrow({ where: { id: c.loanId }, include: { customer: true, instalments: true } });
+    const c = await this.prisma.collection.findFirst({ where: { id: collectionId, tenantId: ctx.tenantId } });
+    if (!c) throw notFound('Collection');
+    assertBranch(ctx, c.branchId);
+    const loan = await this.prisma.loan.findFirst({ where: { id: c.loanId, tenantId: ctx.tenantId }, include: { customer: true, instalments: true } });
+    if (!loan) throw notFound('Loan');
     const pos = positionOf(loan);
     const vars = { business: ctx.tenantName, amount: formatINR(c.amount), loan: loan.number, date: c.date, balance: formatINR(pos.totalOutstanding), receipt: c.receiptNo };
     return this.notify.sms(ctx.tenantId, loan.customer.phone, loan.customer.language, 'sms.collection', vars, ctx.settings.smsTemplates?.collection);
@@ -195,6 +198,7 @@ export class CollectionsService {
     const c = await this.prisma.customer.findFirst({ where: { id: input.customerId, tenantId: ctx.tenantId } });
     if (!c) throw notFound('Customer');
     assertBranch(ctx, c.branchId);
+    if (input.loanId && !(await this.prisma.loan.findFirst({ where: { id: input.loanId, tenantId: ctx.tenantId, customerId: c.id }, select: { id: true } }))) throw notFound('Loan');
     const visitedAt = input.visitedAt ? new Date(input.visitedAt) : new Date();
     return this.prisma.visitLog.create({
       data: { ...input, tenantId: ctx.tenantId, agentId: ctx.userId, visitedAt, date: istDate(visitedAt) },

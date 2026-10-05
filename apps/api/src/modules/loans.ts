@@ -333,6 +333,7 @@ export class LoansService {
   async foreclose(ctx: Ctx, id: string, input: z.infer<typeof forecloseSchema>) {
     const l = await this.prisma.loan.findFirst({ where: { id, tenantId: ctx.tenantId }, include: { instalments: true } });
     if (!l) throw notFound('Loan');
+    assertBranch(ctx, l.branchId);
     const pos = positionOf(l, input.date);
     const expected = pos.totalOutstanding - input.interestWaived;
     if (input.interestWaived > pos.interestOutstanding) throw bad('Waiver is more than the unpaid interest');
