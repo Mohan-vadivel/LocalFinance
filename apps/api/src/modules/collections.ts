@@ -273,7 +273,7 @@ export class CollectionsService {
     return { ok: true };
   }
 
-  async list(ctx: Ctx, q: { from?: string; to?: string; branchId?: string; agentId?: string; routeId?: string; loanId?: string; flagged?: string; page?: number }) {
+  async list(ctx: Ctx, q: { from?: string; to?: string; branchId?: string; agentId?: string; routeId?: string; loanId?: string; customerId?: string; flagged?: string; page?: number }) {
     const take = 100;
     const page = Math.max(1, q.page ?? 1);
     const where: Prisma.CollectionWhereInput = {
@@ -282,6 +282,7 @@ export class CollectionsService {
       ...(q.agentId ? { agentId: q.agentId } : {}),
       ...(q.routeId ? { routeId: q.routeId } : {}),
       ...(q.loanId ? { loanId: q.loanId } : {}),
+      ...(q.customerId ? { customerId: q.customerId } : {}),
       ...(q.flagged === 'true' ? { flagged: true } : {}),
       // Agents only see their own collections.
       ...(ctx.role === 'COLLECTION_AGENT' ? { agentId: ctx.userId } : {}),
@@ -424,6 +425,7 @@ const listQuery = z.object({
   agentId: z.string().optional(),
   routeId: z.string().optional(),
   loanId: z.string().optional(),
+  customerId: z.string().optional(),
   flagged: z.string().optional(),
   page: z.coerce.number().int().positive().optional(),
 });

@@ -285,7 +285,10 @@
     "blacklistWarning": "This customer, or the same person under another record, is blacklisted.",
     "closedOn": "Closed on",
     "gpsDenied": "Couldn't get this device's location. Allow location for this site in the browser, or click the map to mark the customer's place.",
-    "chooseLocation": "Choose the customer's location (area), or pick a route to fill it in."
+    "chooseLocation": "Choose the customer's location (area), or pick a route to fill it in.",
+    "call": "Call",
+    "whatsapp": "WhatsApp",
+    "printStatement": "Print statement"
   },
   "history": {
     "pastLoans": "Past loans",
@@ -1054,5 +1057,26 @@
       "maturityDiffers": "The schedule ends on {{computed}}; the sheet says {{given}}",
       "closedAccount": "Fully paid; not imported"
     }
+  },
+  "confirm": {
+    "title": "Check and confirm",
+    "review": "Review",
+    "check": "Check these details. Nothing is saved until you press the button below.",
+    "reasonRequired": "Reason (required)",
+    "reasonNeeded": "Give a reason of at least 3 letters"
+  },
+  "print": {
+    "printedOn": "Printed on",
+    "receipt": "Print receipt",
+    "sendSms": "Send SMS",
+    "smsSent": "Receipt sent by SMS",
+    "repaymentCard": "Repayment card",
+    "printCard": "Print repayment card",
+    "disbursalSlip": "Loan disbursal slip",
+    "collectedBy": "Collected by",
+    "disbursedBy": "Disbursed by",
+    "outstandingAfter": "Outstanding after this",
+    "signature": "Signature",
+    "sign": "Sign"
   }
 }

@@ -1,16 +1,17 @@
 import { useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Eye } from 'lucide-react';
+import { Eye, HandCoins, MessageCircle, Phone, Printer } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { LANGUAGES } from '@localfinance/shared';
 import { MapView } from '../components/MapView';
 import { BranchPicker, LocationPicker, RoutePicker } from '../components/pickers';
-import { Badge, DataTable, ErrorBox, Field, FormModal, Loading, Stat, Tabs, statusTone, useToast } from '../components/ui';
+import { Badge, DataTable, DocHead, ErrorBox, Field, FormModal, Loading, PrintDoc, Stat, Tabs, printDoc, statusTone, useToast } from '../components/ui';
 import { ApiError, get, openFile, post, put, upload } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateIN, dateTime, money, toPaise, toRupeesInput } from '../lib/format';
 import { useLoad } from '../lib/hooks';
-import { LoanRequestForm } from './Loans';
+import { CollectFlow, LoanRequestForm } from './Loans';
 
 export interface Customer {
   id: string;
@@ -54,9 +55,24 @@ interface History {
   loans: (CustomerLoan & { customerId: string; maxDaysLate: number })[];
 }
 interface LedgerRow { id: string; date: string; loanNumber?: string; type: string; description: string; debit: number; credit: number; balance: number }
+interface CustomerCollection { id: string; receiptNo: string; loanId: string; loanNumber?: string; agentName?: string; amount: number; principal: number; interest: number; penalty: number; mode: string; upiRef: string | null; collectedAt: string; reversedAt: string | null }
+
+/** Indian mobile number as WhatsApp wants it: country code and the last 10 digits. */
+const waLink = (phone: string) => `https://wa.me/91${phone.replace(/\D/g, '').slice(-10)}`;
+
+/** Call and WhatsApp shortcuts shown beside a phone number. */
+function PhoneLinks({ phone }: { phone: string }) {
+  const { t } = useTranslation();
+  return (
+    <span className="phone-links no-print">
+      <a className="icon-btn row-act" href={`tel:${phone}`} aria-label={t('customerMod.call')} data-tip={t('customerMod.call')}><Phone aria-hidden /></a>
+      <a className="icon-btn row-act" href={waLink(phone)} target="_blank" rel="noreferrer" aria-label={t('customerMod.whatsapp')} data-tip={t('customerMod.whatsapp')}><MessageCircle aria-hidden /></a>
+    </span>
+  );
+}
 
 const ID_TYPES = ['AADHAAR', 'PAN', 'VOTER_ID', 'DRIVING_LICENCE', 'OTHER'];
-const gradeTone = (g: string) => ({ A: 'ok', B: 'ok', C: 'warn', D: 'danger' } as const)[g as 'A'] ?? 'brand';
+export const gradeTone = (g: string) => ({ A: 'ok', B: 'ok', C: 'warn', D: 'danger' } as const)[g as 'A'] ?? 'brand';
 
 export function CustomerForm({ customer, onClose, onSaved }: { customer: Partial<Customer>; onClose: () => void; onSaved: (c: Customer) => void }) {
   const { t } = useTranslation();
@@ -259,13 +275,21 @@ export function Pager({ page, pages, total, onPage }: { page: number; pages: num
 export function CustomerDetail() {
   const { t } = useTranslation();
   const toast = useToast();
-  const { can } = useAuth();
+  const { can, profile } = useAuth();
   const nav = useNavigate();
   const { id } = useParams();
   const { data: c, error, reload } = useLoad(() => get<CustomerDetail>(`/customers/${id}`), [id]);
-  const [tab, setTab] = useState<'loans' | 'history' | 'ledger' | 'documents'>('loans');
+  const [tab, setTab] = useState<'loans' | 'collections' | 'history' | 'ledger' | 'documents'>('loans');
+  const [colPage, setColPage] = useState(1);
   const history = useLoad(() => (tab === 'history' ? get<History>(`/customers/${id}/history`) : Promise.resolve(null)), [id, tab]);
   const ledger = useLoad(() => (tab === 'ledger' ? get<LedgerRow[]>(`/customers/${id}/ledger`) : Promise.resolve(null)), [id, tab]);
+  const collections = useLoad(
+    () => (tab === 'collections' ? get<{ total: number; pageSize: number; rows: CustomerCollection[] }>('/collections', { customerId: id, page: colPage }) : Promise.resolve(null)),
+    [id, tab, colPage],
+  );
+  const [statement, setStatement] = useState<LedgerRow[] | null>(null);
+  const [collecting, setCollecting] = useState<string | null>(null);
+  const canSeeCollections = can('collection.record', 'report.view');
   const [editing, setEditing] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [statusing, setStatusing] = useState<string | null>(null);
@@ -279,6 +303,19 @@ export function CustomerDetail() {
   const active = c.loans.filter((l) => l.position);
   const outstanding = active.reduce((s, l) => s + (l.position?.totalOutstanding ?? 0), 0);
   const overdue = active.reduce((s, l) => s + (l.position?.overdue ?? 0), 0);
+
+  const colPages = collections.data ? Math.max(1, Math.ceil(collections.data.total / collections.data.pageSize)) : 1;
+  // Loads the full ledger, renders it into the print-only statement, then opens the print dialog.
+  const printStatement = async () => {
+    setActionError(null);
+    try {
+      const rows = ledger.data ?? (await get<LedgerRow[]>(`/customers/${c.id}/ledger`));
+      flushSync(() => setStatement(rows));
+      printDoc('statement');
+    } catch (e) {
+      setActionError(e);
+    }
+  };
 
   const onUpload = async (file: File | undefined) => {
     if (!file) return;
@@ -305,6 +342,10 @@ export function CustomerDetail() {
         </div>
         <div className="row no-print">
           {can('loan.request') && c.status === 'ACTIVE' && <button className="btn primary" onClick={() => setRequesting(true)}>{t('loanMod.newRequest')}</button>}
+          <button className="btn" onClick={() => void printStatement()}>
+            <Printer aria-hidden />
+            {t('customerMod.printStatement')}
+          </button>
           {can('customer.edit') && <button className="btn" onClick={() => setEditing(true)}>{t('common.edit')}</button>}
           {can('customer.edit') && c.status !== 'BLACKLISTED' && <button className="btn" onClick={() => setStatusing('BLACKLISTED')}>{t('customerMod.blacklist')}</button>}
           {can('customer.edit') && c.status !== 'ACTIVE' && <button className="btn" onClick={() => setStatusing('ACTIVE')}>{t('customerMod.reactivate')}</button>}
@@ -315,7 +356,11 @@ export function CustomerDetail() {
       <div className="grid k4" style={{ marginBottom: 16 }}>
         <Stat label={t('loanMod.outstanding')} value={money(outstanding)} sub={`${active.length} ${t('dashboard.activeLoans')}`} />
         <Stat label={t('loanMod.overdue')} value={money(overdue)} />
-        <Stat label={t('common.phone')} value={<span style={{ fontSize: 16 }}>{c.phone}</span>} sub={c.altPhone ?? undefined} />
+        <Stat
+          label={t('common.phone')}
+          value={<span className="row" style={{ fontSize: 16, gap: 6 }}>{c.phone} <PhoneLinks phone={c.phone} /></span>}
+          sub={c.altPhone ? <span className="row" style={{ gap: 6 }}>{c.altPhone} <PhoneLinks phone={c.altPhone} /></span> : undefined}
+        />
         <Stat label={t('common.route')} value={<span style={{ fontSize: 16 }}>{c.routeSeq ? `#${c.routeSeq}` : '-'}</span>} />
       </div>
       <div className="grid c2">
@@ -345,6 +390,7 @@ export function CustomerDetail() {
           onChange={setTab}
           items={[
             { key: 'loans', label: t('nav.loans') },
+            ...(canSeeCollections ? [{ key: 'collections' as const, label: t('collection.title') }] : []),
             { key: 'history', label: t('customerMod.history') },
             { key: 'ledger', label: t('customerMod.ledger') },
             { key: 'documents', label: t('customerMod.documents') },
@@ -354,6 +400,10 @@ export function CustomerDetail() {
           <DataTable
             rows={c.loans}
             onRow={(l) => nav(`/loans/${l.id}`)}
+            actions={(l) => [
+              { icon: Eye, label: t('common.view'), onClick: () => nav(`/loans/${l.id}`) },
+              { icon: HandCoins, label: t('collection.record'), tone: 'primary', hidden: l.status !== 'ACTIVE' || !can('collection.record'), onClick: () => setCollecting(l.id) },
+            ]}
             columns={[
               { key: 'number', label: t('loanMod.number') },
               { key: 'principal', label: t('loanMod.principal'), money: true },
@@ -364,6 +414,29 @@ export function CustomerDetail() {
               { key: 'status', label: t('common.status'), value: (l) => t(`loanMod.statuses.${l.status}`), render: (l) => <Badge tone={statusTone(l.status)}>{t(`loanMod.statuses.${l.status}`)}</Badge> },
             ]}
           />
+        )}
+        {tab === 'collections' && (
+          <div>
+            <ErrorBox error={collections.error} />
+            <DataTable
+              title={`${c.code} ${t('collection.title')}`}
+              rows={collections.data?.rows}
+              onRow={(r) => nav(`/loans/${r.loanId}`)}
+              columns={[
+                { key: 'receiptNo', label: t('collection.receiptNo') },
+                { key: 'collectedAt', label: t('common.date'), value: (r) => dateTime(r.collectedAt) },
+                { key: 'loanNumber', label: t('loanMod.number') },
+                { key: 'amount', label: t('common.amount'), money: true, total: true, value: (r) => (r.reversedAt ? 0 : r.amount) },
+                { key: 'principal', label: t('loanMod.principalDue'), money: true },
+                { key: 'interest', label: t('loanMod.interestDue'), money: true },
+                { key: 'penalty', label: t('loanMod.penalty'), money: true },
+                { key: 'mode', label: t('common.mode'), value: (r) => `${t(`common.modes.${r.mode}`)}${r.upiRef ? ` ${r.upiRef}` : ''}` },
+                { key: 'agentName', label: t('common.agent') },
+                { key: 'status', label: t('common.status'), value: (r) => (r.reversedAt ? t('collection.reversed') : ''), render: (r) => r.reversedAt && <Badge tone="danger">{t('collection.reversed')}</Badge> },
+              ]}
+            />
+            <Pager page={colPage} pages={colPages} total={collections.data?.total} onPage={setColPage} />
+          </div>
         )}
         {tab === 'history' && (history.data ? <HistoryView h={history.data} /> : <Loading />)}
         {tab === 'ledger' && (
@@ -407,6 +480,46 @@ export function CustomerDetail() {
           </div>
         )}
       </div>
+      {statement && (
+        <PrintDoc id="statement">
+          <DocHead business={profile?.tenant?.name ?? t('common.appName')} title={t('customerMod.statement')} sub={`${c.name} (${c.code}) · ${c.phone}`} />
+          <p>{c.address}</p>
+          <table className="doc-table">
+            <thead>
+              <tr>
+                <th>{t('common.date')}</th>
+                <th>{t('loanMod.number')}</th>
+                <th>{t('daybook.particulars')}</th>
+                <th className="num">{t('customerMod.debit')}</th>
+                <th className="num">{t('customerMod.credit')}</th>
+                <th className="num">{t('loanMod.balance')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {statement.map((r) => (
+                <tr key={r.id}>
+                  <td>{dateIN(r.date)}</td>
+                  <td>{r.loanNumber ?? ''}</td>
+                  <td>{r.description}</td>
+                  <td className="num">{r.debit ? money(r.debit) : ''}</td>
+                  <td className="num">{r.credit ? money(r.credit) : ''}</td>
+                  <td className="num">{money(r.balance)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={3}>{t('common.total')}</td>
+                <td className="num">{money(statement.reduce((s, r) => s + r.debit, 0))}</td>
+                <td className="num">{money(statement.reduce((s, r) => s + r.credit, 0))}</td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
+          <p>{t('loanMod.outstanding')}: <strong>{money(outstanding)}</strong></p>
+        </PrintDoc>
+      )}
+      {collecting && <CollectFlow loanId={collecting} onClose={() => setCollecting(null)} onDone={() => { toast(t('common.saved')); void reload(); }} />}
       {editing && <CustomerForm customer={c} onClose={() => setEditing(false)} onSaved={() => { toast(t('common.saved')); void reload(); }} />}
       {requesting && <LoanRequestForm customerId={c.id} customerName={c.name} onClose={() => setRequesting(false)} onSaved={(l) => nav(`/loans/${l.id}`)} />}
       {statusing && (

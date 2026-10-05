@@ -62,9 +62,13 @@ export function StaffPicker(p: PickerProps & { role?: string; branchId?: string 
   return <Picker {...p} options={data} placeholder={t('common.agent')} />;
 }
 
+/** Funds of a branch with their balances (shared cache with FundPicker). */
+export const useFunds = (branchId?: string) =>
+  useLoad(() => cached(`funds:${branchId ?? ''}`, () => get<(Opt & { balance: number })[]>('/funds', { branchId })), [branchId]).data;
+
 export function FundPicker(p: PickerProps & { branchId?: string }) {
   const { t } = useTranslation();
-  const { data } = useLoad(() => cached(`funds:${p.branchId ?? ''}`, () => get<(Opt & { balance: number })[]>('/funds', { branchId: p.branchId })), [p.branchId]);
+  const data = useFunds(p.branchId);
   return <Picker {...p} options={(data ?? []).map((f) => ({ id: f.id, name: `${f.name} (₹${(f.balance / 100).toLocaleString('en-IN')})` }))} placeholder={t('loanMod.fund')} />;
 }
 
