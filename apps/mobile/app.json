@@ -3,7 +3,7 @@
     "name": "LocalFinance Collect",
     "slug": "localfinance-collect",
     "version": "0.1.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "userInterfaceStyle": "light",
     "platforms": ["android"],
     "android": {

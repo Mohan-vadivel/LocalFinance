@@ -4,7 +4,7 @@ import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '../session';
 import { cachedRouteDay, getFailed, getLastSync, getQueue, myRoutes, subscribe, sync, type MyRoute } from '../store';
-import { Amount, Avatar, Badge, Btn, C, Card, Chevron, ErrorText, Notice, Progress, SP, Section, dateIN, money, s, todayIST, useNav } from '../ui';
+import { AmountPair, Avatar, Badge, Btn, C, Card, Chevron, ErrorText, MAX_W, MAX_W_WIDE, Notice, Progress, SP, Section, dateIN, money, s, todayIST, useLayout, useNav } from '../ui';
 
 /** Pending, failed and last-sync state, kept current as the queue changes. */
 export function useSyncState() {
@@ -24,6 +24,7 @@ export function SyncBar() {
   const { t } = useTranslation();
   const nav = useNav();
   const st = useSyncState();
+  const { compact } = useLayout();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const run = async () => {
@@ -34,9 +35,10 @@ export function SyncBar() {
   };
   const tone = st.failed > 0 ? C.danger : st.pending ? C.warn : C.ok;
   return (
-    <Card style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md, paddingVertical: SP.md }}>
+    <Card style={[{ flexDirection: 'row', alignItems: 'center', gap: SP.md, paddingVertical: SP.md }, compact && { flexWrap: 'wrap', rowGap: SP.sm }]}>
       <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: tone, boxShadow: `0px 0px 0px 4px ${tone}22` }} />
-      <View style={{ flex: 1 }}>
+      {/* On a small phone the button drops under the text (full width) instead of squeezing it. */}
+      <View style={{ flex: 1, minWidth: compact ? 150 : 0 }}>
         <Text style={{ fontWeight: '800', fontSize: 15, color: st.pending ? C.warn : C.ok }}>
           {st.pending ? `${t('mobile.pendingSync')}: ${st.pending}` : t('mobile.allSynced')}
         </Text>
@@ -49,7 +51,7 @@ export function SyncBar() {
           </Pressable>
         )}
       </View>
-      <Btn small kind="tonal" title={t('mobile.syncNow')} onPress={() => void run()} busy={busy} />
+      <Btn small kind="tonal" title={t('mobile.syncNow')} onPress={() => void run()} busy={busy} style={compact ? { flexGrow: 1 } : undefined} />
     </Card>
   );
 }
@@ -61,6 +63,7 @@ export default function Home() {
   const { t } = useTranslation();
   const nav = useNav();
   const insets = useSafeAreaInsets();
+  const { width, tablet, wide } = useLayout();
   const { profile, can } = useSession();
   const [routes, setRoutes] = useState<MyRoute[] | null>(null);
   const [progress, setProgress] = useState<Record<string, DayProgress>>({});
@@ -117,95 +120,131 @@ export default function Home() {
     { title: t('mobile.managerView'), onPress: () => nav.push('Manager'), show: isManager },
   ];
 
-  return (
-    <SafeAreaView style={s.safe} edges={['bottom']}>
-      <View style={[s.header, { paddingTop: insets.top + SP.md, paddingHorizontal: SP.lg, paddingBottom: SP.lg, gap: SP.md }]}>
-        <Avatar name={profile?.name ?? '?'} size={48} />
-        <View style={{ flex: 1 }}>
-          <Text style={s.eyebrow} numberOfLines={1}>{profile?.tenant?.name ?? t('common.appName')}</Text>
-          <Text style={[s.title, { fontSize: 22 }]} numberOfLines={1}>{profile?.name}</Text>
-          <Text style={s.subtitle} numberOfLines={1}>{t(`roles.${profile?.role}`)}</Text>
-        </View>
-        <Btn small kind="outline" title={t('common.settings')} onPress={() => nav.push('Settings')} />
+  // Tablets: route cards in two columns; a landscape tablet also puts the actions in a column of their own.
+  const maxW = wide ? MAX_W_WIDE : MAX_W;
+  const contentW = Math.min(width - insets.left - insets.right, maxW + SP.lg * 2) - SP.lg * 2;
+  const routeCols = tablet && !wide && (routes?.length ?? 0) > 1 ? 2 : 1;
+  const routeW = routeCols === 2 ? (contentW - SP.md) / 2 : undefined;
+
+  const todayCard = (
+    <Card tone="brand" style={{ padding: SP.xl - 4 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SP.md, gap: SP.sm, flexWrap: 'wrap' }}>
+        <Text style={{ color: C.onBrand, fontWeight: '800', fontSize: 16, flexShrink: 1 }}>{t('common.today')}</Text>
+        <Text style={{ color: C.onBrandMuted, fontWeight: '600' }}>{dateIN(todayIST())}</Text>
       </View>
-      <ScrollView contentContainerStyle={s.body} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} colors={[C.brand]} />}>
-        <Card tone="brand" style={{ padding: SP.xl - 4 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SP.md, gap: SP.sm }}>
-            <Text style={{ color: C.onBrand, fontWeight: '800', fontSize: 16, flexShrink: 1 }}>{t('common.today')}</Text>
-            <Text style={{ color: C.onBrandMuted, fontWeight: '600' }}>{dateIN(todayIST())}</Text>
+      {known.length > 0 ? (
+        <>
+          <AmountPair onBrand main={{ label: t('report.collected'), value: money(totals.collected) }} side={{ label: t('report.due'), value: money(totals.due) }} />
+          <View style={{ marginTop: SP.lg }}>
+            <Progress value={totals.total ? totals.visited / totals.total : 0} color="#ffffff" track="rgba(255,255,255,0.25)" />
+            <Text style={{ color: C.onBrandMuted, marginTop: SP.sm, fontWeight: '600' }}>{t('dashboard.visited')}: {totals.visited} / {totals.total}</Text>
           </View>
-          {known.length > 0 ? (
-            <>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: SP.md }}>
-                <Amount onBrand size="xl" label={t('report.collected')} value={money(totals.collected)} />
-                <Amount onBrand size="md" align="right" label={t('report.due')} value={money(totals.due)} />
+        </>
+      ) : (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: SP.xl, rowGap: SP.sm }}>
+          <View style={{ flexShrink: 1 }}>
+            <Text style={{ color: C.onBrand, fontSize: 34, fontWeight: '800' }}>{todays.length}</Text>
+            <Text style={{ color: C.onBrandMuted, fontWeight: '600' }}>{t('mobile.myRoutes')}</Text>
+          </View>
+          <View style={{ flexShrink: 1 }}>
+            <Text style={{ color: C.onBrand, fontSize: 34, fontWeight: '800' }}>{customersToday}</Text>
+            <Text style={{ color: C.onBrandMuted, fontWeight: '600' }}>{t('nav.customers')}</Text>
+          </View>
+        </View>
+      )}
+    </Card>
+  );
+
+  const routeCards = (
+    <View style={routeCols === 2 ? { flexDirection: 'row', flexWrap: 'wrap', columnGap: SP.md } : undefined}>
+      {(routes ?? []).map((r) => {
+        const p = progress[r.id];
+        return (
+          <Card key={r.id} onPress={() => nav.push('RouteDay', { routeId: r.id, name: r.name })} accessibilityLabel={r.name} style={routeW ? { width: routeW } : undefined}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md }}>
+              <Avatar name={r.name} label={r.name.trim().slice(0, 1).toUpperCase()} color={r.collectsToday ? C.brand : C.grey} size={48} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: C.ink }}>{r.name}</Text>
+                <Text style={[s.muted, { marginTop: 2 }]}>{r.location} · {r.customerCount} {t('nav.customers')}</Text>
               </View>
-              <View style={{ marginTop: SP.lg }}>
-                <Progress value={totals.total ? totals.visited / totals.total : 0} color="#ffffff" track="rgba(255,255,255,0.25)" />
-                <Text style={{ color: C.onBrandMuted, marginTop: SP.sm, fontWeight: '600' }}>{t('dashboard.visited')}: {totals.visited} / {totals.total}</Text>
-              </View>
-            </>
-          ) : (
-            <View style={{ flexDirection: 'row', gap: SP.xl }}>
-              <View style={{ flexShrink: 1 }}>
-                <Text style={{ color: C.onBrand, fontSize: 34, fontWeight: '800' }}>{todays.length}</Text>
-                <Text style={{ color: C.onBrandMuted, fontWeight: '600' }}>{t('mobile.myRoutes')}</Text>
-              </View>
-              <View style={{ flexShrink: 1 }}>
-                <Text style={{ color: C.onBrand, fontSize: 34, fontWeight: '800' }}>{customersToday}</Text>
-                <Text style={{ color: C.onBrandMuted, fontWeight: '600' }}>{t('nav.customers')}</Text>
-              </View>
+              <Chevron />
             </View>
-          )}
-        </Card>
-        <SyncBar />
-        {offline && <Notice tone="warn" text={t('mobile.offlineCopy')} />}
-        <ErrorText error={error} />
-        <Section title={t('mobile.myRoutes')} />
-        {routes && routes.length === 0 && <Notice tone="warn" text={t('mobile.noRoutes')} />}
-        {(routes ?? []).map((r) => {
-          const p = progress[r.id];
-          return (
-            <Card key={r.id} onPress={() => nav.push('RouteDay', { routeId: r.id, name: r.name })} accessibilityLabel={r.name}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md }}>
-                <Avatar name={r.name} label={r.name.trim().slice(0, 1).toUpperCase()} color={r.collectsToday ? C.brand : C.grey} size={48} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 18, fontWeight: '800', color: C.ink }}>{r.name}</Text>
-                  <Text style={[s.muted, { marginTop: 2 }]}>{r.location} · {r.customerCount} {t('nav.customers')}</Text>
-                </View>
-                <Chevron />
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: SP.md, gap: SP.sm, flexWrap: 'wrap' }}>
+              {r.collectsToday ? <Badge text={t('common.today')} color={C.brand} /> : <Badge text={t('mobile.notToday')} color={C.grey} />}
+              {p && <Text style={{ fontWeight: '800', color: C.ok, fontSize: 16 }}>{money(p.collected)}</Text>}
+            </View>
+            {p && (
+              <View style={{ marginTop: SP.md }}>
+                <Progress value={p.total ? p.visited / p.total : 0} />
+                <Text style={[s.muted, { marginTop: 6, fontSize: 13 }]}>{t('dashboard.visited')}: {p.visited} / {p.total}</Text>
               </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: SP.md, gap: SP.sm, flexWrap: 'wrap' }}>
-                {r.collectsToday ? <Badge text={t('common.today')} color={C.brand} /> : <Badge text={t('mobile.notToday')} color={C.grey} />}
-                {p && <Text style={{ fontWeight: '800', color: C.ok, fontSize: 16 }}>{money(p.collected)}</Text>}
-              </View>
-              {p && (
-                <View style={{ marginTop: SP.md }}>
-                  <Progress value={p.total ? p.visited / p.total : 0} />
-                  <Text style={[s.muted, { marginTop: 6, fontSize: 13 }]}>{t('dashboard.visited')}: {p.visited} / {p.total}</Text>
-                </View>
-              )}
-            </Card>
-          );
-        })}
-        <Section title={t('common.actions')} />
-        <Card style={{ paddingVertical: SP.xs, paddingHorizontal: 0 }}>
-          {actions
-            .filter((a) => a.show)
-            .map((a, i) => (
-              <Pressable
-                key={a.title}
-                onPress={a.onPress}
-                accessibilityRole="button"
-                android_ripple={{ color: C.surface }}
-                style={({ pressed }) => [{ minHeight: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: SP.lg, paddingVertical: SP.md, gap: SP.md }, i > 0 && { borderTopWidth: 1, borderTopColor: C.line }, pressed && { backgroundColor: C.bg }]}
-              >
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.brand }} />
-                <Text style={{ flex: 1, fontSize: 16, fontWeight: '700', color: C.ink }}>{a.title}</Text>
-                <Chevron />
-              </Pressable>
-            ))}
-        </Card>
+            )}
+          </Card>
+        );
+      })}
+    </View>
+  );
+
+  const actionList = (
+    <>
+      <Section title={t('common.actions')} />
+      <Card style={{ paddingVertical: SP.xs, paddingHorizontal: 0 }}>
+        {actions
+          .filter((a) => a.show)
+          .map((a, i) => (
+            <Pressable
+              key={a.title}
+              onPress={a.onPress}
+              accessibilityRole="button"
+              android_ripple={{ color: C.surface }}
+              style={({ pressed }) => [{ minHeight: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: SP.lg, paddingVertical: SP.md, gap: SP.md }, i > 0 && { borderTopWidth: 1, borderTopColor: C.line }, pressed && { backgroundColor: C.bg }]}
+            >
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.brand }} />
+              <Text style={{ flex: 1, minWidth: 0, fontSize: 16, fontWeight: '700', color: C.ink }}>{a.title}</Text>
+              <Chevron />
+            </Pressable>
+          ))}
+      </Card>
+    </>
+  );
+
+  const main = (
+    <>
+      {todayCard}
+      <SyncBar />
+      {offline && <Notice tone="warn" text={t('mobile.offlineCopy')} />}
+      <ErrorText error={error} />
+      <Section title={t('mobile.myRoutes')} />
+      {routes && routes.length === 0 && <Notice tone="warn" text={t('mobile.noRoutes')} />}
+      {routeCards}
+    </>
+  );
+
+  return (
+    <SafeAreaView style={s.safe} edges={['bottom', 'left', 'right']}>
+      <View style={[s.header, { paddingTop: insets.top + SP.md, paddingHorizontal: SP.lg, paddingBottom: SP.lg }]}>
+        <View style={[s.headerInner, { gap: SP.md, maxWidth: maxW }]}>
+          <Avatar name={profile?.name ?? '?'} size={48} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={s.eyebrow} numberOfLines={1}>{profile?.tenant?.name ?? t('common.appName')}</Text>
+            <Text style={[s.title, { fontSize: 22 }]} numberOfLines={2}>{profile?.name}</Text>
+            <Text style={s.subtitle} numberOfLines={1}>{t(`roles.${profile?.role}`)}</Text>
+          </View>
+          <Btn small kind="outline" title={t('common.settings')} onPress={() => nav.push('Settings')} style={{ flexShrink: 0, maxWidth: '45%' }} />
+        </View>
+      </View>
+      <ScrollView contentContainerStyle={[s.body, { maxWidth: maxW + SP.lg * 2 }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} colors={[C.brand]} />}>
+        {wide ? (
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: SP.lg }}>
+            <View style={{ flex: 3, minWidth: 0 }}>{main}</View>
+            <View style={{ flex: 2, minWidth: 0 }}>{actionList}</View>
+          </View>
+        ) : (
+          <>
+            {main}
+            {actionList}
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

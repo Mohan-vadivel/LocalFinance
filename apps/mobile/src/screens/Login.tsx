@@ -5,11 +5,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LANGUAGES } from '@localfinance/shared';
 import { setLanguage } from '../i18n';
 import { useSession } from '../session';
-import { Btn, C, Card, Chips, ErrorText, Field, SP, s } from '../ui';
+import { Btn, C, Card, Chips, ErrorText, Field, SP, s, useLayout } from '../ui';
 
 export default function Login() {
   const { t, i18n } = useTranslation();
   const { login } = useSession();
+  const { compact } = useLayout();
   const [id, setId] = useState('');
   const [pw, setPw] = useState('');
   const [busy, setBusy] = useState(false);
@@ -32,7 +33,8 @@ export default function Login() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: SP.xl }} keyboardShouldPersistTaps="handled">
+        {/* Centred at phone width on tablets; a little less padding on small phones. */}
+        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: compact ? SP.lg : SP.xl, width: '100%', maxWidth: 480, alignSelf: 'center' }} keyboardShouldPersistTaps="handled">
           <View style={{ alignItems: 'center', marginBottom: SP.xl }}>
             <View style={{ width: 72, height: 72, borderRadius: 22, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center', marginBottom: SP.lg, boxShadow: '0px 6px 16px rgba(15, 118, 110, 0.3)' }}>
               <Text style={{ color: '#fff', fontSize: 36, fontWeight: '800' }}>₹</Text>
@@ -42,7 +44,7 @@ export default function Login() {
           <View style={{ marginBottom: SP.lg }}>
             <Chips segmented value={i18n.language} onChange={(v) => void setLanguage(v)} items={LANGUAGES.map((l) => ({ key: l.code, label: l.nativeName }))} />
           </View>
-          <Card style={{ padding: SP.xl }}>
+          <Card style={{ padding: compact ? SP.lg : SP.xl }}>
             <ErrorText error={error} />
             {tenants ? (
               <View>

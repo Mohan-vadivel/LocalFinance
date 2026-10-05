@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, BackHandler, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
+import { ActivityIndicator, BackHandler, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatINR } from '@localfinance/shared';
 import { ApiError } from './api';
@@ -36,6 +36,20 @@ export const C = {
 export const SP = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 };
 /** Corner radii (dp). */
 export const R = { sm: 10, md: 12, lg: 16, pill: 999 };
+/** Widest a column of content gets on tablets (dp); wider screens centre it. */
+export const MAX_W = 720;
+/** Wider cap for screens that switch to two columns on a landscape tablet. */
+export const MAX_W_WIDE = 1080;
+
+/**
+ * Screen-size flags. `narrow` is a small phone (under 360dp), `compact` any phone under 400dp where rows should
+ * stack, `tablet` 600dp and up, `wide` a landscape tablet (960dp and up) with room for two columns.
+ */
+export function useLayout() {
+  const { width, height } = useWindowDimensions();
+  return { width, height, narrow: width < 360, compact: width < 400, tablet: width >= 600, wide: width >= 960 };
+}
+
 const shadow = '0px 1px 2px rgba(16, 40, 36, 0.06), 0px 2px 8px rgba(16, 40, 36, 0.05)';
 
 export const PIN_COLORS: Record<PinStatus, string> = { PAID: '#067647', PARTIAL: '#d97706', MISSED: '#b42318', NOTHING_DUE: '#8a96a3', PENDING: '#0f766e' };
@@ -99,17 +113,19 @@ export function Header({ title, subtitle, right, back = true, eyebrow }: { title
   const canBack = back && !!nav && nav.stack.length > 1;
   return (
     <View style={[s.header, { paddingTop: insets.top + SP.sm }]}>
+      <View style={s.headerInner}>
       {canBack ? (
         <Pressable onPress={nav.pop} hitSlop={8} style={({ pressed }) => [s.back, pressed && { backgroundColor: C.surface }]} accessibilityRole="button" accessibilityLabel="Back" android_ripple={{ color: C.line, borderless: true }}>
           <Text style={s.backText}>‹</Text>
         </Pressable>
       ) : null}
-      <View style={{ flex: 1, paddingLeft: canBack ? 0 : SP.xs }}>
+      <View style={{ flex: 1, minWidth: 0, paddingLeft: canBack ? 0 : SP.xs }}>
         {eyebrow ? <Text style={s.eyebrow} numberOfLines={1}>{eyebrow}</Text> : null}
         <Text style={s.title} numberOfLines={2}>{title}</Text>
         {subtitle ? <Text style={s.subtitle} numberOfLines={2}>{subtitle}</Text> : null}
       </View>
       {right}
+      </View>
     </View>
   );
 }
@@ -117,7 +133,7 @@ export function Header({ title, subtitle, right, back = true, eyebrow }: { title
 export function Screen({ title, children, right, scroll = true, back = true, subtitle }: { title: string; children: ReactNode; right?: ReactNode; scroll?: boolean; back?: boolean; subtitle?: string }) {
   const body = scroll ? <ScrollView contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">{children}</ScrollView> : <View style={{ flex: 1 }}>{children}</View>;
   return (
-    <SafeAreaView style={s.safe} edges={['bottom']}>
+    <SafeAreaView style={s.safe} edges={['bottom', 'left', 'right']}>
       <Header title={title} subtitle={subtitle} right={right} back={back} />
       {body}
     </SafeAreaView>
@@ -303,6 +319,26 @@ export function Amount({ label, value, size = 'lg', onBrand, align = 'left', ton
   );
 }
 
+/**
+ * Two amounts side by side (the main figure on the left, a smaller one on the right). On a small phone, or with a
+ * long Tamil label, the right one moves under the left one instead of squeezing the figures.
+ */
+export function AmountPair({ main, side, onBrand }: { main: { label: string; value: string }; side: { label: string; value: string }; onBrand?: boolean }) {
+  const { compact } = useLayout();
+  return (
+    <View style={s.amountPair}>
+      <Amount onBrand={onBrand} size="xl" label={main.label} value={main.value} />
+      {/* Left-aligned on a phone under 400dp, where it is likely to sit under the main figure. */}
+      <Amount onBrand={onBrand} size="md" align={compact ? 'left' : 'right'} label={side.label} value={side.value} />
+    </View>
+  );
+}
+
+/** A row of `Stat` tiles; on a small phone they wrap onto a second line rather than breaking their labels. */
+export function StatRow({ children }: { children: ReactNode }) {
+  return <View style={s.statRow}>{children}</View>;
+}
+
 /** A compact figure tile for a row of stats. */
 export function Stat({ label, value, tone, style }: { label: string; value: string; tone?: string; style?: StyleProp<ViewStyle> }) {
   return (
@@ -338,13 +374,14 @@ export const Chevron = ({ color = C.muted }: { color?: string }) => <Text style=
 
 export const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  header: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.panel, paddingHorizontal: SP.md, paddingBottom: SP.md, gap: SP.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line, boxShadow: '0px 1px 3px rgba(16, 40, 36, 0.06)', zIndex: 2 },
+  header: { backgroundColor: C.panel, paddingHorizontal: SP.md, paddingBottom: SP.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line, boxShadow: '0px 1px 3px rgba(16, 40, 36, 0.06)', zIndex: 2 },
+  headerInner: { flexDirection: 'row', alignItems: 'center', gap: SP.sm, width: '100%', maxWidth: MAX_W + (SP.lg - SP.md) * 2, alignSelf: 'center' },
   back: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   backText: { color: C.ink, fontSize: 36, lineHeight: 40, marginTop: -4, fontWeight: '300' },
   eyebrow: { color: C.muted, fontSize: 13, fontWeight: '600' },
   title: { color: C.ink, fontSize: 22, lineHeight: 28, fontWeight: '800' },
   subtitle: { color: C.muted, fontSize: 14, marginTop: 2 },
-  body: { padding: SP.lg, paddingBottom: 48 },
+  body: { padding: SP.lg, paddingBottom: 48, width: '100%', maxWidth: MAX_W + SP.lg * 2, alignSelf: 'center' },
   card: { backgroundColor: C.panel, borderRadius: R.lg, borderWidth: 1, borderColor: C.line, padding: SP.lg, marginBottom: SP.md, boxShadow: shadow },
   cardBrand: { backgroundColor: C.brand, borderColor: C.brand, boxShadow: '0px 4px 14px rgba(15, 118, 110, 0.25)' },
   cardSoft: { backgroundColor: C.surface, borderColor: C.surface, boxShadow: 'none' },
@@ -370,9 +407,9 @@ export const s = StyleSheet.create({
   segmentText: { fontSize: 15, fontWeight: '700', color: C.muted, textAlign: 'center' },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 7, gap: SP.md },
   rowDivider: { borderTopWidth: 1, borderTopColor: C.line, marginTop: SP.xs, paddingTop: SP.md },
-  rowLabel: { color: C.muted, fontSize: 15, flexShrink: 1 },
+  rowLabel: { color: C.muted, fontSize: 15, flexShrink: 1, flexGrow: 1, flexBasis: 0, minWidth: 0 },
   muted: { color: C.muted, fontSize: 14 },
-  value: { color: C.ink, fontSize: 16, fontWeight: '500', flexShrink: 1, textAlign: 'right' },
+  value: { color: C.ink, fontSize: 16, fontWeight: '500', flexShrink: 0, maxWidth: '62%', textAlign: 'right' },
   valueStrong: { fontWeight: '800', fontSize: 17 },
   h2: { fontSize: 18, fontWeight: '800', color: C.ink, marginBottom: SP.md },
   big: { fontSize: 26, fontWeight: '800', color: C.ink },
@@ -388,7 +425,9 @@ export const s = StyleSheet.create({
   sectionText: { fontSize: 16, fontWeight: '800', color: C.ink2, flexShrink: 1 },
   amountLabel: { color: C.muted, fontSize: 14, fontWeight: '600', marginBottom: 2 },
   amount: { color: C.ink, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  stat: { flex: 1, backgroundColor: C.panel, borderRadius: R.md, borderWidth: 1, borderColor: C.line, paddingVertical: SP.md, paddingHorizontal: SP.md, minWidth: 0 },
+  amountPair: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', columnGap: SP.md, rowGap: SP.sm },
+  statRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, marginBottom: SP.md },
+  stat: { flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 104, backgroundColor: C.panel, borderRadius: R.md, borderWidth: 1, borderColor: C.line, paddingVertical: SP.md, paddingHorizontal: SP.md },
   statValue: { fontSize: 20, fontWeight: '800', color: C.ink, fontVariant: ['tabular-nums'] },
   statLabel: { fontSize: 13, color: C.muted, fontWeight: '600', marginTop: 2 },
 });

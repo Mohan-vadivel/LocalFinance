@@ -137,7 +137,7 @@ export function Search({ forLoan }: { forLoan?: boolean }) {
       {(rows ?? []).map((r) => (
         <Card key={r.id} onPress={() => (forLoan ? nav.push('LoanRequest', { customerId: r.id, customerName: r.name }) : nav.push('Customer', { customerId: r.id }))} accessibilityLabel={r.name} style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md }}>
           <Avatar name={r.name} size={44} color={r.status !== 'ACTIVE' ? C.danger : C.brand} />
-          <View style={{ flex: 1, gap: 2 }}>
+          <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
             <Text style={{ fontSize: 17, fontWeight: '800', color: C.ink }}>{r.name}</Text>
             <Text style={s.muted}>{r.code} · {r.phone}{r.routeName ? ` · ${r.routeName}` : ''}</Text>
             {r.status !== 'ACTIVE' && <View style={{ marginTop: 4 }}><Badge text={t(`customerMod.statuses.${r.status}`)} color={C.danger} /></View>}
@@ -200,7 +200,7 @@ export function LoanRequest({ customerId, customerName }: { customerId: string; 
     <Screen title={t('mobile.requestLoan')}>
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md }}>
         <Avatar name={customerName} size={48} />
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={[s.h2, { marginBottom: grade ? SP.xs : 0 }]}>{customerName}</Text>
           {grade && <Row label={t('customerMod.riskGrade')} value={t(`history.grades.${grade}`)} strong />}
         </View>
@@ -248,7 +248,7 @@ export function MyRequests() {
       {(rows ?? []).map((l) => (
         <Card key={l.id}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: SP.sm }}>
-            <Text style={{ fontSize: 17, fontWeight: '800', color: C.ink, flex: 1 }}>{l.customer.name}</Text>
+            <Text style={{ fontSize: 17, fontWeight: '800', color: C.ink, flex: 1, minWidth: 0 }}>{l.customer.name}</Text>
             <Text style={{ fontSize: 18, fontWeight: '800', color: C.ink }}>{money(l.principal)}</Text>
           </View>
           <Text style={[s.muted, { marginTop: 2, marginBottom: SP.sm }]}>{l.number} · {dateIN(l.createdAt.slice(0, 10))}</Text>

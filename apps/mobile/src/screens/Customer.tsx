@@ -74,15 +74,15 @@ export default function Customer({ customer: initial, customerId, routeId }: { c
       <Card>
         <View style={{ flexDirection: 'row', gap: SP.md, alignItems: 'flex-start' }}>
           <Avatar name={c.name} color={PIN_COLORS[c.pin]} size={52} />
-          <View style={{ flex: 1, gap: 2 }}>
+          <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
             <Badge text={t(`mobile.pins.${c.pin}`)} color={PIN_COLORS[c.pin]} />
             <Text style={{ color: C.ink, fontSize: 16, fontWeight: '600', marginTop: SP.xs }}>{c.address}</Text>
             {c.landmark && <Text style={s.muted}>{c.landmark}</Text>}
           </View>
         </View>
-        <View style={{ flexDirection: 'row', gap: SP.sm, marginTop: SP.lg }}>
-          <Btn small kind="tonal" title={c.phone} onPress={() => void Linking.openURL(`tel:${c.phone}`)} style={{ flex: 1 }} />
-          {c.lat != null && c.lng != null && <Btn small kind="tonal" title={t('mobile.navigate')} onPress={() => navigateTo(c.lat!, c.lng!)} style={{ flex: 1 }} />}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, marginTop: SP.lg }}>
+          <Btn small kind="tonal" title={c.phone} onPress={() => void Linking.openURL(`tel:${c.phone}`)} style={{ flexGrow: 1, flexBasis: 120 }} />
+          {c.lat != null && c.lng != null && <Btn small kind="tonal" title={t('mobile.navigate')} onPress={() => navigateTo(c.lat!, c.lng!)} style={{ flexGrow: 1, flexBasis: 120 }} />}
         </View>
       </Card>
       {c.status !== 'ACTIVE' && <Notice tone="danger" text={t(`customerMod.statuses.${c.status}`)} />}
@@ -103,7 +103,7 @@ export default function Customer({ customer: initial, customerId, routeId }: { c
       {c.loans.map((l) => (
         <Card key={l.id}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SP.sm, marginBottom: SP.sm, flexWrap: 'wrap' }}>
-            <Text style={[s.h2, { marginBottom: 0 }]}>{l.number}</Text>
+            <Text style={[s.h2, { marginBottom: 0, flexShrink: 1 }]}>{l.number}</Text>
             <Badge text={t(`product.frequencies.${l.frequency}`)} color={C.brand} />
           </View>
           {l.instalmentAmount > 0 && <Row label={t('loanMod.instalment')} value={money(l.instalmentAmount)} />}
@@ -171,7 +171,7 @@ function CollectForm({ customer, routeId, onDone }: { customer: DayCustomer; rou
     return (
       <Card style={{ borderColor: C.ok, borderWidth: 1.5 }}>
         <Text style={[s.h2, { color: C.ok }]}>{result}</Text>
-        <Text style={[s.big, { fontSize: 34, marginBottom: SP.lg }]}>{money(paise)}</Text>
+        <Text style={[s.big, { fontSize: 34, marginBottom: SP.lg }]} numberOfLines={1} adjustsFontSizeToFit>{money(paise)}</Text>
         <Btn big title={t('common.close')} onPress={onDone} style={{ marginBottom: 0 }} />
       </Card>
     );

@@ -7,7 +7,7 @@ import { setLanguage } from '../i18n';
 import { MapPins } from '../MapPins';
 import { useSession } from '../session';
 import { dismissFailed, getFailed, getQueue, getSynced, subscribe, sync, type FailedItem, type QueueItem, type SyncedItem } from '../store';
-import { Amount, Avatar, Btn, C, Card, Chevron, Chips, ErrorText, Field, Loading, Notice, Progress, Row, SP, Screen, Section, Stat, money, s, useNav } from '../ui';
+import { Amount, AmountPair, Avatar, Btn, C, Card, Chevron, Chips, ErrorText, Field, Loading, Notice, Progress, Row, SP, Screen, Section, Stat, StatRow, money, s, useNav } from '../ui';
 
 // =====================================================================
 // Day summary: today's totals from the server plus what is still on the phone
@@ -54,7 +54,7 @@ export function Summary() {
           <>
             <Card tone="brand" style={{ padding: SP.xl - 4 }}>
               <Amount onBrand size="xl" label={t('report.collected')} value={money(day.total)} />
-              <View style={{ flexDirection: 'row', gap: SP.xl, marginTop: SP.md, flexWrap: 'wrap' }}>
+              <View style={{ flexDirection: 'row', columnGap: SP.xl, rowGap: SP.sm, marginTop: SP.md, flexWrap: 'wrap' }}>
                 <Amount onBrand size="md" label={t('common.modes.CASH')} value={money(day.cash)} />
                 <Amount onBrand size="md" label={t('common.modes.UPI')} value={money(day.upi)} />
               </View>
@@ -65,11 +65,11 @@ export function Summary() {
               <Row label={t('handover.float')} value={money(day.float)} divider />
               <Row label={t('handover.title')} value={day.handover ? `${money(day.handover.received)}${day.handover.difference ? ` (${money(day.handover.difference)})` : ''}` : t('handover.pending')} />
             </Card>
-            <View style={{ flexDirection: 'row', gap: SP.sm, marginBottom: SP.md }}>
+            <StatRow>
               <Stat label={t('mobile.customersVisited')} value={String(day.customersVisited)} />
               <Stat label={t('mobile.pins.PAID')} value={String(day.customersPaid)} tone={C.ok} />
               <Stat label={t('report.missed')} value={String(day.missed)} tone={day.missed ? C.danger : undefined} />
-            </View>
+            </StatRow>
           </>
         )}
         {!day && !error && <Loading />}
@@ -79,7 +79,7 @@ export function Summary() {
             <Text style={[s.h2, { color: C.danger }]}>{t('mobile.failedTitle')}</Text>
             {failed.map((f) => (
               <View key={f.item.clientRef} style={{ borderTopWidth: 1, borderColor: C.line, paddingVertical: SP.md }}>
-                <Text style={{ fontWeight: '800', fontSize: 16, color: C.ink }}>{f.item.customerName}{f.item.kind === 'collection' ? ` · ${money(f.item.amount)}` : ''}</Text>
+                <Text style={{ fontWeight: '800', fontSize: 16, color: C.ink, flexShrink: 1 }}>{f.item.customerName}{f.item.kind === 'collection' ? ` · ${money(f.item.amount)}` : ''}</Text>
                 <Text style={{ color: C.danger }}>{f.error}</Text>
                 <Btn small kind="outline" title={t('mobile.dismiss')} onPress={() => void dismissFailed(f.item.clientRef)} style={{ alignSelf: 'flex-start', marginTop: SP.sm }} />
               </View>
@@ -137,10 +137,7 @@ export function Manager() {
         {d && (
           <>
             <Card tone="brand" style={{ padding: SP.xl - 4 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: SP.md }}>
-                <Amount onBrand size="xl" label={t('dashboard.collectedToday')} value={money(d.collectedToday)} />
-                <Amount onBrand size="md" align="right" label={t('dashboard.dueToday')} value={money(d.dueToday)} />
-              </View>
+              <AmountPair onBrand main={{ label: t('dashboard.collectedToday'), value: money(d.collectedToday) }} side={{ label: t('dashboard.dueToday'), value: money(d.dueToday) }} />
               <View style={{ marginTop: SP.lg }}>
                 <Progress value={(d.collectionRate ?? 0) / 100} color="#ffffff" track="rgba(255,255,255,0.25)" />
                 <Text style={{ color: C.onBrandMuted, marginTop: SP.sm, fontWeight: '600' }}>{t('dashboard.collectionRate')}: {d.collectionRate == null ? '-' : `${d.collectionRate}%`}</Text>
@@ -156,7 +153,7 @@ export function Manager() {
               <Card key={a.agentId}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md, marginBottom: SP.sm }}>
                   <Avatar name={a.name ?? '?'} size={40} />
-                  <Text style={{ fontWeight: '800', fontSize: 17, color: C.ink, flex: 1 }}>{a.name}</Text>
+                  <Text style={{ fontWeight: '800', fontSize: 17, color: C.ink, flex: 1, minWidth: 0 }}>{a.name}</Text>
                 </View>
                 <Row label={t('report.collected')} value={money(a.collected)} strong />
                 <Row label={t('dashboard.cashInHand')} value={a.handedOver ? t('handover.done') : money(a.cashInHand)} />
@@ -167,7 +164,7 @@ export function Manager() {
             {d.routes.map((r) => (
               <Card key={r.routeId} onPress={() => nav.push('RouteDay', { routeId: r.routeId, name: r.name })} accessibilityLabel={r.name}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.sm }}>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={{ fontWeight: '800', fontSize: 17, color: C.ink }}>{r.name}</Text>
                     <Text style={s.muted}>{r.agents.filter(Boolean).join(', ')}</Text>
                   </View>
@@ -221,7 +218,7 @@ export function Settings() {
     <Screen title={t('common.settings')}>
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md }}>
         <Avatar name={profile?.name ?? '?'} size={52} />
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={{ fontSize: 18, fontWeight: '800', color: C.ink }}>{profile?.name ?? ''}</Text>
           <Text style={s.muted}>{profile?.roleName ?? ''}</Text>
         </View>

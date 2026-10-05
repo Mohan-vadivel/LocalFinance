@@ -4,7 +4,7 @@ import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { addDays, periodRange, type SummaryPeriod } from '@localfinance/shared';
 import { get } from '../api';
 import { getQueue, subscribe } from '../store';
-import { Amount, Btn, C, Card, Chips, ErrorText, Loading, Notice, Row, SP, Screen, Stat, dateIN, money, s, todayIST } from '../ui';
+import { Amount, Btn, C, Card, Chips, ErrorText, Loading, Notice, Row, SP, Screen, Stat, StatRow, dateIN, money, s, todayIST } from '../ui';
 
 interface Totals { total: number; cash: number; upi: number; bank: number; count: number }
 interface Summary {
@@ -78,16 +78,16 @@ export default function CollectionReport() {
             {data.mine && <Notice tone="info" text={t('collSummary.onlyMine')} />}
             <Card tone="brand" style={{ padding: SP.xl - 4 }}>
               <Amount onBrand size="xl" label={t('report.collected')} value={money(data.totals.total)} />
-              <View style={{ flexDirection: 'row', gap: SP.xl, marginTop: SP.md, flexWrap: 'wrap' }}>
+              <View style={{ flexDirection: 'row', columnGap: SP.xl, rowGap: SP.sm, marginTop: SP.md, flexWrap: 'wrap' }}>
                 <Amount onBrand size="md" label={t('common.modes.CASH')} value={money(data.totals.cash)} />
                 <Amount onBrand size="md" label={t('common.modes.UPI')} value={money(data.totals.upi)} />
                 {data.totals.bank > 0 && <Amount onBrand size="md" label={t('common.modes.BANK')} value={money(data.totals.bank)} />}
               </View>
             </Card>
-            <View style={{ flexDirection: 'row', gap: SP.sm, marginBottom: SP.md }}>
+            <StatRow>
               <Stat label={t('collSummary.receipts')} value={String(data.totals.count)} />
               <Stat label={t('collSummary.customersPaid')} value={String(data.totals.customers)} />
-            </View>
+            </StatRow>
             <Card>
               <Row label={t('collSummary.previousPeriod')} value={money(data.previousTotal)} strong />
             </Card>
@@ -129,7 +129,7 @@ function Line({ name, t: v }: { name: string; t: Totals }) {
   return (
     <View style={{ borderTopWidth: 1, borderColor: C.line, paddingVertical: SP.md, opacity: v.count ? 1 : 0.5 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: SP.md }}>
-        <Text style={{ fontWeight: '700', fontSize: 16, color: C.ink, flexShrink: 1 }}>{name}</Text>
+        <Text style={{ fontWeight: '700', fontSize: 16, color: C.ink, flexShrink: 1, minWidth: 0 }}>{name}</Text>
         <Text style={{ fontWeight: '800', fontSize: 17, color: C.ink }}>{money(v.total)}</Text>
       </View>
       <Text style={[s.muted, { marginTop: 2 }]}>

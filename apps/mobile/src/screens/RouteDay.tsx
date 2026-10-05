@@ -4,7 +4,7 @@ import { Linking, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { MapPins } from '../MapPins';
 import { getPosition } from '../session';
 import { routeDay, subscribe, type DayCustomer, type RouteDay as Day } from '../store';
-import { Amount, Badge, Btn, C, Card, Chevron, Chips, ErrorText, Loading, Notice, PIN_COLORS, Progress, SP, Screen, dateIN, money, s, useNav } from '../ui';
+import { AmountPair, Badge, Btn, C, Card, Chevron, Chips, ErrorText, Loading, Notice, PIN_COLORS, Progress, SP, Screen, dateIN, money, s, useLayout, useNav } from '../ui';
 import { SyncBar } from './Home';
 
 /** Opens turn-by-turn directions in Google Maps (or any maps app). */
@@ -18,6 +18,7 @@ export function navigateTo(lat: number, lng: number) {
 export default function RouteDay({ routeId, name }: { routeId: string; name: string }) {
   const { t } = useTranslation();
   const nav = useNav();
+  const { compact, height } = useLayout();
   const [day, setDay] = useState<Day | null>(null);
   const [offline, setOffline] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -55,10 +56,7 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
         {offline && <Notice tone="warn" text={t('mobile.offlineCopy')} />}
         <ErrorText error={error} />
         <Card tone="brand" style={{ padding: SP.xl - 4 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: SP.md }}>
-            <Amount onBrand size="xl" label={t('report.collected')} value={money(collected)} />
-            <Amount onBrand size="md" align="right" label={t('report.due')} value={money(due)} />
-          </View>
+          <AmountPair onBrand main={{ label: t('report.collected'), value: money(collected) }} side={{ label: t('report.due'), value: money(due) }} />
           <View style={{ marginTop: SP.lg }}>
             <Progress value={list.length ? done / list.length : 0} color="#ffffff" track="rgba(255,255,255,0.25)" />
             <Text style={{ color: C.onBrandMuted, marginTop: SP.sm, fontWeight: '600' }}>{t('dashboard.visited')}: {done} / {list.length}</Text>
@@ -85,7 +83,8 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
               const c = list.find((x) => x.id === id);
               if (c) open(c);
             }}
-            height={460}
+            // Most of the screen, but never so tall that the legend and switch scroll away (small phones, landscape tablets).
+            height={Math.round(Math.min(560, Math.max(300, height * 0.6)))}
           />
         ) : (
           list.map((c, i) => (
@@ -93,8 +92,16 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
               <View style={[s.seq, { backgroundColor: PIN_COLORS[c.pin] }]}>
                 <Text style={s.seqText}>{label(c, i)}</Text>
               </View>
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text style={{ fontSize: 17, fontWeight: '800', color: C.ink }}>{c.name}</Text>
+              <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                {/* On a phone under 400dp the amount sits beside the name, leaving the full width for the badges. */}
+                {compact ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: SP.sm }}>
+                    <Text style={{ fontSize: 17, fontWeight: '800', color: C.ink, flexShrink: 1 }}>{c.name}</Text>
+                    <Text style={{ fontSize: 17, fontWeight: '800', color: c.dueNow ? C.ink : C.muted }}>{money(c.dueNow)}</Text>
+                  </View>
+                ) : (
+                  <Text style={{ fontSize: 17, fontWeight: '800', color: C.ink }}>{c.name}</Text>
+                )}
                 <Text style={s.muted} numberOfLines={1}>{c.landmark ?? c.address}</Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 4 }}>
                   <Badge text={t(`mobile.pins.${c.pin}`)} color={PIN_COLORS[c.pin]} />
@@ -103,9 +110,11 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
                   {c.lat == null && <Text style={{ color: C.warn, fontSize: 13, fontWeight: '600' }}>{t('mobile.noGps')}</Text>}
                 </View>
               </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={{ fontSize: 18, fontWeight: '800', color: c.dueNow ? C.ink : C.muted }}>{money(c.dueNow)}</Text>
-              </View>
+              {!compact && (
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: c.dueNow ? C.ink : C.muted }}>{money(c.dueNow)}</Text>
+                </View>
+              )}
               <Chevron />
             </Card>
           ))
