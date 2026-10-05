@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Injectable, Param, Patch, Post, Put } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import {
   createTenantSchema,
@@ -168,6 +169,35 @@ export class SettingsController {
     });
     await this.audit.log(ctx, 'UPDATE', 'Settings', t.id, ctx.settings, merged);
     return { id: t.id, name: t.name, logoUrl: t.logoUrl, settings: merged };
+  }
+
+  /** Every record of this business as one JSON file, for the owner to keep. Passwords and login tokens are left out. */
+  @Get('backup')
+  @Perm('settings.manage')
+  async backup(@CurrentCtx() ctx: Ctx) {
+    const tenantId = ctx.tenantId;
+    const own = { tenantId };
+    const db = this.prisma as unknown as Record<string, { findMany: (a: object) => Promise<unknown[]> }>;
+    const tables: Record<string, unknown[]> = {};
+    for (const m of Prisma.dmmf.datamodel.models) {
+      const delegate = m.name[0].toLowerCase() + m.name.slice(1);
+      if (m.name === 'Tenant' || m.name === 'RefreshToken') continue;
+      const where = m.fields.some((f) => f.name === 'tenantId')
+        ? own
+        : m.name === 'UserBranch'
+          ? { user: own }
+          : m.name === 'LoanApproval'
+            ? { loan: own }
+            : m.name === 'CollectionAllocation'
+              ? { collection: own }
+              : null;
+      if (!where) continue;
+      const rows = await db[delegate].findMany({ where });
+      tables[m.name] = m.name === 'User' ? rows.map((u) => ({ ...(u as object), passwordHash: undefined })) : rows;
+    }
+    const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+    await this.audit.log(ctx, 'BACKUP', 'Tenant', tenantId);
+    return { format: 'localfinance-backup', version: 1, exportedAt: new Date().toISOString(), tenant, tables };
   }
 
   /** Lets the platform's Super Admin view this business read-only for a number of days (0 revokes). */

@@ -189,7 +189,7 @@ export default function DeskEntry() {
                   <label className="field">
                     {t('reportCols.mode')}
                     <select value={mode} onChange={(e) => setMode(e.target.value)}>
-                      {['CASH', 'UPI', 'BANK'].map((m) => <option key={m} value={m}>{t(`common.modes.${m}`)}</option>)}
+                      {['CASH', 'UPI', 'CARD', 'BANK'].map((m) => <option key={m} value={m}>{t(`common.modes.${m}`)}</option>)}
                     </select>
                   </label>
                 </div>
@@ -235,6 +235,7 @@ export default function DeskEntry() {
             <Stat label={t('common.total')} value={money(sum)} sub={`${t('collSummary.receipts')}: ${list.data?.total ?? 0}`} />
             <Stat label={t('common.modes.CASH')} value={money(totals.CASH ?? 0)} />
             <Stat label={t('common.modes.UPI')} value={money(totals.UPI ?? 0)} />
+            {(totals.CARD ?? 0) > 0 && <Stat label={t('common.modes.CARD')} value={money(totals.CARD ?? 0)} />}
             {(totals.BANK ?? 0) > 0 && <Stat label={t('common.modes.BANK')} value={money(totals.BANK ?? 0)} />}
             <Stat label={t('desk.closedCount')} value={closed.length} sub={closed.join(', ')} />
           </div>

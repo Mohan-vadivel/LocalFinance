@@ -72,6 +72,7 @@ export default function Collections() {
         <Stat label={t('common.modes.CASH')} value={money(totals.CASH ?? 0)} />
         <Stat label={t('common.modes.UPI')} value={money(totals.UPI ?? 0)} />
         <Stat label={t('common.modes.BANK')} value={money(totals.BANK ?? 0)} />
+        {(totals.CARD ?? 0) > 0 && <Stat label={t('common.modes.CARD')} value={money(totals.CARD ?? 0)} />}
       </div>
       <ErrorBox error={error} />
       <div className="card">

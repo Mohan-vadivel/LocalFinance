@@ -4,7 +4,7 @@ import { LANGUAGES, type TenantSettings } from '@localfinance/shared';
 import { DataTable, ErrorBox, Field, Loading, useToast } from '../components/ui';
 import { get, post, put } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { dateIN, dateTime } from '../lib/format';
+import { dateIN, dateTime, today } from '../lib/format';
 import { useLoad } from '../lib/hooks';
 
 interface SettingsData { id: string; name: string; logoUrl: string | null; status: string; supportAccessUntil: string | null; settings: TenantSettings }
@@ -49,6 +49,24 @@ export default function Settings() {
       void reload();
     } catch (e) {
       setSaveError(e);
+    }
+  };
+
+  const backup = async () => {
+    setBusy(true);
+    setSaveError(null);
+    try {
+      const file = await get<unknown>('/settings/backup');
+      const url = URL.createObjectURL(new Blob([JSON.stringify(file)], { type: 'application/json' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `localfinance-backup-${today()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setSaveError(e);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -131,6 +149,11 @@ export default function Settings() {
           <button className="btn" onClick={() => void support(Number(days))}>{t('settings.grantSupport')}</button>
           {data.supportAccessUntil && <button className="btn" onClick={() => void support(0)}>{t('settings.revokeSupport')}</button>}
         </div>
+      </div>
+      <div className="card">
+        <h3>{t('settings.backup')}</h3>
+        <p className="muted">{t('settings.backupHelp')}</p>
+        <button className="btn" disabled={busy} onClick={() => void backup()}>{t('settings.downloadBackup')}</button>
       </div>
     </div>
   );

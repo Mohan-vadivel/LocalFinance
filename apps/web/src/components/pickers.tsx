@@ -72,7 +72,7 @@ export function ModeSelect({ value, onChange }: { value: string; onChange: (v: s
   const { t } = useTranslation();
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)}>
-      {['CASH', 'UPI', 'BANK'].map((m) => (
+      {['CASH', 'UPI', 'CARD', 'BANK'].map((m) => (
         <option key={m} value={m}>
           {t(`common.modes.${m}`)}
         </option>

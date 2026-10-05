@@ -23,7 +23,7 @@ export type InterestMethod = (typeof INTEREST_METHODS)[number];
 export const PENALTY_TYPES = ['NONE', 'FIXED_PER_DAY', 'PERCENT_PER_DAY'] as const;
 export type PenaltyType = (typeof PENALTY_TYPES)[number];
 
-export const PAYMENT_MODES = ['CASH', 'UPI', 'BANK'] as const;
+export const PAYMENT_MODES = ['CASH', 'UPI', 'CARD', 'BANK'] as const;
 export type PaymentMode = (typeof PAYMENT_MODES)[number];
 
 export const LOAN_STATUSES = [

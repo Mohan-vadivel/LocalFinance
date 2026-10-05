@@ -59,6 +59,7 @@
     "modes": {
       "CASH": "Cash",
       "UPI": "UPI",
+      "CARD": "Card",
       "BANK": "Bank"
     }
   },
@@ -707,7 +708,10 @@
     "supportUntil": "Support can view until",
     "supportOff": "Support access is off",
     "grantSupport": "Allow for days",
-    "revokeSupport": "Turn off"
+    "revokeSupport": "Turn off",
+    "backup": "Backup",
+    "backupHelp": "Download every record of your business as one file and keep it safe. Passwords are not included.",
+    "downloadBackup": "Download backup"
   },
   "receipt": {
     "title": "Payment receipt",

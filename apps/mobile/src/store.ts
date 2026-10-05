@@ -53,7 +53,7 @@ export interface QueuedCollection {
   clientRef: string;
   loanId: string;
   amount: number;
-  mode: 'CASH' | 'UPI' | 'BANK';
+  mode: 'CASH' | 'UPI' | 'CARD' | 'BANK';
   upiRef?: string | null;
   note?: string | null;
   collectedAt: string;
