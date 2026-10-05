@@ -9,6 +9,7 @@ import Branches from './pages/Branches';
 import CollectionSummary from './pages/CollectionSummary';
 import DeskEntry from './pages/DeskEntry';
 import LineAbstract from './pages/LineAbstract';
+import LineList from './pages/LineList';
 import Collections from './pages/Collections';
 import Customers, { CustomerDetail } from './pages/Customers';
 import Dashboard from './pages/Dashboard';
@@ -64,6 +65,7 @@ function Guarded() {
         <Route path="collections/summary" element={<Need perms={['collection.record', 'report.view']}><CollectionSummary /></Need>} />
         <Route path="collections/desk" element={<Need perms={['collection.reverse']}><DeskEntry /></Need>} />
         <Route path="reports/line-abstract" element={<Need perms={['report.view']}><LineAbstract /></Need>} />
+        <Route path="reports/line-list" element={<Need perms={['report.view']}><LineList /></Need>} />
         <Route path="funds" element={<Need perms={['fund.manage']}><Funds /></Need>} />
         <Route path="investors" element={<Need perms={['investor.manage']}><Investors /></Need>} />
         <Route path="investors/:id" element={<Need perms={['investor.manage']}><InvestorDetail /></Need>} />

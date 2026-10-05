@@ -1,10 +1,10 @@
 import { Controller, Get, Injectable, Query } from '@nestjs/common';
-import { ageingBucket, AGEING_BUCKETS, addDays, diffDays, periodRange, reportFilterSchema, todayIST, type ReportFilter, type SummaryPeriod } from '@localfinance/shared';
+import { ageingBucket, AGEING_BUCKETS, addDays, addMonthsClamped, diffDays, weekday, periodRange, reportFilterSchema, todayIST, type ReportFilter, type SummaryPeriod } from '@localfinance/shared';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { positionOf } from '../common/books.service';
 import { CurrentCtx, Perm, type Ctx } from '../common/context';
-import { bad } from '../common/errors';
+import { bad, notFound } from '../common/errors';
 import { PrismaService } from '../common/prisma.service';
 import { branchScope } from '../common/scope';
 import { V } from '../common/zod.pipe';
@@ -638,6 +638,175 @@ export class ReportsService {
     const investors = await this.prisma.investor.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, name: true } });
     return txns.map((t) => ({ date: t.date, investor: investors.find((i) => i.id === t.investorId)?.name, type: t.type, amount: t.amount, period: t.periodStart ? `${t.periodStart} to ${t.periodEnd}` : '', mode: t.mode, note: t.note }));
   }
+
+  /** Each loan's balance (customer ledger, debits less credits) at the end of `date`. */
+  private async balancesAt(loanIds: string[], date: string) {
+    const rows = loanIds.length
+      ? await this.prisma.ledgerEntry.groupBy({ by: ['loanId'], where: { loanId: { in: loanIds }, date: { lte: date } }, _sum: { debit: true, credit: true } })
+      : [];
+    return new Map(rows.map((r) => [r.loanId, (r._sum.debit ?? 0) - (r._sum.credit ?? 0)]));
+  }
+
+  /**
+   * Line list: the month sheet for one line (route), like the owner's Excel sheet. One row per loan in route order with
+   * the balance at the start, the amount collected on each day of the month, the month total and the balance at the end.
+   * Loans closed during the month are included. Without a route, every line of the branch is listed, line by line.
+   */
+  async lineList(ctx: Ctx, f: ReportFilter & { month?: string }) {
+    let from: string;
+    let to: string;
+    if (f.month) {
+      from = `${f.month}-01`;
+      to = addDays(addMonthsClamped(from, 1, 1), -1);
+    } else ({ from, to } = range(f));
+    if (diffDays(to, from) > 30) throw bad('The line list covers at most 31 days');
+    const scope = branchScope(ctx, f.branchId);
+    const route = f.routeId ? await this.prisma.route.findFirst({ where: { id: f.routeId, ...scope }, select: { id: true, name: true } }) : null;
+    if (f.routeId && !route) throw notFound('Route');
+    const routeIds = f.routeId ? [f.routeId] : undefined;
+    // Loans of the line's customers that were running at some point in the period, plus any loan collected on this line.
+    const collectedHere = f.routeId
+      ? await this.prisma.collection.findMany({ where: { ...scope, routeId: f.routeId, date: { gte: from, lte: to }, reversedAt: null }, distinct: ['loanId'], select: { loanId: true } })
+      : [];
+    const loans = await this.prisma.loan.findMany({
+      where: {
+        ...scope,
+        disbursedOn: { not: null },
+        OR: [
+          {
+            disbursedOn: { not: null, lte: to },
+            AND: [{ OR: [{ closedOn: null }, { closedOn: { gte: from } }] }],
+            customer: { ...(routeIds ? { routeId: { in: routeIds } } : {}), ...(f.locationId ? { locationId: f.locationId } : {}) },
+          },
+          ...(collectedHere.length ? [{ id: { in: collectedHere.map((c) => c.loanId) } }] : []),
+        ],
+      },
+      select: {
+        id: true,
+        number: true,
+        principal: true,
+        disbursedOn: true,
+        closedOn: true,
+        status: true,
+        instalments: { where: { seq: 1 }, select: { principalDue: true, interestDue: true } },
+        customer: { select: { id: true, name: true, code: true, phone: true, routeId: true, routeSeq: true } },
+      },
+    });
+    const ids = loans.map((l) => l.id);
+    const [opening, closing, cols, n] = await Promise.all([
+      this.balancesAt(ids, addDays(from, -1)),
+      this.balancesAt(ids, to),
+      ids.length ? this.prisma.collection.findMany({ where: { loanId: { in: ids }, date: { gte: from, lte: to }, reversedAt: null }, select: { loanId: true, date: true, amount: true } }) : Promise.resolve([]),
+      this.names(ctx),
+    ]);
+    const days: string[] = [];
+    for (let d = from; d <= to; d = addDays(d, 1)) days.push(d);
+    const dayIndex = new Map(days.map((d, i) => [d, i]));
+    const daily = new Map(ids.map((id) => [id, days.map(() => 0)]));
+    for (const c of cols) daily.get(c.loanId)![dayIndex.get(c.date)!] += c.amount;
+    const rows = loans
+      .map((l) => {
+        const d = daily.get(l.id)!;
+        const first = l.instalments[0];
+        return {
+          loanId: l.id,
+          loan: l.number,
+          customerId: l.customer.id,
+          customer: l.customer.name,
+          code: l.customer.code,
+          phone: l.customer.phone,
+          route: route?.name ?? (n.route(l.customer.routeId) || '-'),
+          routeSeq: !route || l.customer.routeId === route.id ? l.customer.routeSeq : null,
+          principal: l.principal,
+          instalment: first ? first.principalDue + first.interestDue : 0,
+          loanDate: l.disbursedOn!,
+          closedOn: l.closedOn && l.closedOn <= to ? l.closedOn : null,
+          status: l.status,
+          opening: opening.get(l.id) ?? 0,
+          daily: d,
+          total: d.reduce((s, x) => s + x, 0),
+          closing: closing.get(l.id) ?? 0,
+        };
+      })
+      .sort((a, b) => a.route.localeCompare(b.route) || (a.routeSeq ?? 1e9) - (b.routeSeq ?? 1e9) || a.customer.localeCompare(b.customer) || a.loanDate.localeCompare(b.loanDate) || a.loan.localeCompare(b.loan));
+    const sum = (k: 'opening' | 'total' | 'closing') => rows.reduce((s, r) => s + r[k], 0);
+    return {
+      from,
+      to,
+      route,
+      days,
+      rows,
+      totals: { opening: sum('opening'), daily: days.map((_, i) => rows.reduce((s, r) => s + r.daily[i], 0)), total: sum('total'), closing: sum('closing') },
+    };
+  }
+
+  /**
+   * Growth month by month for the last N months (ending with the month of `to`, default this month): loans given,
+   * collected, income (only with P&L access), loan balance at month end, new customers, closed and running accounts.
+   */
+  async growth(ctx: Ctx, f: ReportFilter & { months?: number }) {
+    const count = f.months ?? 12;
+    const lastMonthStart = (f.to ?? todayIST()).slice(0, 8) + '01';
+    const firstMonthStart = addMonthsClamped(lastMonthStart, -(count - 1), 1);
+    const end = addDays(addMonthsClamped(lastMonthStart, 1, 1), -1);
+    const scope = branchScope(ctx, f.branchId);
+    const withIncome = ctx.permissions.has('pl.view');
+    const loans = await this.prisma.loan.findMany({
+      where: { ...scope, disbursedOn: { not: null, lte: end }, ...(f.productId ? { productId: f.productId } : {}), customer: customerWhere(ctx, f) },
+      select: { id: true, customerId: true, principal: true, fee: true, upfrontInterest: true, disbursedOn: true, closedOn: true },
+    });
+    const ids = loans.map((l) => l.id);
+    const [cols, ledger] = await Promise.all([
+      ids.length ? this.prisma.collection.findMany({ where: { loanId: { in: ids }, date: { gte: firstMonthStart, lte: end }, reversedAt: null }, select: { date: true, amount: true, interest: true, penalty: true } }) : Promise.resolve([]),
+      this.ledgerByDay(ids, end),
+    ]);
+    // A customer's first loan (within this filter) marks them as new in that month.
+    const firstLoan = new Map<string, string>();
+    for (const l of loans) if (!firstLoan.has(l.customerId) || l.disbursedOn! < firstLoan.get(l.customerId)!) firstLoan.set(l.customerId, l.disbursedOn!);
+    const rows = [];
+    for (let i = 0; i < count; i++) {
+      const mFrom = addMonthsClamped(firstMonthStart, i, 1);
+      const mTo = addDays(addMonthsClamped(mFrom, 1, 1), -1);
+      const inMonth = (d: string | null) => d != null && d >= mFrom && d <= mTo;
+      const given = loans.filter((l) => inMonth(l.disbursedOn));
+      const coll = cols.filter((c) => inMonth(c.date));
+      rows.push({
+        month: month(mFrom),
+        loans: given.length,
+        loanAmount: given.reduce((s, l) => s + l.principal, 0),
+        collected: coll.reduce((s, c) => s + c.amount, 0),
+        interest: withIncome ? coll.reduce((s, c) => s + c.interest, 0) + given.reduce((s, l) => s + l.upfrontInterest, 0) : null,
+        fees: withIncome ? given.reduce((s, l) => s + l.fee, 0) : null,
+        penalty: withIncome ? coll.reduce((s, c) => s + c.penalty, 0) : null,
+        outstanding: ledger.filter((e) => e.date <= mTo).reduce((s, e) => s + e.delta, 0),
+        newCustomers: [...firstLoan.values()].filter(inMonth).length,
+        closedAccounts: loans.filter((l) => inMonth(l.closedOn)).length,
+        closingAccounts: loans.filter((l) => l.disbursedOn! <= mTo && (l.closedOn == null || l.closedOn > mTo)).length,
+      });
+    }
+    return rows;
+  }
+
+  /** Collections grouped by day of the week (Monday first): receipts, amount, cash and UPI, and the average per such day. */
+  async weekdayCollection(ctx: Ctx, f: ReportFilter) {
+    const { from, to } = range(f);
+    const cols = await this.prisma.collection.findMany({ where: this.collectionWhere(ctx, f, from, to), select: { date: true, amount: true, mode: true } });
+    const order = [1, 2, 3, 4, 5, 6, 0];
+    const rows = order.map((d) => ({ weekday: d, days: 0, receipts: 0, amount: 0, cash: 0, upi: 0, average: 0 }));
+    const at = (d: string) => rows[order.indexOf(weekday(d))];
+    // Count each weekday in the period, up to today, so the average is per calendar day of that weekday.
+    const last = to < todayIST() ? to : todayIST();
+    for (let d = from; d <= last; d = addDays(d, 1)) at(d).days += 1;
+    for (const c of cols) {
+      const r = at(c.date);
+      r.receipts += 1;
+      r.amount += c.amount;
+      if (c.mode === 'CASH') r.cash += c.amount;
+      else r.upi += c.amount;
+    }
+    for (const r of rows) r.average = r.days ? Math.round(r.amount / r.days) : 0;
+    return rows;
+  }
 }
 
 // =====================================================================
@@ -741,6 +910,8 @@ export class DashboardService {
 
 const filter = reportFilterSchema.extend({ investorId: z.string().optional() });
 type Filter = z.infer<typeof filter>;
+const lineListQuery = reportFilterSchema.extend({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional() });
+const growthQuery = reportFilterSchema.extend({ months: z.coerce.number().int().min(1).max(36).optional() });
 
 const summaryQuery = z.object({
   period: z.enum(['DAY', 'WEEK', 'MONTH']).default('DAY'),
@@ -777,6 +948,15 @@ export class ReportsController {
   @Get('reports/line-abstract') @Perm('report.view') async lineAbstract(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
     const [abstract, pl] = await Promise.all([this.reports.lineAbstract(ctx, f), ctx.permissions.has('pl.view') ? this.pl.compute(ctx, f) : null]);
     return { ...abstract, profit: pl ? { income: pl.totalIncome, costs: pl.totalIncome - pl.netProfit, net: pl.netProfit } : null };
+  }
+  @Get('reports/line-list') @Perm('report.view') lineList(@CurrentCtx() ctx: Ctx, @Query(V(lineListQuery)) f: z.infer<typeof lineListQuery>) {
+    return this.reports.lineList(ctx, f);
+  }
+  @Get('reports/growth') @Perm('report.view') growth(@CurrentCtx() ctx: Ctx, @Query(V(growthQuery)) f: z.infer<typeof growthQuery>) {
+    return this.reports.growth(ctx, f);
+  }
+  @Get('reports/weekday') @Perm('report.view') weekday(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
+    return this.reports.weekdayCollection(ctx, f);
   }
   @Get('reports/disbursements') @Perm('report.view') disb(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
     return this.reports.disbursements(ctx, f);

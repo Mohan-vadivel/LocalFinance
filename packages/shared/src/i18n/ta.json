@@ -98,7 +98,8 @@
     "settings": "அமைப்புகள்",
     "collectionSummary": "வசூல் சுருக்கம்",
     "deskEntry": "விரைவு வசூல் பதிவு",
-    "lineAbstract": "மாதச் சுருக்கம்"
+    "lineAbstract": "மாதச் சுருக்கம்",
+    "lineList": "லைன் பட்டியல்"
   },
   "roles": {
     "SUPER_ADMIN": "சூப்பர் நிர்வாகி",
@@ -649,7 +650,10 @@
     },
     "dailyStatement": "தினசரி அறிக்கை",
     "pendingList": "நிலுவைப் பட்டியல்",
-    "lineAbstract": "மாதாந்திர லைன் சுருக்கம்"
+    "lineAbstract": "மாதாந்திர லைன் சுருக்கம்",
+    "growth": "வளர்ச்சி பகுப்பாய்வு",
+    "weekday": "வார நாள் வசூல்",
+    "months": "மாதங்கள்"
   },
   "pl": {
     "title": "லாப நஷ்டம்",
@@ -816,7 +820,12 @@
     "closingAccounts": "இறுதிக் கணக்குகள்",
     "interestCollected": "வசூலான வட்டி",
     "balance": "நிலுவை",
-    "lastOutcome": "கடைசி வருகை"
+    "lastOutcome": "கடைசி வருகை",
+    "newCustomers": "புதிய வாடிக்கையாளர்கள்",
+    "weekday": "நாள்",
+    "days": "நாட்கள்",
+    "receipts": "ரசீதுகள்",
+    "average": "நாள் சராசரி"
   },
   "collSummary": {
     "title": "வசூல் சுருக்கம்",
@@ -877,5 +886,14 @@
     "costs": "செலவு",
     "net": "லாபம்",
     "profit": "இந்தக் காலத்தின் லாபம்"
+  },
+  "lineList": {
+    "title": "லைன் பட்டியல்",
+    "allLines": "அனைத்து லைன்களும்",
+    "loanDate": "கடன் தேதி",
+    "opening": "தொடக்க இருப்பு",
+    "closing": "இறுதி இருப்பு",
+    "monthTotal": "மாத மொத்தம்",
+    "closed": "முடிந்தது"
   }
 }

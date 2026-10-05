@@ -9,7 +9,7 @@ import { useLoad } from '../lib/hooks';
 import type { Permission } from '@localfinance/shared';
 
 type Row = Record<string, unknown>;
-type Filter = 'location' | 'route' | 'agent' | 'product' | 'dates';
+type Filter = 'location' | 'route' | 'agent' | 'product' | 'dates' | 'months';
 interface ReportDef {
   key: string;
   path: string;
@@ -18,12 +18,19 @@ interface ReportDef {
   filters: Filter[];
   /** Column keys; money keys are listed in MONEY. */
   columns: string[];
+  /** Columns of this report that are shown but not added up (month-end balances and the like). */
+  noSum?: string[];
+  /** Columns only filled in for users with P&L access; hidden from the rest. */
+  plOnly?: string[];
 }
 
-const MONEY = new Set(['due', 'collected', 'cash', 'upi', 'principal', 'fee', 'upfrontInterest', 'netDisbursed', 'principalOutstanding', 'interestOutstanding', 'penalty', 'totalOutstanding', 'overdue', 'demand', 'amount', 'cashDifference', 'expected', 'received', 'difference', 'available', 'lentOut', 'interest', 'fees', 'upfront', 'total', 'interestWaived', 'writtenOff', 'outstanding', 'loanAmount', 'interestTaken', 'docCharges', 'addLess', 'expenses', 'otherIncome', 'otherDebit', 'otherCredit', 'loanBalance', 'cashBalance', 'bankBalance', 'instalment', 'pending', 'lastPaidAmount']);
+const MONEY = new Set(['due', 'collected', 'cash', 'upi', 'principal', 'fee', 'upfrontInterest', 'netDisbursed', 'principalOutstanding', 'interestOutstanding', 'penalty', 'totalOutstanding', 'overdue', 'demand', 'amount', 'cashDifference', 'expected', 'received', 'difference', 'available', 'lentOut', 'interest', 'fees', 'upfront', 'total', 'interestWaived', 'writtenOff', 'outstanding', 'loanAmount', 'interestTaken', 'docCharges', 'addLess', 'expenses', 'otherIncome', 'otherDebit', 'otherCredit', 'loanBalance', 'cashBalance', 'bankBalance', 'instalment', 'pending', 'lastPaidAmount', 'average']);
 /** Balances and per-loan figures are shown but not added up. */
-const NO_SUM = new Set(['loanBalance', 'cashBalance', 'bankBalance', 'instalment', 'lastPaidAmount']);
-const SUM = new Set([...[...MONEY].filter((k) => !NO_SUM.has(k)), 'missedInstalments', 'customersDue', 'missed', 'collections', 'customersVisited', 'noPaymentVisits', 'flagged', 'activeLoans', 'customers', 'loans']);
+const NO_SUM = new Set(['loanBalance', 'cashBalance', 'bankBalance', 'instalment', 'lastPaidAmount', 'average']);
+const SUM = new Set([...[...MONEY].filter((k) => !NO_SUM.has(k)), 'missedInstalments', 'customersDue', 'missed', 'collections', 'customersVisited', 'noPaymentVisits', 'flagged', 'activeLoans', 'customers', 'loans', 'receipts', 'days', 'newCustomers', 'closedAccounts']);
+/** Counts that are numbers but not totals. */
+const NUM = new Set(['rate', 'utilisation', 'daysPastDue', 'missedInstalments', 'closingAccounts']);
+const MONTHS = [3, 6, 12, 24, 36];
 const DATES = new Set(['date', 'disbursedOn', 'closedOn', 'lastPaidOn']);
 
 export const REPORTS: ReportDef[] = [
@@ -40,16 +47,18 @@ export const REPORTS: ReportDef[] = [
   { key: 'income', path: 'income', title: 'report.income', perm: 'pl.view', filters: ['dates'], columns: ['month', 'interest', 'fees', 'upfront', 'penalty', 'total'] },
   { key: 'closedLoans', path: 'closed-loans', title: 'report.closedLoans', filters: ['dates', 'location', 'route'], columns: ['closedOn', 'loan', 'customer', 'branch', 'status', 'principal', 'interestWaived', 'writtenOff'] },
   { key: 'locationWise', path: 'location-wise', title: 'report.locationWise', filters: ['dates'], columns: ['location', 'branch', 'customers', 'activeLoans', 'outstanding', 'overdue', 'collected'] },
+  { key: 'growth', path: 'growth', title: 'report.growth', filters: ['months', 'location', 'route', 'product'], columns: ['month', 'loans', 'loanAmount', 'collected', 'interest', 'fees', 'penalty', 'outstanding', 'newCustomers', 'closedAccounts', 'closingAccounts'], noSum: ['outstanding'], plOnly: ['interest', 'fees', 'penalty'] },
+  { key: 'weekday', path: 'weekday', title: 'report.weekday', filters: ['dates', 'route', 'agent'], columns: ['weekday', 'days', 'receipts', 'amount', 'cash', 'upi', 'average'] },
   { key: 'investorStatement', path: 'investor-statement', title: 'report.investorStatement', perm: 'investor.manage', filters: ['dates'], columns: ['date', 'investor', 'type', 'amount', 'period', 'mode', 'note'] },
 ];
 
 export default function Reports() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { can } = useAuth();
   const visible = REPORTS.filter((r) => !r.perm || can(r.perm, 'pl.view'));
   const [key, setKey] = useState(visible[0]?.key ?? '');
   const def = visible.find((r) => r.key === key) ?? visible[0];
-  const [f, setF] = useState({ from: monthStart(), to: today(), branchId: '', locationId: '', routeId: '', agentId: '', productId: '' });
+  const [f, setF] = useState({ from: monthStart(), to: today(), branchId: '', locationId: '', routeId: '', agentId: '', productId: '', months: '12' });
   const [applied, setApplied] = useState(f);
   const params = {
     ...(def?.filters.includes('dates') ? { from: applied.from, to: applied.to } : {}),
@@ -58,6 +67,7 @@ export default function Reports() {
     routeId: def?.filters.includes('route') ? applied.routeId : undefined,
     agentId: def?.filters.includes('agent') ? applied.agentId : undefined,
     productId: def?.filters.includes('product') ? applied.productId : undefined,
+    months: def?.filters.includes('months') ? applied.months : undefined,
   };
   const { data, error, loading } = useLoad(() => (def ? get<Row[] | { buckets: Row[]; loans: Row[] }>(`/reports/${def.path}`, params) : Promise.resolve([])), [def?.key, JSON.stringify(params)]);
 
@@ -65,14 +75,16 @@ export default function Reports() {
   const rows = Array.isArray(data) ? data : data?.loans ?? [];
   const buckets = !Array.isArray(data) && data ? data.buckets : null;
   const label = (k: string) => t(`reportCols.${k}`);
-  const columns: Column<Row>[] = def.columns.map((c) => ({
+  const columns: Column<Row>[] = def.columns.filter((c) => !def.plOnly?.includes(c) || can('pl.view')).map((c) => ({
     key: c,
     label: label(c),
     money: MONEY.has(c),
-    num: !MONEY.has(c) && ['rate', 'utilisation', 'daysPastDue', 'missedInstalments', ...SUM].includes(c),
-    total: SUM.has(c),
+    num: !MONEY.has(c) && (NUM.has(c) || SUM.has(c)),
+    total: SUM.has(c) && !def.noSum?.includes(c),
     value: (r) => {
       const v = r[c];
+      if (c === 'weekday' && typeof v === 'number') return t(`weekdays.${v}`);
+      if (c === 'month' && typeof v === 'string' && /^\d{4}-\d{2}$/.test(v)) return new Date(`${v}-01T00:00:00Z`).toLocaleString(i18n.language === 'ta' ? 'ta-IN' : 'en-IN', { month: 'short', year: 'numeric', timeZone: 'UTC' });
       if (c === 'type' && typeof v === 'string') return t(`investor.txnTypes.${v}`, { defaultValue: v });
       if (c === 'status' && typeof v === 'string') return t(`loanMod.statuses.${v}`, { defaultValue: v });
       if (c === 'source' && typeof v === 'string') return t(`fund.sourceTypes.${v}`, { defaultValue: v });
@@ -102,6 +114,14 @@ export default function Reports() {
               <label className="field inline">{t('common.to')}<input type="date" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} /></label>
             </>
           )}
+          {def.filters.includes('months') && (
+            <label className="field inline">
+              {t('report.months')}
+              <select value={f.months} onChange={(e) => setF({ ...f, months: e.target.value })}>
+                {MONTHS.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </label>
+          )}
           <BranchPicker value={f.branchId} onChange={(v) => setF({ ...f, branchId: v, locationId: '', routeId: '' })} allowAll />
           {def.filters.includes('location') && <LocationPicker branchId={f.branchId || undefined} value={f.locationId} onChange={(v) => setF({ ...f, locationId: v, routeId: '' })} allowAll />}
           {def.filters.includes('route') && <RoutePicker branchId={f.branchId || undefined} locationId={f.locationId || undefined} value={f.routeId} onChange={(v) => setF({ ...f, routeId: v })} allowAll />}
@@ -120,7 +140,7 @@ export default function Reports() {
       )}
       <div className="card">
         <div className="print-only muted">
-          {def.filters.includes('dates') ? `${dateIN(applied.from)} – ${dateIN(applied.to)}` : dateIN(today())}
+          {def.filters.includes('dates') ? `${dateIN(applied.from)} – ${dateIN(applied.to)}` : def.filters.includes('months') ? `${t('report.months')}: ${applied.months}` : dateIN(today())}
         </div>
         {loading && !data ? <Loading /> : <DataTable title={t(def.title)} rows={rows} columns={columns} />}
       </div>

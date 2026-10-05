@@ -98,7 +98,8 @@
     "settings": "Settings",
     "collectionSummary": "Collection summary",
     "deskEntry": "Quick collection entry",
-    "lineAbstract": "Monthly abstract"
+    "lineAbstract": "Monthly abstract",
+    "lineList": "Line list"
   },
   "roles": {
     "SUPER_ADMIN": "Super Admin",
@@ -649,7 +650,10 @@
     },
     "dailyStatement": "Daily statement",
     "pendingList": "Pending list",
-    "lineAbstract": "Monthly line abstract"
+    "lineAbstract": "Monthly line abstract",
+    "growth": "Growth analysis",
+    "weekday": "Week day collection",
+    "months": "Months"
   },
   "pl": {
     "title": "Profit and loss",
@@ -816,7 +820,12 @@
     "closingAccounts": "Accounts at end",
     "interestCollected": "Interest collected",
     "balance": "Balance",
-    "lastOutcome": "Last visit"
+    "lastOutcome": "Last visit",
+    "newCustomers": "New customers",
+    "weekday": "Day",
+    "days": "Days",
+    "receipts": "Receipts",
+    "average": "Average per day"
   },
   "collSummary": {
     "title": "Collection summary",
@@ -877,5 +886,14 @@
     "costs": "Costs",
     "net": "Profit",
     "profit": "Profit for the period"
+  },
+  "lineList": {
+    "title": "Line list",
+    "allLines": "All lines",
+    "loanDate": "Loan date",
+    "opening": "Balance at start",
+    "closing": "Balance at end",
+    "monthTotal": "Month total",
+    "closed": "Closed"
   }
 }
