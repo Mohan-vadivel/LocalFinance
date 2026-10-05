@@ -20,12 +20,16 @@ interface ReportDef {
   columns: string[];
 }
 
-const MONEY = new Set(['due', 'collected', 'cash', 'upi', 'principal', 'fee', 'upfrontInterest', 'netDisbursed', 'principalOutstanding', 'interestOutstanding', 'penalty', 'totalOutstanding', 'overdue', 'demand', 'amount', 'cashDifference', 'expected', 'received', 'difference', 'available', 'lentOut', 'interest', 'fees', 'upfront', 'total', 'interestWaived', 'writtenOff', 'outstanding']);
-const SUM = new Set([...MONEY, 'customersDue', 'missed', 'collections', 'customersVisited', 'noPaymentVisits', 'flagged', 'activeLoans', 'customers', 'loans']);
-const DATES = new Set(['date', 'disbursedOn', 'closedOn']);
+const MONEY = new Set(['due', 'collected', 'cash', 'upi', 'principal', 'fee', 'upfrontInterest', 'netDisbursed', 'principalOutstanding', 'interestOutstanding', 'penalty', 'totalOutstanding', 'overdue', 'demand', 'amount', 'cashDifference', 'expected', 'received', 'difference', 'available', 'lentOut', 'interest', 'fees', 'upfront', 'total', 'interestWaived', 'writtenOff', 'outstanding', 'loanAmount', 'interestTaken', 'docCharges', 'addLess', 'expenses', 'otherIncome', 'otherDebit', 'otherCredit', 'loanBalance', 'cashBalance', 'bankBalance', 'instalment', 'pending', 'lastPaidAmount']);
+/** Balances and per-loan figures are shown but not added up. */
+const NO_SUM = new Set(['loanBalance', 'cashBalance', 'bankBalance', 'instalment', 'lastPaidAmount']);
+const SUM = new Set([...[...MONEY].filter((k) => !NO_SUM.has(k)), 'missedInstalments', 'customersDue', 'missed', 'collections', 'customersVisited', 'noPaymentVisits', 'flagged', 'activeLoans', 'customers', 'loans']);
+const DATES = new Set(['date', 'disbursedOn', 'closedOn', 'lastPaidOn']);
 
 export const REPORTS: ReportDef[] = [
   { key: 'dailyCollection', path: 'daily-collection', title: 'report.dailyCollection', filters: ['dates', 'location', 'route', 'agent'], columns: ['date', 'route', 'due', 'collected', 'cash', 'upi', 'customersDue', 'missed', 'rate'] },
+  { key: 'dailyStatement', path: 'daily-statement', title: 'report.dailyStatement', filters: ['dates'], columns: ['date', 'loans', 'loanAmount', 'interestTaken', 'docCharges', 'collected', 'cash', 'upi', 'addLess', 'expenses', 'otherIncome', 'otherDebit', 'otherCredit', 'loanBalance', 'cashBalance', 'bankBalance'] },
+  { key: 'pendingList', path: 'pending-list', title: 'report.pendingList', filters: ['location', 'route', 'product'], columns: ['route', 'loan', 'customer', 'phone', 'principal', 'instalment', 'missedInstalments', 'pending', 'totalOutstanding', 'daysPastDue', 'lastPaidOn', 'lastPaidAmount', 'lastOutcome', 'remark'] },
   { key: 'demandVsCollection', path: 'demand-vs-collection', title: 'report.demandVsCollection', filters: ['dates', 'location', 'route', 'agent'], columns: ['date', 'demand', 'collected', 'rate'] },
   { key: 'disbursement', path: 'disbursements', title: 'report.disbursement', filters: ['dates', 'location', 'route', 'product'], columns: ['date', 'loan', 'customer', 'branch', 'product', 'principal', 'fee', 'upfrontInterest', 'netDisbursed', 'mode'] },
   { key: 'outstanding', path: 'outstanding', title: 'report.outstanding', filters: ['location', 'route', 'product'], columns: ['loan', 'customer', 'phone', 'location', 'route', 'product', 'disbursedOn', 'principal', 'principalOutstanding', 'interestOutstanding', 'penalty', 'totalOutstanding', 'overdue', 'daysPastDue'] },
@@ -65,7 +69,7 @@ export default function Reports() {
     key: c,
     label: label(c),
     money: MONEY.has(c),
-    num: !MONEY.has(c) && ['rate', 'utilisation', 'daysPastDue', ...SUM].includes(c),
+    num: !MONEY.has(c) && ['rate', 'utilisation', 'daysPastDue', 'missedInstalments', ...SUM].includes(c),
     total: SUM.has(c),
     value: (r) => {
       const v = r[c];
@@ -73,6 +77,7 @@ export default function Reports() {
       if (c === 'status' && typeof v === 'string') return t(`loanMod.statuses.${v}`, { defaultValue: v });
       if (c === 'source' && typeof v === 'string') return t(`fund.sourceTypes.${v}`, { defaultValue: v });
       if (c === 'mode' && typeof v === 'string') return t(`common.modes.${v}`, { defaultValue: v });
+      if (c === 'lastOutcome' && typeof v === 'string') return t(`collection.outcomes.${v}`, { defaultValue: v });
       if (DATES.has(c) && typeof v === 'string') return dateIN(v);
       if ((c === 'rate' || c === 'utilisation') && (typeof v === 'number' || v == null)) return pct(v as number | null);
       return v as string | number | null;

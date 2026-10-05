@@ -159,6 +159,33 @@ describe('collections on the phone', () => {
     }
   });
 
+  test('office enters a collection for an agent; an agent cannot enter for someone else', async () => {
+    const agentId = (await ok(api('GET', '/auth/me', { token: agent }))).id;
+    const r = await ok(api('POST', '/collections', { token: manager, body: { loanId: loan.id, amount: 1000, mode: 'CASH', clientRef: randomUUID(), agentId } }));
+    assert.equal(r.collection.agentId, agentId);
+    const managerId = (await ok(api('GET', '/auth/me', { token: manager }))).id;
+    const denied = await api('POST', '/collections', { token: agent, body: { loanId: loan.id, amount: 1000, mode: 'CASH', clientRef: randomUUID(), agentId: managerId } });
+    assert.equal(denied.status, 403);
+    const day = await ok(api('GET', `/routes/${routeId}/day?date=${today()}`, { token: manager }));
+    const l = day.customers.flatMap((c) => c.loans).find((x) => x.id === loan.id);
+    assert.ok(l.instalmentsTotal > 0 && l.maturityDate && l.totalPayable >= l.totalPaid);
+  });
+
+  test('daily statement, pending list and line abstract agree with the books', async () => {
+    const q = `from=${today().slice(0, 8)}01&to=${today()}`;
+    const stmt = await ok(api('GET', `/reports/daily-statement?${q}`, { token: manager }));
+    assert.equal(stmt[0].date, today());
+    assert.ok(stmt[0].collected > 0 && stmt[0].collected >= stmt[0].cash + stmt[0].upi);
+    const pending = await ok(api('GET', `/reports/pending-list?${q}`, { token: manager }));
+    assert.ok(pending.length > 0 && pending.every((x) => x.pending > 0 && x.phone));
+    const abs = await ok(api('GET', `/reports/line-abstract?${q}`, { token: manager }));
+    assert.equal(abs.lines.reduce((s, l) => s + l.balance, 0), stmt[0].loanBalance);
+    const sum = (l) => l.reduce((s, b) => s + b.amount, 0);
+    assert.equal(abs.book.opening.cash + abs.book.opening.bank + sum(abs.book.receipts), sum(abs.book.payments) + abs.book.closing.cash + abs.book.closing.bank);
+    assert.equal(abs.profit, null, 'a manager without P&L access sees no profit');
+    assert.ok((await ok(api('GET', `/reports/line-abstract?${q}`, { token: owner }))).profit);
+  });
+
   test('refuses more than the balance', async () => {
     const r = await api('POST', '/collections', { token: agent, body: { loanId: loan.id, amount: 99_999_999, mode: 'CASH', clientRef: randomUUID() } });
     assert.equal(r.status, 400);
@@ -335,7 +362,7 @@ describe('investors and profit and loss', () => {
   });
 
   test('every report answers', async () => {
-    for (const r of ['daily-collection', 'disbursements', 'outstanding', 'ageing', 'demand-vs-collection', 'agent-performance', 'cash-differences', 'fund-utilisation', 'income', 'closed-loans', 'location-wise', 'investor-statement']) {
+    for (const r of ['daily-collection', 'disbursements', 'outstanding', 'ageing', 'demand-vs-collection', 'agent-performance', 'cash-differences', 'fund-utilisation', 'income', 'closed-loans', 'location-wise', 'investor-statement', 'daily-statement', 'pending-list', 'line-abstract']) {
       await ok(api('GET', `/reports/${r}?from=2020-01-01&to=${today()}`, { token: owner }));
     }
     const dash = await ok(api('GET', '/dashboard', { token: manager }));

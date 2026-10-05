@@ -43,7 +43,7 @@ export class CollectionsService {
     tx: Tx,
     ctx: Ctx,
     loanId: string,
-    p: { amount: number; mode: string; date: string; collectedAt: Date; clientRef: string; upiRef?: string | null; lat?: number | null; lng?: number | null; note?: string | null; kind?: 'INSTALMENT' | 'FORECLOSURE'; waiveInterest?: number },
+    p: { amount: number; mode: string; date: string; collectedAt: Date; clientRef: string; upiRef?: string | null; lat?: number | null; lng?: number | null; note?: string | null; kind?: 'INSTALMENT' | 'FORECLOSURE'; waiveInterest?: number; agentId?: string },
   ) {
     const loan = await tx.loan.findFirst({ where: { id: loanId, tenantId: ctx.tenantId }, include: { instalments: { orderBy: { seq: 'asc' } }, customer: true } });
     if (!loan) throw notFound('Loan');
@@ -94,7 +94,7 @@ export class CollectionsService {
         branchId: loan.branchId,
         loanId: loan.id,
         customerId: loan.customerId,
-        agentId: ctx.userId,
+        agentId: p.agentId ?? ctx.userId,
         routeId: customer.routeId,
         amount: p.amount,
         principal: alloc.principal,
@@ -168,10 +168,15 @@ export class CollectionsService {
     const collectedAt = input.collectedAt ? new Date(input.collectedAt) : new Date();
     if (collectedAt.getTime() > Date.now() + 5 * 60_000) throw bad('Collection time is in the future');
     const date = istDate(collectedAt);
+    if (input.agentId && input.agentId !== ctx.userId) {
+      if (!ctx.permissions.has('handover.verify') && !ctx.permissions.has('collection.reverse')) throw forbidden('Only office staff can enter collections for another agent');
+      const agent = await this.prisma.user.findFirst({ where: { id: input.agentId, tenantId: ctx.tenantId } });
+      if (!agent) throw notFound('Agent');
+    }
     const res = await this.prisma.tx((tx) =>
       this.applyPayment(tx, ctx, input.loanId, { ...input, date, collectedAt }),
     );
-    await this.audit.log(ctx, 'COLLECT', 'Collection', res.collection.id, undefined, { loanId: input.loanId, amount: input.amount, mode: input.mode });
+    await this.audit.log(ctx, 'COLLECT', 'Collection', res.collection.id, undefined, { loanId: input.loanId, amount: input.amount, mode: input.mode, agentId: res.collection.agentId });
     void this.sendReceipt(ctx, res.collection.id).catch(() => undefined);
     return { collection: res.collection, duplicate: false, loanClosed: res.closes, balance: res.balance };
   }
@@ -338,6 +343,13 @@ export class CollectionsService {
             penalty: pos.penaltyOutstanding,
             outstanding: pos.totalOutstanding,
             daysPastDue: pos.daysPastDue,
+            // For the office quick-entry screen: the loan card the old desk software showed.
+            disbursedOn: l.disbursedOn,
+            maturityDate: instalments.at(-1)?.dueDate ?? null,
+            totalPayable: instalments.reduce((s, i) => s + i.principalDue + i.interestDue, 0),
+            totalPaid: instalments.reduce((s, i) => s + i.principalPaid + i.interestPaid, 0),
+            instalmentsPaid: instalments.filter((i) => i.principalPaid + i.interestPaid >= i.principalDue + i.interestDue).length,
+            instalmentsTotal: instalments.length,
             lastPayments: recent.filter((r) => r.loanId === l.id).slice(0, 5).map((r) => ({ date: r.date, amount: r.amount, mode: r.mode, receiptNo: r.receiptNo })),
           };
         });

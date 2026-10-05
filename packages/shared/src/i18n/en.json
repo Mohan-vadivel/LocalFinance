@@ -92,7 +92,9 @@
     "profitLoss": "Profit and loss",
     "audit": "Audit log",
     "settings": "Settings",
-    "collectionSummary": "Collection summary"
+    "collectionSummary": "Collection summary",
+    "deskEntry": "Quick collection entry",
+    "lineAbstract": "Monthly abstract"
   },
   "roles": {
     "SUPER_ADMIN": "Super Admin",
@@ -640,7 +642,10 @@
       "d8_30": "8 to 30 days",
       "d31_90": "31 to 90 days",
       "d90_plus": "Over 90 days"
-    }
+    },
+    "dailyStatement": "Daily statement",
+    "pendingList": "Pending list",
+    "lineAbstract": "Monthly line abstract"
   },
   "pl": {
     "title": "Profit and loss",
@@ -779,7 +784,32 @@
     "outstanding": "Outstanding",
     "investor": "Investor",
     "type": "Type",
-    "period": "Period"
+    "period": "Period",
+    "loans": "Loans",
+    "loanAmount": "Loan amount",
+    "interestTaken": "Interest taken",
+    "docCharges": "Document charges",
+    "addLess": "Excess / short",
+    "expenses": "Expenses",
+    "otherIncome": "Other income",
+    "otherDebit": "Other payments",
+    "otherCredit": "Other receipts",
+    "loanBalance": "Loan balance",
+    "cashBalance": "Cash balance",
+    "bankBalance": "Bank balance",
+    "instalment": "Instalment",
+    "missedInstalments": "Missed instalments",
+    "pending": "Pending dues",
+    "lastPaidOn": "Last paid on",
+    "lastPaidAmount": "Last paid",
+    "remark": "Last remark",
+    "openingAccounts": "Accounts at start",
+    "newAccounts": "New accounts",
+    "closedAccounts": "Closed accounts",
+    "closingAccounts": "Accounts at end",
+    "interestCollected": "Interest collected",
+    "balance": "Balance",
+    "lastOutcome": "Last visit"
   },
   "collSummary": {
     "title": "Collection summary",
@@ -797,5 +827,48 @@
     "customersPaid": "Customers paid",
     "onlyMine": "Showing only your own collections",
     "nothing": "No collections in this period"
+  },
+  "desk": {
+    "title": "Quick collection entry",
+    "help": "Enter the receipts an agent brings to the office: choose the agent and line, type the account number, check the amount and press Enter.",
+    "accountNo": "Account no",
+    "collectedBy": "Collected by",
+    "line": "Line",
+    "find": "Account no or name",
+    "notFound": "No active loan with that number in this line",
+    "loanAmount": "Loan amount",
+    "totalPayable": "Total payable",
+    "received": "Received",
+    "balance": "Balance",
+    "loanDate": "Loan date",
+    "maturity": "Maturity date",
+    "instalment": "Instalment",
+    "paidInstalments": "Paid instalments",
+    "pendingDues": "Pending dues",
+    "daysLate": "Days late",
+    "save": "Save receipt",
+    "entered": "Receipts for this line",
+    "closedCount": "Accounts closed",
+    "accountClosed": "Account closed",
+    "pendingInLine": "Still to collect in this line",
+    "chooseLine": "Choose the agent and the line to start.",
+    "saved": "Saved receipt {{receipt}}",
+    "onBehalf": "Entered by the office for the agent"
+  },
+  "abstract": {
+    "title": "Monthly line abstract",
+    "month": "Month",
+    "lines": "Line-wise",
+    "book": "Receipts and payments",
+    "receipts": "Receipts",
+    "payments": "Payments",
+    "opening": "Opening balance",
+    "closing": "Closing balance",
+    "cash": "Cash",
+    "bank": "Bank",
+    "income": "Income",
+    "costs": "Costs",
+    "net": "Profit",
+    "profit": "Profit for the period"
   }
 }

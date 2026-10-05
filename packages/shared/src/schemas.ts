@@ -208,6 +208,8 @@ export const collectionSchema = z.object({
   /** Unique id generated on the phone; a retried sync with the same id is ignored. */
   clientRef: z.string().min(8).max(100),
   note: optStr,
+  /** Office entry on behalf of the agent who collected the money (needs handover or reversal rights). */
+  agentId: id.optional(),
 });
 export const visitSchema = z.object({
   customerId: id,
