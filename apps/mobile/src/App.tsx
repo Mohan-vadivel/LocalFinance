@@ -7,6 +7,7 @@ import { AddCustomer, LoanRequest, MyRequests, Search } from './screens/Forms';
 import Home from './screens/Home';
 import Login from './screens/Login';
 import { Manager, Settings, Summary } from './screens/More';
+import CollectionReport from './screens/Report';
 import RouteDay from './screens/RouteDay';
 import { SessionProvider, useSession } from './session';
 import type { DayCustomer, MyRoute } from './store';
@@ -29,6 +30,8 @@ function Screens({ route }: { route: Route }) {
       return <MyRequests />;
     case 'Summary':
       return <Summary />;
+    case 'CollectionReport':
+      return <CollectionReport />;
     case 'Manager':
       return <Manager />;
     case 'Settings':

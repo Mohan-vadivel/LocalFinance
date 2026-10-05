@@ -10,6 +10,7 @@ import {
   summarize,
   type InstalmentState,
 } from './loan';
+import { periodRange } from './dates';
 import { formatINR } from './money';
 import { missingKeys, translate } from './i18n';
 
@@ -121,5 +122,15 @@ describe('language files', () => {
     expect(translate('ta', 'common.save')).toBe('சேமி');
     expect(translate('xx', 'common.save')).toBe('Save');
     expect(translate('en', 'receipt.body', { amount: '₹100', customer: 'Ravi', loan: 'L1', date: '2026-10-04', balance: '₹0', receipt: 'R1' })).toContain('Ravi');
+  });
+});
+
+describe('periodRange', () => {
+  it('gives the day, the Monday-to-Sunday week and the calendar month', () => {
+    expect(periodRange('DAY', '2026-10-07')).toEqual({ from: '2026-10-07', to: '2026-10-07' });
+    expect(periodRange('WEEK', '2026-10-07')).toEqual({ from: '2026-10-05', to: '2026-10-11' }); // Wednesday
+    expect(periodRange('WEEK', '2026-10-11')).toEqual({ from: '2026-10-05', to: '2026-10-11' }); // Sunday
+    expect(periodRange('MONTH', '2026-02-14')).toEqual({ from: '2026-02-01', to: '2026-02-28' });
+    expect(periodRange('MONTH', '2028-02-29')).toEqual({ from: '2028-02-01', to: '2028-02-29' });
   });
 });

@@ -101,6 +101,7 @@ export default function Home() {
         ))}
         <View style={{ height: 8 }} />
         <Btn kind="plain" title={t('mobile.daySummary')} onPress={() => nav.push('Summary')} />
+        <Btn kind="plain" title={t('collSummary.title')} onPress={() => nav.push('CollectionReport')} />
         {can('customer.view', 'collection.record') && <Btn kind="plain" title={t('mobile.searchCustomer')} onPress={() => nav.push('Search')} />}
         {can('customer.create') && <Btn kind="plain" title={t('mobile.addCustomer')} onPress={() => nav.push('AddCustomer', { routes: routes ?? [] })} />}
         {can('loan.request') && <Btn kind="plain" title={t('mobile.requestLoan')} onPress={() => nav.push('Search', { forLoan: true })} />}

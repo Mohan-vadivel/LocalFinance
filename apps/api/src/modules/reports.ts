@@ -1,5 +1,5 @@
 import { Controller, Get, Injectable, Query } from '@nestjs/common';
-import { ageingBucket, AGEING_BUCKETS, addDays, diffDays, reportFilterSchema, todayIST, type ReportFilter } from '@localfinance/shared';
+import { ageingBucket, AGEING_BUCKETS, addDays, diffDays, periodRange, reportFilterSchema, todayIST, type ReportFilter, type SummaryPeriod } from '@localfinance/shared';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { positionOf } from '../common/books.service';
@@ -192,6 +192,57 @@ export class ReportsService {
         missed: [...r.customersDue].filter((c) => !r.customersPaid.has(c)).length,
         rate: r.due ? Math.round((r.collected / r.due) * 1000) / 10 : null,
       }));
+  }
+
+  /**
+   * Collection totals for a day, week (Mon-Sun) or month, split by payment mode, with day-wise, route-wise and
+   * agent-wise rows. Staff without report access only ever see their own collections.
+   */
+  async collectionSummary(ctx: Ctx, q: { period: SummaryPeriod; date?: string; branchId?: string; routeId?: string; agentId?: string }) {
+    const { from, to } = periodRange(q.period, q.date ?? todayIST());
+    const mine = !ctx.permissions.has('report.view');
+    const f: ReportFilter = { branchId: q.branchId, routeId: q.routeId, agentId: mine ? ctx.userId : q.agentId };
+    const prev = periodRange(q.period, addDays(from, -1));
+    const [n, cols, previous] = await Promise.all([
+      this.names(ctx),
+      this.prisma.collection.findMany({ where: this.collectionWhere(ctx, f, from, to), select: { date: true, amount: true, mode: true, agentId: true, routeId: true, customerId: true } }),
+      this.prisma.collection.aggregate({ where: this.collectionWhere(ctx, f, prev.from, prev.to), _sum: { amount: true } }),
+    ]);
+    type Totals = { total: number; cash: number; upi: number; bank: number; count: number };
+    const zero = (): Totals => ({ total: 0, cash: 0, upi: 0, bank: 0, count: 0 });
+    const add = (t: Totals, c: { amount: number; mode: string }) => {
+      t.total += c.amount;
+      t.count += 1;
+      if (c.mode === 'CASH') t.cash += c.amount;
+      else if (c.mode === 'UPI') t.upi += c.amount;
+      else t.bank += c.amount;
+    };
+    const totals = zero();
+    const days = new Map<string, Totals>();
+    const routes = new Map<string, Totals>();
+    const agents = new Map<string, Totals>();
+    // Every day of the period up to today, so a day with nothing collected still shows.
+    const last = to < todayIST() ? to : todayIST();
+    for (let d = from; d <= last; d = addDays(d, 1)) days.set(d, zero());
+    const bucket = (m: Map<string, Totals>, k: string) => m.get(k) ?? m.set(k, zero()).get(k)!;
+    for (const c of cols) {
+      add(totals, c);
+      add(bucket(days, c.date), c);
+      add(bucket(routes, c.routeId ?? ''), c);
+      add(bucket(agents, c.agentId), c);
+    }
+    const byTotal = (a: Totals, b: Totals) => b.total - a.total;
+    return {
+      period: q.period,
+      from,
+      to,
+      mine,
+      totals: { ...totals, customers: new Set(cols.map((c) => c.customerId)).size },
+      previousTotal: previous._sum.amount ?? 0,
+      byDay: [...days.entries()].sort(([a], [b]) => b.localeCompare(a)).map(([date, t]) => ({ date, ...t })),
+      byRoute: [...routes.entries()].map(([routeId, t]) => ({ routeId: routeId || null, route: n.route(routeId) || '-', ...t })).sort(byTotal),
+      byAgent: mine ? [] : [...agents.entries()].map(([agentId, t]) => ({ agentId, agent: n.user(agentId), ...t })).sort(byTotal),
+    };
   }
 
   async disbursements(ctx: Ctx, f: ReportFilter) {
@@ -497,6 +548,14 @@ export class DashboardService {
 const filter = reportFilterSchema.extend({ investorId: z.string().optional() });
 type Filter = z.infer<typeof filter>;
 
+const summaryQuery = z.object({
+  period: z.enum(['DAY', 'WEEK', 'MONTH']).default('DAY'),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  branchId: z.string().optional(),
+  routeId: z.string().optional(),
+  agentId: z.string().optional(),
+});
+
 @Controller()
 export class ReportsController {
   constructor(
@@ -511,6 +570,9 @@ export class ReportsController {
   }
   @Get('reports/daily-collection') @Perm('report.view') daily(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
     return this.reports.dailyCollection(ctx, f);
+  }
+  @Get('reports/collection-summary') @Perm('collection.record', 'report.view') collectionSummary(@CurrentCtx() ctx: Ctx, @Query(V(summaryQuery)) q: z.infer<typeof summaryQuery>) {
+    return this.reports.collectionSummary(ctx, q);
   }
   @Get('reports/disbursements') @Perm('report.view') disb(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
     return this.reports.disbursements(ctx, f);

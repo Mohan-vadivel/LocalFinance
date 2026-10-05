@@ -91,7 +91,8 @@
     "reports": "Reports",
     "profitLoss": "Profit and loss",
     "audit": "Audit log",
-    "settings": "Settings"
+    "settings": "Settings",
+    "collectionSummary": "Collection summary"
   },
   "roles": {
     "SUPER_ADMIN": "Super Admin",
@@ -779,5 +780,22 @@
     "investor": "Investor",
     "type": "Type",
     "period": "Period"
+  },
+  "collSummary": {
+    "title": "Collection summary",
+    "daily": "Daily",
+    "weekly": "Weekly",
+    "monthly": "Monthly",
+    "prev": "Previous",
+    "next": "Next",
+    "current": "Current",
+    "previousPeriod": "Previous period",
+    "byDay": "Day-wise",
+    "byRoute": "Route-wise",
+    "byAgent": "Agent-wise",
+    "receipts": "Receipts",
+    "customersPaid": "Customers paid",
+    "onlyMine": "Showing only your own collections",
+    "nothing": "No collections in this period"
   }
 }

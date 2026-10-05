@@ -6,6 +6,7 @@ import { Layout } from './components/Layout';
 import { Loading, ToastProvider } from './components/ui';
 import { AuthProvider, useAuth } from './lib/auth';
 import Branches from './pages/Branches';
+import CollectionSummary from './pages/CollectionSummary';
 import Collections from './pages/Collections';
 import Customers, { CustomerDetail } from './pages/Customers';
 import Dashboard from './pages/Dashboard';
@@ -58,6 +59,7 @@ function Guarded() {
         <Route path="loans/:id" element={<Need perms={['customer.view', 'loan.request', 'loan.approve', 'collection.record']}><LoanDetail /></Need>} />
         <Route path="approvals" element={<Need perms={['loan.approve']}><Approvals /></Need>} />
         <Route path="collections" element={<Need perms={['collection.record', 'report.view']}><Collections /></Need>} />
+        <Route path="collections/summary" element={<Need perms={['collection.record', 'report.view']}><CollectionSummary /></Need>} />
         <Route path="funds" element={<Need perms={['fund.manage']}><Funds /></Need>} />
         <Route path="investors" element={<Need perms={['investor.manage']}><Investors /></Need>} />
         <Route path="investors/:id" element={<Need perms={['investor.manage']}><InvestorDetail /></Need>} />

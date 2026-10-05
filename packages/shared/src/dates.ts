@@ -20,3 +20,15 @@ export function addMonthsClamped(d: string, n: number, dayOfMonth: number): stri
 
 /** Today's date in India (IST), as YYYY-MM-DD. */
 export const todayIST = (now: Date = new Date()): string => fmtDate(new Date(now.getTime() + 330 * 60_000));
+
+export type SummaryPeriod = 'DAY' | 'WEEK' | 'MONTH';
+/** The day, the Monday-to-Sunday week, or the calendar month that contains `d`. */
+export function periodRange(period: SummaryPeriod, d: string): { from: string; to: string } {
+  if (period === 'DAY') return { from: d, to: d };
+  if (period === 'WEEK') {
+    const from = addDays(d, -((weekday(d) + 6) % 7));
+    return { from, to: addDays(from, 6) };
+  }
+  const from = d.slice(0, 8) + '01';
+  return { from, to: addDays(addMonthsClamped(from, 1, 1), -1) };
+}

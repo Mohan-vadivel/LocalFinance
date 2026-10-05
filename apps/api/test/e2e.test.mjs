@@ -137,6 +137,28 @@ describe('collections on the phone', () => {
     assert.equal(day.cashInHand, day.cash + day.float);
   });
 
+  test('collection summary splits cash and UPI by day, week and month; agents see only their own', async () => {
+    const mine = await ok(api('GET', '/reports/collection-summary?period=DAY', { token: agent }));
+    assert.equal(mine.mine, true);
+    assert.equal(mine.from, today());
+    assert.equal(mine.byAgent.length, 0);
+    const day = await ok(api('GET', '/me/day', { token: agent }));
+    assert.equal(mine.totals.total, day.total);
+    assert.equal(mine.totals.cash, day.cash);
+    assert.equal(mine.totals.total, mine.totals.cash + mine.totals.upi + mine.totals.bank);
+    // An agent cannot look at someone else's collections by passing an agentId.
+    const forced = await ok(api('GET', '/reports/collection-summary?period=DAY&agentId=someone-else', { token: agent }));
+    assert.equal(forced.totals.total, mine.totals.total);
+    for (const period of ['WEEK', 'MONTH']) {
+      const r = await ok(api('GET', `/reports/collection-summary?period=${period}`, { token: manager }));
+      assert.equal(r.mine, false);
+      assert.ok(r.from <= today() && today() <= r.to);
+      assert.equal(r.byDay.reduce((s, d) => s + d.total, 0), r.totals.total);
+      assert.equal(r.byAgent.reduce((s, a) => s + a.total, 0), r.totals.total);
+      assert.ok(r.totals.total >= mine.totals.total);
+    }
+  });
+
   test('refuses more than the balance', async () => {
     const r = await api('POST', '/collections', { token: agent, body: { loanId: loan.id, amount: 99_999_999, mode: 'CASH', clientRef: randomUUID() } });
     assert.equal(r.status, 400);

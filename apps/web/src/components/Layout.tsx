@@ -27,6 +27,7 @@ const groups: { title: string; items: Item[] }[] = [
       { to: '/loans', key: 'nav.loans', perms: ['customer.view', 'loan.request'] },
       { to: '/approvals', key: 'nav.approvals', perms: ['loan.approve'] },
       { to: '/collections', key: 'nav.collections', perms: ['collection.record', 'report.view'] },
+      { to: '/collections/summary', key: 'nav.collectionSummary', perms: ['collection.record', 'report.view'] },
       { to: '/products', key: 'nav.products', perms: ['settings.manage'] },
     ],
   },
@@ -79,7 +80,7 @@ export function Layout() {
             <div key={g.title}>
               <div className="group">{t(g.title)}</div>
               {items.map((i) => (
-                <NavLink key={i.to} to={i.to} end={i.to === '/'} className={({ isActive }) => (isActive ? 'active' : '')}>
+                <NavLink key={i.to} to={i.to} end={i.to === '/' || i.to === '/collections'} className={({ isActive }) => (isActive ? 'active' : '')}>
                   {t(i.key)}
                 </NavLink>
               ))}
