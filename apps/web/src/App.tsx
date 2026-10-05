@@ -13,7 +13,7 @@ import LineList from './pages/LineList';
 import Import from './pages/Import';
 import Collections from './pages/Collections';
 import Customers, { CustomerDetail } from './pages/Customers';
-import Dashboard from './pages/Dashboard';
+import Dashboard, { ActionHome } from './pages/Dashboard';
 import Daybook, { Handovers } from './pages/Daybook';
 import Funds from './pages/Funds';
 import Investors, { InvestorDetail } from './pages/Investors';
@@ -27,11 +27,28 @@ import Settings, { Audit } from './pages/Settings';
 import Staff, { Roles } from './pages/Staff';
 import Tenants from './pages/Tenants';
 
+/** The main page for a user without reports, in order of how often each role works there. */
+const LANDING: { to: string; key: string; perms: Permission[] }[] = [
+  { to: '/customers', key: 'nav.customers', perms: ['customer.view'] },
+  { to: '/approvals', key: 'nav.approvals', perms: ['loan.approve'] },
+  { to: '/loans', key: 'nav.loans', perms: ['loan.request'] },
+  { to: '/collections', key: 'nav.collections', perms: ['collection.record'] },
+  { to: '/handovers', key: 'nav.handovers', perms: ['handover.verify'] },
+  { to: '/daybook', key: 'nav.daybook', perms: ['daybook.view', 'daybook.manage'] },
+  { to: '/funds', key: 'nav.funds', perms: ['fund.manage'] },
+  { to: '/investors', key: 'nav.investors', perms: ['investor.manage'] },
+  { to: '/staff', key: 'nav.staff', perms: ['staff.manage'] },
+  { to: '/profit-loss', key: 'nav.profitLoss', perms: ['pl.view'] },
+  { to: '/audit', key: 'nav.audit', perms: ['audit.view'] },
+  { to: '/settings', key: 'nav.settings', perms: ['settings.manage'] },
+];
+
 function Home() {
   const { profile, can } = useAuth();
   if (profile?.role === 'SUPER_ADMIN' && !profile.tenant) return <Navigate to="/tenants" replace />;
   if (can('report.view')) return <Dashboard />;
-  return <Navigate to={can('customer.view') ? '/customers' : '/loans'} replace />;
+  // No dashboard: show what is waiting on them (approvals, handovers, day books), else go to their main page.
+  return <ActionHome fallback={LANDING.find((l) => can(...l.perms)) ?? null} />;
 }
 
 /** Shows the page only when the user has one of the rights; the API enforces the same rules. */

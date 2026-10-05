@@ -48,6 +48,7 @@ export default function Branches() {
         <DataTable
           title={t('branch.title')}
           rows={branches.data}
+          empty={{ message: t('empty.branches'), action: can('branch.manage') ? { label: t('empty.firstBranch'), onClick: () => setBranch({ active: true }) } : undefined }}
           onRow={can('branch.manage') ? (r) => setBranch(r) : undefined}
           actions={can('branch.manage') ? (r) => [{ icon: Pencil, label: t('common.edit'), onClick: () => setBranch(r) }] : undefined}
           columns={[
@@ -64,6 +65,7 @@ export default function Branches() {
         <DataTable
           title={t('locationMod.title')}
           rows={locations.data}
+          empty={{ message: t('empty.locations'), action: { label: t('empty.firstLocation'), onClick: () => setLoc({ active: true }) } }}
           onRow={(r) => setLoc(r)}
           actions={(r) => [{ icon: Pencil, label: t('common.edit'), onClick: () => setLoc(r) }]}
           columns={[

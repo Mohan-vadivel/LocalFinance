@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CheckCheck } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { BranchPicker, ModeSelect } from '../components/pickers';
 import { Badge, DataTable, ErrorBox, Field, FormModal, Modal, Stat, useToast, RowActions } from '../components/ui';
 import { get, openFile, post, upload } from '../lib/api';
@@ -26,9 +27,11 @@ export default function Daybook() {
   const { t } = useTranslation();
   const toast = useToast();
   const { can, profile } = useAuth();
-  const [branchId, setBranchId] = useState(profile?.branches.length === 1 ? profile.branches[0].id : '');
-  const [from, setFrom] = useState(today());
-  const [to, setTo] = useState(today());
+  // The dashboard's "Action needed" links open this page on ?branchId=...&date=... (the oldest open day).
+  const [params] = useSearchParams();
+  const [branchId, setBranchId] = useState(params.get('branchId') ?? (profile?.branches.length === 1 ? profile.branches[0].id : ''));
+  const [from, setFrom] = useState(params.get('date') ?? today());
+  const [to, setTo] = useState(params.get('date') ?? today());
   const { data, error, reload } = useLoad(() => get<Day>('/daybook', { branchId, from, to }), [branchId, from, to]);
   const cats = useLoad(() => get<Category[]>('/daybook/categories'), []);
   const [adding, setAdding] = useState(false);
@@ -200,8 +203,9 @@ export function Handovers() {
   const { t } = useTranslation();
   const toast = useToast();
   const { profile } = useAuth();
-  const [branchId, setBranchId] = useState(profile?.branches[0]?.id ?? '');
-  const [date, setDate] = useState(today());
+  const [params] = useSearchParams();
+  const [branchId, setBranchId] = useState(params.get('branchId') ?? profile?.branches[0]?.id ?? '');
+  const [date, setDate] = useState(params.get('date') ?? today());
   // Owners are not tied to a branch: start on the first branch they can see.
   const branches = useLoad(() => get<{ id: string }[]>('/branches'), []);
   useEffect(() => {
@@ -275,22 +279,38 @@ export function Handovers() {
 
 function VerifyForm({ row, branchId, date, onClose, onSaved }: { row: { agentId: string; agentName?: string; expected: number }; branchId: string; date: string; onClose: () => void; onSaved: () => void }) {
   const { t } = useTranslation();
-  const [received, setReceived] = useState(String(row.expected / 100));
+  // Starts empty so the cash is really counted, not confirmed by habit.
+  const [received, setReceived] = useState('');
   const [note, setNote] = useState('');
-  const diff = toPaise(received) - row.expected;
+  const [tried, setTried] = useState(false);
+  const entered = received.trim() !== '';
+  const diff = entered ? toPaise(received) - row.expected : 0;
+  const noteMissing = diff < 0 && !note.trim();
   return (
     <FormModal
       title={`${t('handover.verify')}: ${row.agentName}`}
       onClose={onClose}
+      submitLabel={t('handover.verify')}
       onSubmit={async () => {
-        await post('/handovers', { agentId: row.agentId, branchId, date, received: toPaise(received), note: note || null });
+        setTried(true);
+        if (!entered) throw new Error(`${t('handover.received')}: ${t('common.required')}`);
+        if (noteMissing) throw new Error(t('handover.noteRequired'));
+        await post('/handovers', { agentId: row.agentId, branchId, date, received: toPaise(received), note: note.trim() || null });
         onSaved();
       }}
     >
       <Field label={t('handover.expected')}><input value={money(row.expected)} disabled /></Field>
-      <Field label={t('handover.received')}><input type="number" min="0" step="0.01" value={received} onChange={(e) => setReceived(e.target.value)} /></Field>
-      <Field label={t('common.notes')} full><input value={note} onChange={(e) => setNote(e.target.value)} /></Field>
-      {diff !== 0 && <div className={`full ${diff < 0 ? 'error-box' : 'ok-box'}`}>{diff < 0 ? t('handover.shortage') : t('handover.excess')}: {money(Math.abs(diff))}</div>}
+      <Field label={t('handover.received')} error={tried && !entered ? t('common.required') : undefined}>
+        <input type="number" min="0" step="0.01" inputMode="decimal" autoFocus placeholder={t('handover.countCash')} value={received} onChange={(e) => setReceived(e.target.value)} />
+      </Field>
+      {entered && (
+        <div className={`full ${diff < 0 ? 'error-box' : 'ok-box'}`} role="status" style={{ marginBottom: 0 }}>
+          {t('handover.difference')}: {diff === 0 ? money(0) : `${diff < 0 ? t('handover.shortage') : t('handover.excess')} ${money(Math.abs(diff))}`}
+        </div>
+      )}
+      <Field label={diff < 0 ? t('handover.noteForShortage') : t('common.notes')} full error={tried && noteMissing ? t('handover.noteRequired') : undefined}>
+        <input value={note} required={diff < 0} onChange={(e) => setNote(e.target.value)} />
+      </Field>
     </FormModal>
   );
 }

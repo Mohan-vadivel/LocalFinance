@@ -86,6 +86,7 @@ export default function Routes() {
         <DataTable
           title={t('routeMod.title')}
           rows={data}
+          empty={branchId || locationId ? t('empty.noMatch') : { message: t('empty.routes'), action: { label: t('empty.firstRoute'), onClick: () => setEditing({}) } }}
           onRow={(r) => nav(`/routes/${r.id}`)}
           actions={(r) => [{ icon: Eye, label: t('common.view'), onClick: () => nav(`/routes/${r.id}`) }]}
           columns={[

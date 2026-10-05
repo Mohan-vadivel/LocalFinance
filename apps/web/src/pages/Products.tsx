@@ -136,6 +136,7 @@ export default function Products() {
         <DataTable
           title={t('product.title')}
           rows={data}
+          empty={{ message: t('empty.products'), action: { label: t('empty.firstProduct'), onClick: () => setEditing({}) } }}
           onRow={(p) => setEditing(p)}
           actions={(p) => [{ icon: Pencil, label: t('common.edit'), onClick: () => setEditing(p) }]}
           columns={[
