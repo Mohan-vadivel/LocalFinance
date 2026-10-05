@@ -72,6 +72,17 @@ eas build -p android --profile production   # app bundle for Play Store
 
 Collections and no-payment visits work offline: they are saved on the phone and sent automatically when the network returns. Adding customers and loan requests needs internet.
 
+## Live server
+
+`deploy/` holds a Docker Compose stack (Postgres, API, and Caddy serving the web admin with automatic HTTPS):
+
+```bash
+cp deploy/.env.example deploy/.env           # set both domains, passwords and JWT_SECRET
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+```
+
+`deploy/backup.sh` backs up the database and uploaded files.
+
 ## Production notes
 
 - Run the API behind HTTPS (nginx or a cloud load balancer) and set `CORS_ORIGIN` to the web address.

@@ -1,0 +1,15 @@
+# Caddy gets and renews HTTPS certificates for both names automatically.
+{$APP_DOMAIN} {
+	encode gzip
+	root * /srv
+	try_files {path} /index.html
+	file_server
+}
+
+{$API_DOMAIN} {
+	encode gzip
+	request_body {
+		max_size 20MB
+	}
+	reverse_proxy api:4000
+}
