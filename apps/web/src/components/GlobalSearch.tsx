@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { HandCoins, LoaderCircle, Search, User } from 'lucide-react';
+import { HandCoins, LoaderCircle, Search, Sparkles, User } from 'lucide-react';
 import { get } from '../lib/api';
+import { useAiStatus } from '../lib/ai';
 import { useAuth } from '../lib/auth';
 import { money } from '../lib/format';
 import { useDebounced } from '../lib/hooks';
@@ -11,7 +12,7 @@ import { Badge, ErrorBox, statusTone } from './ui';
 interface Hit {
   id: string;
   to: string;
-  kind: 'customer' | 'loan';
+  kind: 'customer' | 'loan' | 'ask';
   title: string;
   sub: string;
   status: string;
@@ -37,6 +38,9 @@ export function GlobalSearch() {
   const canCustomers = can('customer.view');
   // The loan list and the loan page both allow these rights.
   const canLoans = can('customer.view', 'loan.request', 'loan.approve');
+  // With AI on, the typed words can also be asked as a question on the Ask AI page.
+  const ai = useAiStatus();
+  const canAsk = can('report.view') && !!ai?.enabled;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -74,7 +78,7 @@ export function GlobalSearch() {
       .finally(() => my === seq.current && setBusy(false));
   }, [term, canCustomers, canLoans, t]);
 
-  if (!canCustomers && !canLoans) return null;
+  if (!canCustomers && !canLoans && !canAsk) return null;
 
   const close = () => {
     setOpen(false);
@@ -86,7 +90,8 @@ export function GlobalSearch() {
     close();
     nav(h.to);
   };
-  const list = hits ?? [];
+  const askHit: Hit[] = canAsk && term.length >= 2 ? [{ id: 'ask', to: `/ask?${new URLSearchParams({ q: term })}`, kind: 'ask', title: t('ai.web.searchAsk', { q: term }), sub: t('ai.ask.subtitle'), status: '', statusLabel: '' }] : [];
+  const list = [...(hits ?? []), ...askHit];
   const onKeyDown = (e: ReactKeyboardEvent) => {
     if (e.key === 'Escape') close();
     else if (e.key === 'ArrowDown' && list.length) {
@@ -105,7 +110,7 @@ export function GlobalSearch() {
   const group = (kind: Hit['kind'], label: string) => {
     const rows = list.map((h, i) => ({ h, i })).filter(({ h }) => h.kind === kind);
     if (!rows.length) return null;
-    const Icon = kind === 'customer' ? User : HandCoins;
+    const Icon = kind === 'customer' ? User : kind === 'loan' ? HandCoins : Sparkles;
     return (
       <div role="group" aria-label={label}>
         <div className="gs-group">{label}</div>
@@ -124,7 +129,7 @@ export function GlobalSearch() {
               <span className="t">{h.title}</span>
               <span className="s">{h.sub}</span>
             </span>
-            <Badge tone={statusTone(h.status)}>{h.statusLabel}</Badge>
+            {h.statusLabel && <Badge tone={statusTone(h.status)}>{h.statusLabel}</Badge>}
           </div>
         ))}
       </div>
@@ -164,12 +169,13 @@ export function GlobalSearch() {
             <div className="gs-results" id="gs-results" role="listbox">
               {term.length < 2 ? (
                 <div className="gs-empty muted">{t('search.hint')}</div>
-              ) : hits && !list.length ? (
+              ) : hits && !hits.length && !askHit.length ? (
                 <div className="gs-empty muted">{t('search.noResults', { q: term })}</div>
               ) : (
                 <>
                   {group('customer', t('search.customers'))}
                   {group('loan', t('search.loans'))}
+                  {group('ask', t('nav.ask'))}
                 </>
               )}
             </div>

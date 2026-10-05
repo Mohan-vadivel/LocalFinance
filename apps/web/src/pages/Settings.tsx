@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LANGUAGES, type TenantSettings } from '@localfinance/shared';
+import { AiSettingsCard } from '../components/ai';
 import { DataTable, ErrorBox, Field, Loading, useToast } from '../components/ui';
 import { get, post, put } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -128,6 +129,7 @@ export default function Settings() {
         </div>
         <p className="muted">{t('settings.holidayHelp')}</p>
       </div>
+      <AiSettingsCard onChange={(aiEnabled) => setF((x) => (x ? { ...x, s: { ...x.s, aiEnabled } } : x))} />
       <div className="card">
         <h3>{t('settings.smsTemplates')}</h3>
         <p className="muted">{t('settings.smsHelp')}</p>

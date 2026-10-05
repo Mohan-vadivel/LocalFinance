@@ -1181,12 +1181,12 @@
       "yesterday": "Yesterday {{collected}} was collected against {{due}} due ({{pct}}%).",
       "yesterdayNoDue": "Yesterday {{collected}} was collected.",
       "today": "Today {{due}} is due; {{collected}} collected so far.",
-      "newlyLate": "{{count}} loans fell behind in the last three days ({{amount}}). Call them before it grows.",
-      "late": "{{count}} loans are late in total, {{amount}} overdue.",
-      "short": "{{count}} agents were short at yesterday's handover, {{amount}} in all.",
-      "approvals": "{{count}} loan requests are waiting for approval.",
+      "newlyLate": "Loans that fell behind in the last three days: {{count}} ({{amount}}). Call them before it grows.",
+      "late": "Late loans in total: {{count}}, {{amount}} overdue.",
+      "short": "Agents short at yesterday's handover: {{count}}, {{amount}} in all.",
+      "approvals": "Loan requests waiting for approval: {{count}}.",
       "forecast": "Expected collection over the next 7 days is {{expected}}; about {{free}} is free to lend.",
-      "alerts": "{{count}} unusual activity alerts need a look."
+      "alerts": "Unusual activity alerts to check: {{count}}."
     },
     "alerts": {
       "title": "Unusual activity",
@@ -1194,7 +1194,7 @@
       "high": "Check now",
       "medium": "Worth a look",
       "agentDrop": "{{agent}} collected {{yesterday}} yesterday, only {{pct}}% of the usual {{usual}}.",
-      "reversals": "{{count}} collections by {{agent}} were cancelled this week ({{amount}}), {{later}} of them on a later day.",
+      "reversals": "Collections by {{agent}} cancelled this week: {{count}} ({{amount}}), {{later}} of them on a later day.",
       "dayReopened": "The closed day {{date}} at {{branch}} was opened again for changes.",
       "sharedPhone": "{{count}} active customers share the phone number {{phone}}.",
       "sharedId": "{{count}} active customers share the ID number {{id}}.",
@@ -1308,6 +1308,36 @@
         "nearby": "On the way",
         "done": "Done for today"
       }
+    },
+    "web": {
+      "tryAsking": "Try asking",
+      "you": "You",
+      "question": "Your question",
+      "ownerOnly": "Only someone who can manage settings can change this.",
+      "openSettings": "Open Settings",
+      "searchAsk": "Ask AI: \"{{q}}\"",
+      "moreReasons": "{{count}} more",
+      "reminderOverdue": "{{amount}} overdue, {{days}} days late",
+      "reminderNext": "Next due {{amount}} on {{date}}",
+      "reminderNothing": "Nothing is due right now.",
+      "tone": "Tone",
+      "message": "Message",
+      "copyFailed": "Could not copy. Select the text and copy it.",
+      "open": "Open",
+      "notImage": "Choose a photo (JPG, PNG or WebP).",
+      "loansCount": "{{count}} loans",
+      "tools": {
+        "places": "Branches, lines and agents"
+      }
+    },
+    "mobile": {
+      "find": "Find",
+      "openCustomer": "Open customer",
+      "share": "Share",
+      "message": "Message",
+      "reminderOffline": "No connection. This message was made from the copy on the phone.",
+      "cameraDenied": "Allow the camera to read the ID card.",
+      "moreAlerts": "and {{count}} more"
     }
   }
 }

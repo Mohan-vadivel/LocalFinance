@@ -5,6 +5,7 @@ import type { Permission } from '@localfinance/shared';
 import { Layout } from './components/Layout';
 import { Loading, ToastProvider } from './components/ui';
 import { AuthProvider, useAuth } from './lib/auth';
+import Ask from './pages/Ask';
 import Branches from './pages/Branches';
 import CollectionSummary from './pages/CollectionSummary';
 import DeskEntry from './pages/DeskEntry';
@@ -89,6 +90,7 @@ function Guarded() {
         <Route path="investors/:id" element={<Need perms={['investor.manage']}><InvestorDetail /></Need>} />
         <Route path="daybook" element={<Need perms={['daybook.view', 'daybook.manage']}><Daybook /></Need>} />
         <Route path="handovers" element={<Need perms={['handover.verify']}><Handovers /></Need>} />
+        <Route path="ask" element={<Need perms={['report.view']}><Ask /></Need>} />
         <Route path="reports" element={<Need perms={['report.view']}><Reports /></Need>} />
         <Route path="profit-loss" element={<Need perms={['pl.view']}><ProfitLoss /></Need>} />
         <Route path="audit" element={<Need perms={['audit.view', 'staff.manage']}><Audit /></Need>} />

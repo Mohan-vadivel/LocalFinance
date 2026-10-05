@@ -28,6 +28,7 @@ import {
   Route,
   Settings,
   ShieldCheck,
+  Sparkles,
   Store,
   Sun,
   TrendingUp,
@@ -57,6 +58,7 @@ const groups: { title: string; items: Item[] }[] = [
     items: [
       // Users without reports still get a home page listing what is waiting on them.
       { to: '/', key: 'nav.dashboard', perms: ['report.view', 'loan.approve', 'loan.disburse', 'handover.verify', 'daybook.manage'], icon: LayoutDashboard },
+      { to: '/ask', key: 'nav.ask', perms: ['report.view'], icon: Sparkles },
       { to: '/tenants', key: 'nav.tenants', roles: ['SUPER_ADMIN'], icon: Building2 },
     ],
   },

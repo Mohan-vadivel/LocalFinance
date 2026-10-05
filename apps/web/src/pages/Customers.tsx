@@ -4,12 +4,14 @@ import { useTranslation } from 'react-i18next';
 import { Eye, HandCoins, MessageCircle, Phone, Printer } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { LANGUAGES } from '@localfinance/shared';
+import { ReadIdCard, ReminderButton, RiskBadge, RiskReasons, type RiskReason } from '../components/ai';
 import { MapView } from '../components/MapView';
 import { BranchPicker, LocationPicker, RoutePicker } from '../components/pickers';
 import { Badge, DataTable, DocHead, ErrorBox, Field, FormModal, Loading, PrintDoc, Stat, Tabs, printDoc, statusTone, useToast } from '../components/ui';
 import { ApiError, get, openFile, post, put, upload } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateIN, dateTime, money, toPaise, toRupeesInput } from '../lib/format';
+import { useAiStatus } from '../lib/ai';
 import { useDebounced, useLoad } from '../lib/hooks';
 import { CollectFlow, LoanRequestForm } from './Loans';
 
@@ -51,7 +53,7 @@ interface CustomerDetail extends Customer {
 interface History {
   matches: { id: string; code: string; name: string; phone: string; status: string; statusReason: string | null }[];
   blacklisted: boolean;
-  summary: { pastLoans: number; currentLoans: number; instalmentsDue: number; onTimeRatio: number; missed: number; maxDaysLate: number; writtenOff: number; grade: string };
+  summary: { pastLoans: number; currentLoans: number; instalmentsDue: number; onTimeRatio: number; missed: number; maxDaysLate: number; writtenOff: number; grade: string; score?: number | null; reasons?: RiskReason[] };
   loans: (CustomerLoan & { customerId: string; maxDaysLate: number })[];
 }
 interface LedgerRow { id: string; date: string; loanNumber?: string; type: string; description: string; debit: number; credit: number; balance: number }
@@ -76,6 +78,7 @@ export const gradeTone = (g: string) => ({ A: 'ok', B: 'ok', C: 'warn', D: 'dang
 
 export function CustomerForm({ customer, onClose, onSaved }: { customer: Partial<Customer>; onClose: () => void; onSaved: (c: Customer) => void }) {
   const { t } = useTranslation();
+  const ai = useAiStatus();
   const [branchId, setBranchId] = useState(customer.branchId ?? '');
   const [allowDuplicate, setAllowDuplicate] = useState(false);
   const [f, setF] = useState({
@@ -146,6 +149,21 @@ export function CustomerForm({ customer, onClose, onSaved }: { customer: Partial
       }}
       submitLabel={allowDuplicate ? t('customerMod.saveAnyway') : undefined}
     >
+      {ai?.enabled && (
+        <div className="full">
+          <ReadIdCard
+            onFilled={(r) =>
+              setF((x) => ({
+                ...x,
+                name: r.name || x.name,
+                idType: r.idType ?? x.idType,
+                idNumber: r.idNumber || x.idNumber,
+                address: r.address || x.address,
+              }))
+            }
+          />
+        </div>
+      )}
       <Field label={t('common.name')}><input value={f.name} onChange={set('name')} /></Field>
       <Field label={t('common.phone')}><input value={f.phone} onChange={set('phone')} inputMode="tel" /></Field>
       <Field label={t('customerMod.altPhone')}><input value={f.altPhone} onChange={set('altPhone')} inputMode="tel" /></Field>
@@ -347,6 +365,7 @@ export function CustomerDetail() {
         </div>
         <div className="row no-print">
           {can('loan.request') && c.status === 'ACTIVE' && <button className="btn primary" onClick={() => setRequesting(true)}>{t('loanMod.newRequest')}</button>}
+          {can('collection.record', 'report.view', 'customer.view') && <ReminderButton customer={c} />}
           <button className="btn" onClick={() => void printStatement()}>
             <Printer aria-hidden />
             {t('customerMod.printStatement')}
@@ -552,11 +571,12 @@ export function HistoryView({ h }: { h: History }) {
     <div>
       {h.blacklisted && <div className="error-box">{t('customerMod.blacklistWarning')}</div>}
       <div className="grid k4" style={{ marginBottom: 12 }}>
-        <Stat label={t('customerMod.riskGrade')} value={<Badge tone={gradeTone(s.grade)}>{t(`history.grades.${s.grade}`)}</Badge>} />
+        <Stat label={t('customerMod.riskGrade')} value={<RiskBadge s={s} />} />
         <Stat label={t('history.pastLoans')} value={s.pastLoans} sub={`${t('history.currentLoans')}: ${s.currentLoans}`} />
         <Stat label={t('history.onTimeRate')} value={`${Math.round(s.onTimeRatio * 100)}%`} sub={`${s.instalmentsDue}`} />
         <Stat label={t('history.maxDaysLate')} value={s.maxDaysLate} sub={`${t('history.missed')}: ${s.missed} · ${t('history.writtenOff')}: ${s.writtenOff}`} />
       </div>
+      <RiskReasons s={s} />
       {h.matches.length > 0 && (
         <div className="card">
           <h3>{t('history.matches')}</h3>

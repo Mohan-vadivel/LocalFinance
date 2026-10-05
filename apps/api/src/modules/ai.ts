@@ -413,7 +413,7 @@ export class AiService {
       if (next && (!nextDue || next.dueDate < nextDue.date)) nextDue = { date: next.dueDate, amount: next.principalDue + next.interestDue - next.principalPaid - next.interestPaid };
     }
     const lang = input.language ?? (c.language === 'ta' ? 'ta' : 'en');
-    const vars = { name: c.name, amount: rs(overdue), days: daysLate, business: ctx.tenantName, nextDate: nextDue?.date ?? '', nextAmount: nextDue ? rs(nextDue.amount) : '' };
+    const vars = { name: c.name, amount: rs(overdue), days: daysLate, business: ctx.tenantName, nextDate: nextDue ? nextDue.date.split('-').reverse().join('-') : '', nextAmount: nextDue ? rs(nextDue.amount) : '' };
     const template = translate(lang, overdue > 0 ? 'ai.reminder.overdue' : nextDue ? 'ai.reminder.upcoming' : 'ai.reminder.none', vars);
     const base = { phone: c.phone, language: lang, overdue, daysLate, nextDue };
     if (!this.claude.enabled(ctx) || (overdue === 0 && !nextDue)) return { ...base, text: template, source: 'rules' as const };

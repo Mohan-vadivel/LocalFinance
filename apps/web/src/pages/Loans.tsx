@@ -7,8 +7,9 @@ import { Badge, ConfirmFormModal, ConfirmPanel, DataTable, DocHead, ErrorBox, Fi
 import { get, post, put } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateIN, dateTime, money, toPaise, toRupeesInput, today } from '../lib/format';
-import { useLoad } from '../lib/hooks';
-import { HistoryView, Pager, gradeTone, type History } from './Customers';
+import { useDebounced, useLoad } from '../lib/hooks';
+import { RiskBadge, RiskReasons } from '../components/ai';
+import { HistoryView, Pager, type History } from './Customers';
 
 interface Position { principalOutstanding: number; interestOutstanding: number; penaltyOutstanding: number; totalOutstanding: number; overdue: number; dueToday: number; daysPastDue: number }
 interface Summary { principal: number; fee: number; upfrontInterest: number; netDisbursed: number; totalInterest: number; totalRepayable: number }
@@ -120,7 +121,9 @@ export function LoanRequestForm({ customerId, customerName, loan, onClose, onSav
   const [f, setF] = useState({ productId: loan?.productId ?? '', principal: toRupeesInput(loan?.principal ?? null), purpose: loan?.purpose ?? '', notes: loan?.notes ?? '' });
   const [preview, setPreview] = useState<{ summary: Summary; schedule: ScheduleRow[] } | null>(null);
   const [previewError, setPreviewError] = useState<unknown>(null);
-  const history = useLoad(() => (customer ? get<History>(`/customers/${customer.id}/history`) : Promise.resolve(null)), [customer?.id]);
+  // The amount asked for lets the risk score say when it is much bigger than any loan repaid before.
+  const amount = useDebounced(Number(f.principal) > 0 ? toPaise(f.principal) : undefined, 500);
+  const history = useLoad(() => (customer ? get<History>(`/customers/${customer.id}/history`, { amount }) : Promise.resolve(null)), [customer?.id, amount]);
   useEffect(() => {
     setPreview(null);
     setPreviewError(null);
@@ -154,10 +157,17 @@ export function LoanRequestForm({ customerId, customerName, loan, onClose, onSav
         <ErrorBox error={previewError} />
         {preview && <SchedulePreview {...preview} />}
         {history.data && (
-          <details>
-            <summary>{t('customerMod.history')}: {t(`history.grades.${history.data.summary.grade}`)}</summary>
-            <HistoryView h={history.data} />
-          </details>
+          <div className="risk-inline">
+            <div className="row">
+              <strong>{t('ai.risk.score')}:</strong>
+              <RiskBadge s={history.data.summary} />
+            </div>
+            <RiskReasons s={history.data.summary} />
+            <details>
+              <summary>{t('customerMod.history')}</summary>
+              <HistoryView h={history.data} />
+            </details>
+          </div>
         )}
       </div>
     </FormModal>
@@ -251,11 +261,15 @@ function canDecideLoan(l: LoanRow, auth: ReturnType<typeof useAuth>) {
 }
 
 /** The customer's advisory risk grade, from their repayment history. */
-function GradeCell({ customerId }: { customerId: string }) {
-  const { t } = useTranslation();
-  const { data } = useLoad(() => get<History>(`/customers/${customerId}/history`), [customerId]);
+function GradeCell({ customerId, amount }: { customerId: string; amount: number }) {
+  const { data } = useLoad(() => get<History>(`/customers/${customerId}/history`, { amount }), [customerId, amount]);
   if (!data) return <span className="muted">-</span>;
-  return <Badge tone={gradeTone(data.summary.grade)}>{t(`history.grades.${data.summary.grade}`)}</Badge>;
+  return (
+    <div className="grade-cell">
+      <RiskBadge s={data.summary} />
+      <RiskReasons s={data.summary} compact />
+    </div>
+  );
 }
 
 export function Approvals() {
@@ -280,7 +294,7 @@ export function Approvals() {
         <LoanTable
           rows={waiting.data?.rows}
           onRow={(l) => nav(`/loans/${l.id}`)}
-          extra={[{ key: 'grade', label: t('customerMod.riskGrade'), value: () => '', render: (l) => <GradeCell customerId={l.customerId} /> }]}
+          extra={[{ key: 'grade', label: t('customerMod.riskGrade'), value: () => '', render: (l) => <GradeCell customerId={l.customerId} amount={l.principal} /> }]}
           actions={(l) => {
             const hidden = !canDecideLoan(l, auth);
             return [
@@ -531,7 +545,7 @@ function DecisionForm({ loan, decision, compact, onClose, onSaved }: { loan: Loa
   const { t } = useTranslation();
   const { profile } = useAuth();
   const [reason, setReason] = useState('');
-  const history = useLoad(() => (compact ? Promise.resolve(null) : get<History>(`/customers/${loan.customerId}/history`)), [loan.customerId, compact]);
+  const history = useLoad(() => (compact ? Promise.resolve(null) : get<History>(`/customers/${loan.customerId}/history`, { amount: loan.principal })), [loan.customerId, loan.principal, compact]);
   const label = { APPROVE: t('loanMod.approve'), REJECT: t('loanMod.reject'), SEND_BACK: t('loanMod.sendBack') }[decision];
   const overLimit = decision === 'APPROVE' && profile?.role !== 'TENANT_ADMIN' && loan.principal > (profile?.approvalLimit ?? 0);
   // Rejecting or sending back must tell the requester why.

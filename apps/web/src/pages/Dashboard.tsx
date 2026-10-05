@@ -24,6 +24,7 @@ import {
   Route,
   Wallet,
 } from 'lucide-react';
+import { AlertsCard, BriefingCard, ForecastCard } from '../components/AiDashboard';
 import { BranchPicker } from '../components/pickers';
 import { Badge, DataTable, ErrorBox, Loading, Stat } from '../components/ui';
 import { MapView } from '../components/MapView';
@@ -214,6 +215,7 @@ export default function Dashboard() {
         <BranchPicker value={branchId} onChange={setBranchId} allowAll />
       </div>
       {can('settings.manage') && !profile?.readOnly && <GetStarted />}
+      <BriefingCard branchId={branchId} />
       {actions.data && <ActionStrip data={actions.data} />}
       <ErrorBox error={error} />
       {loading && !data ? (
@@ -233,6 +235,10 @@ export default function Dashboard() {
             <Stat icon={<FilePlus2 />} label={t('dashboard.newLoans')} value={data.newLoans} sub={`${t('dashboard.disbursedToday')}: ${money(data.disbursedToday)}`} />
             <Stat icon={<Briefcase />} tone="info" label={t('dashboard.portfolio')} value={money(data.portfolio)} sub={`${t('dashboard.activeLoans')}: ${data.activeLoans}`} />
             <Stat icon={<BadgeCheck />} tone={data.pendingApprovals ? 'warn' : undefined} label={t('dashboard.pendingApprovals')} value={<Link to="/approvals">{data.pendingApprovals}</Link>} />
+          </div>
+          <div className="grid c2 ai-row">
+            <AlertsCard branchId={branchId} />
+            <ForecastCard branchId={branchId} />
           </div>
           <div className="grid c2">
             <div className="card">
