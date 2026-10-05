@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as XLSX from 'xlsx';
+import { CircleAlert, CircleCheck, FileSpreadsheet, Inbox, LoaderCircle, Printer, X } from 'lucide-react';
 import { ApiError } from '../lib/api';
 import { money } from '../lib/format';
 
@@ -15,7 +16,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastCtx.Provider value={show}>
       {children}
-      {msg && <div className="toast" role="status">{msg}</div>}
+      {msg && (
+        <div className="toast" role="status">
+          <CircleCheck aria-hidden />
+          <span>{msg}</span>
+        </div>
+      )}
     </ToastCtx.Provider>
   );
 }
@@ -30,7 +36,10 @@ export function ErrorBox({ error }: { error: unknown }) {
   const text = e.code && i18n.exists(e.code) && e.code !== 'errors.validation' ? t(e.code) : e.message;
   return (
     <div className="error-box" role="alert">
-      {text}
+      <div className="notice">
+        <CircleAlert aria-hidden />
+        <div>{text}</div>
+      </div>
       {e.fields?.length ? (
         <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
           {e.fields.map((f) => (
@@ -56,11 +65,17 @@ export function Field({ label, children, error, full }: { label: string; childre
 }
 
 export function Modal({ title, onClose, children, actions, wide }: { title: string; onClose: () => void; children: ReactNode; actions?: ReactNode; wide?: boolean }) {
+  const { t } = useTranslation();
   return (
     <div className="modal-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={wide ? { width: 'min(1000px, 100%)' } : undefined} role="dialog" aria-label={title}>
-        <h2>{title}</h2>
-        {children}
+        <div className="modal-head">
+          <h2>{title}</h2>
+          <button type="button" className="icon-btn ghost" onClick={onClose} aria-label={t('common.close')}>
+            <X />
+          </button>
+        </div>
+        <div className="modal-body">{children}</div>
         {actions && <div className="actions">{actions}</div>}
       </div>
     </div>
@@ -115,10 +130,14 @@ export function FormModal({ title, onClose, onSubmit, children, submitLabel, wid
   );
 }
 
-export function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
+/** `icon` and `tone` are optional: they add a small tinted icon chip next to the label. */
+export function Stat({ label, value, sub, icon, tone }: { label: string; value: ReactNode; sub?: ReactNode; icon?: ReactNode; tone?: 'ok' | 'warn' | 'danger' | 'info' }) {
   return (
     <div className="stat">
-      <div className="label">{label}</div>
+      <div className="top">
+        <div className="label">{label}</div>
+        {icon && <span className={`chip-icon sm ${tone ?? ''}`}>{icon}</span>}
+      </div>
       <div className="value">{value}</div>
       {sub && <div className="sub">{sub}</div>}
     </div>
@@ -175,14 +194,16 @@ export function DataTable<T extends object>({ rows, columns, title, empty, onRow
   const hasTotals = columns.some((c) => c.total);
   return (
     <div>
-      <div className="row no-print" style={{ marginBottom: 8 }}>
-        {title && <h3 style={{ margin: 0 }}>{title}</h3>}
+      <div className="dt-toolbar no-print">
+        {title && <h3>{title}</h3>}
+        <span className="count-pill">{list.length}</span>
         <span className="spacer" />
-        <span className="muted">{list.length}</span>
         <button className="btn small" onClick={exportExcel} disabled={!list.length}>
+          <FileSpreadsheet aria-hidden />
           {t('common.exportExcel')}
         </button>
         <button className="btn small" onClick={() => window.print()} disabled={!list.length}>
+          <Printer aria-hidden />
           {t('common.exportPdf')}
         </button>
       </div>
@@ -200,7 +221,7 @@ export function DataTable<T extends object>({ rows, columns, title, empty, onRow
           </thead>
           <tbody>
             {list.map((r, i) => (
-              <tr key={(r as { id?: string }).id ?? i} onClick={onRow ? () => onRow(r) : undefined} style={onRow ? { cursor: 'pointer' } : undefined}>
+              <tr key={(r as { id?: string }).id ?? i} onClick={onRow ? () => onRow(r) : undefined} className={onRow ? 'clickable' : undefined}>
                 {columns.map((c) => (
                   <td key={c.key} className={c.money || c.num ? 'num' : ''}>
                     {c.render ? c.render(r) : c.money ? money(raw(r, c) as number) : String(raw(r, c) ?? '')}
@@ -210,8 +231,13 @@ export function DataTable<T extends object>({ rows, columns, title, empty, onRow
             ))}
             {!list.length && (
               <tr>
-                <td colSpan={columns.length} className="muted" style={{ textAlign: 'center', padding: 24 }}>
-                  {empty ?? t('common.noData')}
+                <td colSpan={columns.length} className="empty">
+                  <div className="empty-state">
+                    <span className="ico">
+                      <Inbox aria-hidden />
+                    </span>
+                    <span>{empty ?? t('common.noData')}</span>
+                  </div>
                 </td>
               </tr>
             )}
@@ -235,7 +261,12 @@ export function DataTable<T extends object>({ rows, columns, title, empty, onRow
 
 export function Loading() {
   const { t } = useTranslation();
-  return <div className="muted" style={{ padding: 16 }}>{t('common.loading')}</div>;
+  return (
+    <div className="loading" role="status">
+      <LoaderCircle className="spinner" aria-hidden />
+      <span>{t('common.loading')}</span>
+    </div>
+  );
 }
 
 export function Money({ v }: { v: number | null | undefined }) {

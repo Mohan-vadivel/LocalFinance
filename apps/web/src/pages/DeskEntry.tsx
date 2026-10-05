@@ -164,7 +164,7 @@ export default function DeskEntry() {
             <div className="card">
               <form onSubmit={(e) => { e.preventDefault(); void save(); }}>
                 <div className="row" style={{ alignItems: 'flex-end' }}>
-                  <label className="field inline" style={{ flex: '1 1 180px' }}>
+                  <label className="field" style={{ flex: '2 1 200px' }}>
                     {t('desk.accountNo')}
                     <input
                       ref={accountRef}
@@ -182,11 +182,11 @@ export default function DeskEntry() {
                       }}
                     />
                   </label>
-                  <label className="field inline" style={{ flex: '1 1 120px' }}>
+                  <label className="field" style={{ flex: '1 1 120px' }}>
                     {t('reportCols.amount')}
                     <input ref={amountRef} type="number" min="1" step="0.01" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
                   </label>
-                  <label className="field inline">
+                  <label className="field">
                     {t('reportCols.mode')}
                     <select value={mode} onChange={(e) => setMode(e.target.value)}>
                       {['CASH', 'UPI', 'BANK'].map((m) => <option key={m} value={m}>{t(`common.modes.${m}`)}</option>)}

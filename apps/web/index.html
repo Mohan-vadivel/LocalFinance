@@ -2,11 +2,28 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="LocalFinance: loans and daily collections" />
+    <meta name="theme-color" content="#0f766e" />
+    <meta name="color-scheme" content="light dark" />
     <link rel="icon" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&family=Noto+Sans+Tamil:wght@400;600;700&display=swap" rel="stylesheet" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=Noto+Sans+Tamil:wght@400..700&display=swap" rel="stylesheet" />
     <title>LocalFinance</title>
+    <script>
+      // Apply the saved theme (or the system one) before first paint to avoid a flash.
+      (function () {
+        var mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+        var apply = function () {
+          var s = null;
+          try { s = localStorage.getItem('lf.theme'); } catch (e) {}
+          document.documentElement.dataset.theme = s === 'dark' || s === 'light' ? s : mq && mq.matches ? 'dark' : 'light';
+        };
+        apply();
+        if (mq && mq.addEventListener) mq.addEventListener('change', apply);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

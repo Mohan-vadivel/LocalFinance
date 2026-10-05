@@ -1,5 +1,8 @@
 {
   "common": {
+    "menu": "Menu",
+    "darkMode": "Dark mode",
+    "lightMode": "Light mode",
     "appName": "LocalFinance",
     "save": "Save",
     "cancel": "Cancel",
