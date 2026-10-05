@@ -89,6 +89,7 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
 - `pnpm --filter @localfinance/web build` produces static files in `apps/web/dist` for any web host.
 - Uploaded documents and bills are stored in `UPLOAD_DIR`; back this folder up with the database.
 - SMS: `SMS_PROVIDER=log` only records messages. Set `SMS_PROVIDER=msg91` with `MSG91_AUTH_KEY` and `MSG91_SENDER` to send real SMS, and add the DLT-approved templates under Settings > SMS templates.
+- AI: the risk score, unusual activity alerts, cash forecast, smart visit order and voice entry run on the API server and need nothing. Asking in plain words, the AI-written morning briefing, ID card reading and reminder drafts use Claude: set `ANTHROPIC_API_KEY` (from console.anthropic.com) on the API, then each business owner turns on Settings > AI features. Only that business's own figures are sent, and every call is in the audit log. `AI_MODEL` defaults to `claude-opus-5-5`.
 
 ## Checks
 
