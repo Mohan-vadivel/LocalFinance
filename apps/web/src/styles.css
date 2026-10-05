@@ -693,3 +693,27 @@ table.data tfoot td.actions-col { background: inherit; }
   .badge { box-shadow: none; padding: 0; background: none; }
   .badge::before { display: none; }
 }
+
+/* ---------- Review step and printed documents (receipt, repayment card, statement) ---------- */
+.confirm-panel .kv { padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); }
+.phone-links { display: inline-flex; gap: 4px; }
+.phone-links .icon-btn { display: inline-grid; place-items: center; }
+.print-doc { display: none; }
+.print-doc .doc-head { text-align: center; border-bottom: 1px solid #000; padding-bottom: 8px; margin-bottom: 12px; }
+.print-doc .doc-head h1 { font-size: 18px; margin: 0; }
+.print-doc .doc-head h2 { font-size: 14px; margin: 4px 0; font-weight: 600; }
+.print-doc .doc-printed { font-size: 11px; color: #444; }
+.print-doc .confirm-panel .kv { border: none; padding: 0; background: none; margin-bottom: 12px; }
+.print-doc .receipt-doc { max-width: 420px; margin: 0 auto; }
+.print-doc .doc-sign { margin: 48px 0 0 auto; width: 50%; text-align: right; border-top: 1px dashed #000; padding-top: 4px; font-size: 12px; }
+.print-doc .doc-foot { text-align: center; font-size: 12px; }
+.print-doc .doc-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.print-doc .doc-table th, .print-doc .doc-table td { border: 1px solid #888; padding: 4px 6px; text-align: left; }
+.print-doc .doc-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.print-doc .doc-table tr { break-inside: avoid; }
+.print-doc .doc-table .sign-cell { min-width: 80px; }
+.print-doc .doc-table tfoot td { font-weight: 600; }
+@media print {
+  body.print-doc-on > :not(.print-doc.on) { display: none !important; }
+  body.print-doc-on > .print-doc.on { display: block; color: #000; background: #fff; }
+}

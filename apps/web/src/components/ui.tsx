@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, type ComponentType, type ReactNode, type SVGProps } from 'react';
+import { createContext, Fragment, useContext, useState, type ComponentType, type ReactNode, type SVGProps } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import * as XLSX from 'xlsx';
 import { CircleAlert, CircleCheck, FileSpreadsheet, Inbox, LoaderCircle, Printer, X } from 'lucide-react';
@@ -309,4 +310,148 @@ export function Loading() {
 
 export function Money({ v }: { v: number | null | undefined }) {
   return <>{money(v)}</>;
+}
+
+// ---------- Review step before money moves ----------
+export interface ConfirmRow {
+  label: string;
+  value: ReactNode;
+  strong?: boolean;
+}
+
+/** Read-back of what is about to be saved; rows with no value are left out. */
+export function ConfirmPanel({ rows, note }: { rows: ConfirmRow[]; note?: ReactNode }) {
+  return (
+    <div className="confirm-panel">
+      <dl className="kv">
+        {rows
+          .filter((r) => r.value !== null && r.value !== undefined && r.value !== '')
+          .map((r) => (
+            <Fragment key={r.label}>
+              <dt>{r.label}</dt>
+              <dd>{r.strong ? <strong>{r.value}</strong> : r.value}</dd>
+            </Fragment>
+          ))}
+      </dl>
+      {note}
+    </div>
+  );
+}
+
+/**
+ * A FormModal with a second step: the form, then a read-back of `review()` with Back / Confirm.
+ * `validate` throws to keep the user on the form; server errors show on the review step.
+ */
+export function ConfirmFormModal({ title, onClose, onSubmit, children, submitLabel, wide, review, validate, danger }: { title: string; onClose: () => void; onSubmit: () => Promise<unknown>; children: ReactNode; submitLabel?: string; wide?: boolean; review: () => ConfirmRow[]; validate?: () => void; danger?: boolean }) {
+  const { t } = useTranslation();
+  const [step, setStep] = useState<'form' | 'confirm'>('form');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const next = () => {
+    setError(null);
+    try {
+      validate?.();
+      setStep('confirm');
+    } catch (e) {
+      setError(e);
+    }
+  };
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await onSubmit();
+      onClose();
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const confirming = step === 'confirm';
+  return (
+    <Modal
+      title={confirming ? `${t('confirm.title')}: ${title}` : title}
+      onClose={() => !busy && onClose()}
+      wide={wide && !confirming}
+      actions={
+        confirming ? (
+          <>
+            <button className="btn" onClick={() => { setError(null); setStep('form'); }} disabled={busy}>
+              {t('common.back')}
+            </button>
+            <button className={`btn ${danger ? 'danger' : 'primary'}`} onClick={submit} disabled={busy} autoFocus>
+              {busy ? t('common.loading') : submitLabel ?? t('common.confirm')}
+            </button>
+          </>
+        ) : (
+          <>
+            <button className="btn" onClick={onClose}>
+              {t('common.cancel')}
+            </button>
+            <button className="btn primary" onClick={next}>
+              {t('confirm.review')}
+            </button>
+          </>
+        )
+      }
+    >
+      <ErrorBox error={error} />
+      {confirming ? (
+        <>
+          <p className="muted" style={{ marginTop: 0 }}>{t('confirm.check')}</p>
+          <ConfirmPanel rows={review()} />
+        </>
+      ) : (
+        <form
+          className="form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            next();
+          }}
+        >
+          {children}
+          <button type="submit" hidden />
+        </form>
+      )}
+    </Modal>
+  );
+}
+
+// ---------- Printing one document (receipt, repayment card, statement) ----------
+/** Hidden on screen; printDoc(id) prints this alone, with the rest of the app hidden. */
+export function PrintDoc({ id, children }: { id: string; children: ReactNode }) {
+  return createPortal(
+    <div className="print-doc" id={`print-${id}`}>
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
+export function printDoc(id: string) {
+  const el = document.getElementById(`print-${id}`);
+  if (!el) return;
+  document.body.classList.add('print-doc-on');
+  el.classList.add('on');
+  const done = () => {
+    document.body.classList.remove('print-doc-on');
+    el.classList.remove('on');
+    window.removeEventListener('afterprint', done);
+  };
+  window.addEventListener('afterprint', done);
+  window.print();
+}
+
+/** Letterhead for a printed document: business name, document title and when it was printed. */
+export function DocHead({ business, title, sub }: { business: string; title: string; sub?: ReactNode }) {
+  const { t } = useTranslation();
+  return (
+    <div className="doc-head">
+      <h1>{business}</h1>
+      <h2>{title}</h2>
+      {sub && <div>{sub}</div>}
+      <div className="doc-printed">{t('print.printedOn')} {new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</div>
+    </div>
+  );
 }

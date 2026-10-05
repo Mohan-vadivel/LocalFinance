@@ -137,6 +137,15 @@ describe('collections on the phone', () => {
     assert.equal(day.cashInHand, day.cash + day.float);
   });
 
+  test('lists one customer\'s collections across loans', async () => {
+    const one = await ok(api('GET', `/loans/${loan.id}`, { token: manager }));
+    const list = await ok(api('GET', `/collections?customerId=${one.customerId}`, { token: manager }));
+    assert.ok(list.rows.length >= 2);
+    assert.ok(list.rows.every((r) => r.customerId === one.customerId));
+    const none = await ok(api('GET', '/collections?customerId=no-such-customer', { token: manager }));
+    assert.equal(none.total, 0);
+  });
+
   test('collection summary splits cash and UPI by day, week and month; agents see only their own', async () => {
     const mine = await ok(api('GET', '/reports/collection-summary?period=DAY', { token: agent }));
     assert.equal(mine.mine, true);
