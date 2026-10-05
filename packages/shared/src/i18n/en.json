@@ -489,7 +489,16 @@
       "NOTHING_DUE": "Nothing due",
       "PENDING": "Not visited"
     },
-    "serverAddress": "Server address"
+    "serverAddress": "Server address",
+    "home": "Home",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "menuWork": "Field work",
+    "menuAccount": "Account",
+    "quickActions": "Quick actions",
+    "hello": "Hello, {{name}}",
+    "accountSettings": "Profile and password",
+    "search": "Search customer"
   },
   "fund": {
     "title": "Funds",

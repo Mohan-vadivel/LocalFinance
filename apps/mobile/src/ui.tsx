@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { createContext, useContext, useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, BackHandler, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -79,6 +80,8 @@ interface Nav {
   pop: () => void;
   replace: (name: string, params?: Record<string, unknown>) => void;
   reset: (name: string) => void;
+  /** Opens a top-level screen from the side menu: it becomes the only screen, with the menu button in its header. */
+  open: (name: string, params?: Record<string, unknown>) => void;
 }
 const NavCtx = createContext<Nav>(null as unknown as Nav);
 export const useNav = () => useContext(NavCtx);
@@ -91,35 +94,58 @@ export function NavProvider({ initial, children }: { initial: string; children: 
     pop: () => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s)),
     replace: (name, params) => setStack((s) => [...s.slice(0, -1), { name, params }]),
     reset: (name) => setStack([{ name }]),
+    open: (name, params) => setStack([{ name, params }]),
   };
+  const top = stack[stack.length - 1];
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (stack.length > 1) {
         setStack((s) => s.slice(0, -1));
         return true;
       }
+      // Back on a screen opened from the menu goes home rather than closing the app.
+      if (top.name !== initial) {
+        setStack([{ name: initial }]);
+        return true;
+      }
       return false;
     });
     return () => sub.remove();
-  }, [stack.length]);
+  }, [stack.length, top.name, initial]);
   return <NavCtx.Provider value={nav}>{children(stack[stack.length - 1])}</NavCtx.Provider>;
+}
+
+/** Opens the side menu; provided by `MenuProvider` in Menu.tsx. */
+export const MenuCtx = createContext<{ open: () => void }>({ open: () => undefined });
+
+export type IconName = ComponentProps<typeof Ionicons>['name'];
+/** An outline icon from the Ionicons set bundled with Expo. */
+export const Icon = ({ name, size = 22, color = C.ink }: { name: IconName; size?: number; color?: string }) => <Ionicons name={name} size={size} color={color} />;
+
+/** A round icon-only button for headers. */
+export function IconButton({ icon, onPress, label, color = C.ink }: { icon: IconName; onPress: () => void; label: string; color?: string }) {
+  return (
+    <Pressable onPress={onPress} hitSlop={6} style={({ pressed }) => [s.back, pressed && { backgroundColor: C.surface }]} accessibilityRole="button" accessibilityLabel={label} android_ripple={{ color: C.line, borderless: true }}>
+      <Icon name={icon} size={24} color={color} />
+    </Pressable>
+  );
 }
 
 // ---------- Layout ----------
 /** The top app bar: back button, a large title (wraps to two lines for long Tamil titles) and optional actions. */
 export function Header({ title, subtitle, right, back = true, eyebrow }: { title: string; subtitle?: string; right?: ReactNode; back?: boolean; eyebrow?: string }) {
+  const { t } = useTranslation();
   const nav = useNav();
+  const menu = useContext(MenuCtx);
   const insets = useSafeAreaInsets();
   const canBack = back && !!nav && nav.stack.length > 1;
+  // A screen at the bottom of the stack (home, or one opened from the menu) shows the menu button instead.
+  const showMenu = !!nav && nav.stack.length === 1;
   return (
     <View style={[s.header, { paddingTop: insets.top + SP.sm }]}>
       <View style={s.headerInner}>
-      {canBack ? (
-        <Pressable onPress={nav.pop} hitSlop={8} style={({ pressed }) => [s.back, pressed && { backgroundColor: C.surface }]} accessibilityRole="button" accessibilityLabel="Back" android_ripple={{ color: C.line, borderless: true }}>
-          <Text style={s.backText}>‹</Text>
-        </Pressable>
-      ) : null}
-      <View style={{ flex: 1, minWidth: 0, paddingLeft: canBack ? 0 : SP.xs }}>
+      {canBack ? <IconButton icon="arrow-back" label={t('common.back')} onPress={nav.pop} /> : showMenu ? <IconButton icon="menu" label={t('mobile.openMenu')} onPress={menu.open} /> : null}
+      <View style={{ flex: 1, minWidth: 0, paddingLeft: canBack || showMenu ? 0 : SP.xs }}>
         {eyebrow ? <Text style={s.eyebrow} numberOfLines={1}>{eyebrow}</Text> : null}
         <Text style={s.title} numberOfLines={2}>{title}</Text>
         {subtitle ? <Text style={s.subtitle} numberOfLines={2}>{subtitle}</Text> : null}
@@ -370,7 +396,11 @@ export function Avatar({ name, color = C.brand, size = 44, label }: { name: stri
 }
 
 /** A right-pointing chevron for tappable rows. */
-export const Chevron = ({ color = C.muted }: { color?: string }) => <Text style={{ color, fontSize: 26, lineHeight: 28, marginLeft: SP.xs }}>›</Text>;
+export const Chevron = ({ color = C.muted }: { color?: string }) => (
+  <View style={{ marginLeft: SP.xs }}>
+    <Icon name="chevron-forward" size={20} color={color} />
+  </View>
+);
 
 export const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },

@@ -10,6 +10,7 @@
     "bundle:check": "expo export --platform android --output-dir dist-check"
   },
   "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
     "@localfinance/shared": "workspace:*",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "57.0.26",

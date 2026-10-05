@@ -5,6 +5,7 @@ import { loadLanguage } from './i18n';
 import Customer from './screens/Customer';
 import { AddCustomer, LoanRequest, MyRequests, Search } from './screens/Forms';
 import Home from './screens/Home';
+import { MenuProvider } from './Menu';
 import Login from './screens/Login';
 import { Manager, Settings, Summary } from './screens/More';
 import CollectionReport from './screens/Report';
@@ -48,7 +49,11 @@ function Root() {
   // Keyed by user so a new login starts on a fresh home screen.
   return (
     <NavProvider key={profile.id} initial="Home">
-      {(top) => <Screens key={JSON.stringify(top.params ?? {}) + top.name} route={top} />}
+      {(top) => (
+        <MenuProvider>
+          <Screens key={JSON.stringify(top.params ?? {}) + top.name} route={top} />
+        </MenuProvider>
+      )}
     </NavProvider>
   );
 }

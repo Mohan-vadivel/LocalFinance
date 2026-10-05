@@ -4,7 +4,7 @@ import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { addDays, periodRange, type SummaryPeriod } from '@localfinance/shared';
 import { get } from '../api';
 import { getQueue, subscribe } from '../store';
-import { Amount, Btn, C, Card, Chips, ErrorText, Loading, Notice, Row, SP, Screen, Stat, StatRow, dateIN, money, s, todayIST } from '../ui';
+import { Amount, Btn, C, Card, Chips, ErrorText, IconButton, Loading, Notice, Row, SP, Screen, Stat, StatRow, dateIN, money, s, todayIST } from '../ui';
 
 interface Totals { total: number; cash: number; upi: number; bank: number; count: number }
 interface Summary {
@@ -65,9 +65,9 @@ export default function CollectionReport() {
           ]}
         />
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: SP.sm, padding: SP.sm }}>
-          <Btn small kind="tonal" title="‹" accessibilityLabel={t('collSummary.prev')} onPress={() => setDate(addDays(range.from, -1))} style={{ width: 52 }} textStyle={{ fontSize: 28, lineHeight: 30, fontWeight: '500' }} />
+          <IconButton icon="chevron-back" label={t('collSummary.prev')} color={C.brandInk} onPress={() => setDate(addDays(range.from, -1))} />
           <Text style={{ flex: 1, textAlign: 'center', fontWeight: '800', fontSize: 16, color: C.ink }}>{label}</Text>
-          <Btn small kind="tonal" title="›" accessibilityLabel={t('collSummary.next')} disabled={atCurrent} onPress={() => setDate(addDays(range.to, 1))} style={{ width: 52 }} textStyle={{ fontSize: 28, lineHeight: 30, fontWeight: '500' }} />
+          <IconButton icon="chevron-forward" label={t('collSummary.next')} color={atCurrent ? C.lineStrong : C.brandInk} onPress={() => !atCurrent && setDate(addDays(range.to, 1))} />
         </Card>
         {!atCurrent && <Btn small kind="outline" title={t('collSummary.current')} onPress={() => setDate(todayIST())} style={{ alignSelf: 'center', marginBottom: SP.md }} />}
         <ErrorText error={error} />

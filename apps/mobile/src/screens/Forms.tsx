@@ -4,16 +4,25 @@ import { Text, View } from 'react-native';
 import { LANGUAGES } from '@localfinance/shared';
 import { ApiError, get, newRef, post } from '../api';
 import { getPosition } from '../session';
-import type { MyRoute } from '../store';
+import { myRoutes, type MyRoute } from '../store';
 import { Amount, Avatar, Badge, Btn, C, Card, Chevron, Chips, ErrorText, Field, Loading, Notice, Row, SP, Screen, dateIN, money, s, toPaise, useNav } from '../ui';
 
 // =====================================================================
 // Add customer (with GPS pin)
 // =====================================================================
-export function AddCustomer({ routes }: { routes: MyRoute[] }) {
+export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
   const { t } = useTranslation();
   const nav = useNav();
-  const [routeId, setRouteId] = useState(routes[0]?.id ?? '');
+  // Opened from the side menu there is no route list passed in, so read this agent's routes (cached offline).
+  const [routes, setRoutes] = useState<MyRoute[]>(given);
+  const [routeId, setRouteId] = useState(given[0]?.id ?? '');
+  useEffect(() => {
+    if (given.length) return;
+    void myRoutes().then((r) => {
+      setRoutes(r.data ?? []);
+      setRouteId((cur) => cur || (r.data?.[0]?.id ?? ''));
+    });
+  }, [given.length]);
   const [f, setF] = useState({ name: '', phone: '', altPhone: '', address: '', landmark: '', idType: 'AADHAAR', idNumber: '', occupation: '', monthlyIncome: '', language: 'ta', guarantorName: '', guarantorPhone: '' });
   const [gps, setGps] = useState<{ lat: number; lng: number; accuracy: number | null } | null>(null);
   const [locating, setLocating] = useState(false);

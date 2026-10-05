@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
-import { LANGUAGES } from '@localfinance/shared';
 import { BASE, get, post } from '../api';
-import { setLanguage } from '../i18n';
 import { MapPins } from '../MapPins';
 import { useSession } from '../session';
 import { dismissFailed, getFailed, getQueue, getSynced, subscribe, sync, type FailedItem, type QueueItem, type SyncedItem } from '../store';
-import { Amount, AmountPair, Avatar, Btn, C, Card, Chevron, Chips, ErrorText, Field, Loading, Notice, Progress, Row, SP, Screen, Section, Stat, StatRow, money, s, useNav } from '../ui';
+import { Amount, AmountPair, Avatar, Btn, C, Card, Chevron, ErrorText, Field, Loading, Notice, Progress, Row, SP, Screen, Section, Stat, StatRow, money, s, useNav } from '../ui';
 
 // =====================================================================
 // Day summary: today's totals from the server plus what is still on the phone
@@ -185,21 +183,12 @@ export function Manager() {
 // Settings: language, password, log out
 // =====================================================================
 export function Settings() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { profile, logout } = useSession();
-  const [pending, setPending] = useState(0);
   const [pw, setPw] = useState({ currentPassword: '', newPassword: '' });
   const [msg, setMsg] = useState('');
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    void getQueue().then((q) => setPending(q.length));
-    return subscribe(() => void getQueue().then((q) => setPending(q.length)));
-  }, []);
-  const changeLang = async (code: string) => {
-    await setLanguage(code);
-    await post('/auth/language', { language: code }).catch(() => undefined);
-  };
   const changePassword = async () => {
     setBusy(true);
     setError(null);
@@ -215,17 +204,13 @@ export function Settings() {
     }
   };
   return (
-    <Screen title={t('common.settings')}>
+    <Screen title={t('mobile.accountSettings')}>
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md }}>
         <Avatar name={profile?.name ?? '?'} size={52} />
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={{ fontSize: 18, fontWeight: '800', color: C.ink }}>{profile?.name ?? ''}</Text>
           <Text style={s.muted}>{profile?.roleName ?? ''}</Text>
         </View>
-      </Card>
-      <Card>
-        <Text style={s.h2}>{t('common.language')}</Text>
-        <Chips segmented value={i18n.language} onChange={(v) => void changeLang(v)} items={LANGUAGES.map((l) => ({ key: l.code, label: l.nativeName }))} />
       </Card>
       <Card>
         <Text style={s.h2}>{t('auth.changePassword')}</Text>
@@ -240,8 +225,6 @@ export function Settings() {
         <Row label={t('staff.role')} value={profile?.roleName ?? ''} divider />
         <Row label="API" value={BASE} divider />
       </Card>
-      {pending > 0 && <Notice tone="danger" text={t('mobile.logoutPending', { count: pending })} />}
-      <Btn kind="danger" title={t('common.logout')} onPress={() => void logout()} disabled={pending > 0} />
     </Screen>
   );
 }

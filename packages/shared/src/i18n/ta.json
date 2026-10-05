@@ -489,7 +489,16 @@
       "NOTHING_DUE": "நிலுவை இல்லை",
       "PENDING": "சந்திக்கவில்லை"
     },
-    "serverAddress": "சர்வர் முகவரி"
+    "serverAddress": "சர்வர் முகவரி",
+    "home": "முகப்பு",
+    "openMenu": "மெனுவைத் திற",
+    "closeMenu": "மெனுவை மூடு",
+    "menuWork": "களப்பணி",
+    "menuAccount": "கணக்கு",
+    "quickActions": "விரைவுச் செயல்கள்",
+    "hello": "வணக்கம், {{name}}",
+    "accountSettings": "சுயவிவரம் மற்றும் கடவுச்சொல்",
+    "search": "வாடிக்கையாளர் தேடல்"
   },
   "fund": {
     "title": "நிதிகள்",

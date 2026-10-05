@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '../session';
 import { cachedRouteDay, getFailed, getLastSync, getQueue, myRoutes, subscribe, sync, type MyRoute } from '../store';
-import { AmountPair, Avatar, Badge, Btn, C, Card, Chevron, ErrorText, MAX_W, MAX_W_WIDE, Notice, Progress, SP, Section, dateIN, money, s, todayIST, useLayout, useNav } from '../ui';
+import { AmountPair, Avatar, Badge, Btn, C, Card, Chevron, ErrorText, Icon, IconButton, MAX_W, MAX_W_WIDE, MenuCtx, Notice, Progress, R, SP, Section, dateIN, money, s, todayIST, useLayout, useNav, type IconName } from '../ui';
 
 /** Pending, failed and last-sync state, kept current as the queue changes. */
 export function useSyncState() {
@@ -65,6 +65,7 @@ export default function Home() {
   const insets = useSafeAreaInsets();
   const { width, tablet, wide } = useLayout();
   const { profile, can } = useSession();
+  const menu = useContext(MenuCtx);
   const [routes, setRoutes] = useState<MyRoute[] | null>(null);
   const [progress, setProgress] = useState<Record<string, DayProgress>>({});
   const [offline, setOffline] = useState(false);
@@ -110,21 +111,26 @@ export default function Home() {
   const totals = known.reduce((a, p) => ({ visited: a.visited + p.visited, total: a.total + p.total, collected: a.collected + p.collected, due: a.due + p.due }), { visited: 0, total: 0, collected: 0, due: 0 });
   const customersToday = todays.reduce((sum, r) => sum + r.customerCount, 0);
 
-  const actions: { title: string; onPress: () => void; show: boolean }[] = [
-    { title: t('mobile.daySummary'), onPress: () => nav.push('Summary'), show: true },
-    { title: t('collSummary.title'), onPress: () => nav.push('CollectionReport'), show: true },
-    { title: t('mobile.searchCustomer'), onPress: () => nav.push('Search'), show: can('customer.view', 'collection.record') },
-    { title: t('mobile.addCustomer'), onPress: () => nav.push('AddCustomer', { routes: routes ?? [] }), show: can('customer.create') },
-    { title: t('mobile.requestLoan'), onPress: () => nav.push('Search', { forLoan: true }), show: can('loan.request') },
-    { title: t('mobile.myRequests'), onPress: () => nav.push('MyRequests'), show: can('loan.request') },
-    { title: t('mobile.managerView'), onPress: () => nav.push('Manager'), show: isManager },
+  // The most used places, as tiles. Everything else (and settings) is in the side menu.
+  const actions: { title: string; icon: IconName; color: string; onPress: () => void; show: boolean }[] = [
+    { title: t('mobile.search'), icon: 'search', color: '#0f766e', onPress: () => nav.push('Search'), show: can('customer.view', 'collection.record') },
+    { title: t('mobile.addCustomer'), icon: 'person-add', color: '#2563eb', onPress: () => nav.push('AddCustomer', { routes: routes ?? [] }), show: can('customer.create') },
+    { title: t('mobile.daySummary'), icon: 'today', color: '#7c3aed', onPress: () => nav.push('Summary'), show: true },
+    { title: t('collSummary.title'), icon: 'bar-chart', color: '#c2410c', onPress: () => nav.push('CollectionReport'), show: true },
+    { title: t('mobile.requestLoan'), icon: 'cash', color: '#047857', onPress: () => nav.push('Search', { forLoan: true }), show: can('loan.request') },
+    { title: t('mobile.managerView'), icon: 'people', color: '#be185d', onPress: () => nav.push('Manager'), show: isManager },
   ];
+
 
   // Tablets: route cards in two columns; a landscape tablet also puts the actions in a column of their own.
   const maxW = wide ? MAX_W_WIDE : MAX_W;
   const contentW = Math.min(width - insets.left - insets.right, maxW + SP.lg * 2) - SP.lg * 2;
   const routeCols = tablet && !wide && (routes?.length ?? 0) > 1 ? 2 : 1;
   const routeW = routeCols === 2 ? (contentW - SP.md) / 2 : undefined;
+  // Equal-width action tiles: 2 on a phone, 3 on a tablet; a landscape tablet shows them in a 2/5 side column.
+  const tileCols = tablet && !wide ? 3 : 2;
+  const tileArea = wide ? ((contentW - SP.lg) * 2) / 5 : contentW;
+  const tileW = Math.floor((tileArea - SP.md * (tileCols - 1)) / tileCols);
 
   const todayCard = (
     <Card tone="brand" style={{ padding: SP.xl - 4 }}>
@@ -185,26 +191,29 @@ export default function Home() {
     </View>
   );
 
+  const shownActions = actions.filter((a) => a.show);
   const actionList = (
     <>
-      <Section title={t('common.actions')} />
-      <Card style={{ paddingVertical: SP.xs, paddingHorizontal: 0 }}>
-        {actions
-          .filter((a) => a.show)
-          .map((a, i) => (
-            <Pressable
-              key={a.title}
-              onPress={a.onPress}
-              accessibilityRole="button"
-              android_ripple={{ color: C.surface }}
-              style={({ pressed }) => [{ minHeight: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: SP.lg, paddingVertical: SP.md, gap: SP.md }, i > 0 && { borderTopWidth: 1, borderTopColor: C.line }, pressed && { backgroundColor: C.bg }]}
-            >
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.brand }} />
-              <Text style={{ flex: 1, minWidth: 0, fontSize: 16, fontWeight: '700', color: C.ink }}>{a.title}</Text>
-              <Chevron />
-            </Pressable>
-          ))}
-      </Card>
+      <Section title={t('mobile.quickActions')} />
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.md, marginBottom: SP.md }}>
+        {shownActions.map((a) => (
+          <Pressable
+            key={a.title}
+            onPress={a.onPress}
+            accessibilityRole="button"
+            android_ripple={{ color: C.surface }}
+            style={({ pressed }) => [
+              { width: tileW, minHeight: 112, backgroundColor: C.panel, borderRadius: R.lg, borderWidth: 1, borderColor: C.line, padding: SP.lg, justifyContent: 'space-between', gap: SP.md, boxShadow: '0px 1px 2px rgba(16, 40, 36, 0.06), 0px 2px 8px rgba(16, 40, 36, 0.05)' },
+              pressed && { backgroundColor: '#f6f9f8', transform: [{ scale: 0.98 }] },
+            ]}
+          >
+            <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: a.color + '1f', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name={a.icon} size={24} color={a.color} />
+            </View>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: C.ink, lineHeight: 20 }} numberOfLines={3}>{a.title}</Text>
+          </Pressable>
+        ))}
+      </View>
     </>
   );
 
@@ -222,15 +231,16 @@ export default function Home() {
 
   return (
     <SafeAreaView style={s.safe} edges={['bottom', 'left', 'right']}>
-      <View style={[s.header, { paddingTop: insets.top + SP.md, paddingHorizontal: SP.lg, paddingBottom: SP.lg }]}>
-        <View style={[s.headerInner, { gap: SP.md, maxWidth: maxW }]}>
-          <Avatar name={profile?.name ?? '?'} size={48} />
+      <View style={[s.header, { paddingTop: insets.top + SP.sm, paddingHorizontal: SP.md, paddingBottom: SP.md }]}>
+        <View style={[s.headerInner, { gap: SP.sm, maxWidth: maxW }]}>
+          <IconButton icon="menu" label={t('mobile.openMenu')} onPress={menu.open} />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={s.eyebrow} numberOfLines={1}>{profile?.tenant?.name ?? t('common.appName')}</Text>
-            <Text style={[s.title, { fontSize: 22 }]} numberOfLines={2}>{profile?.name}</Text>
-            <Text style={s.subtitle} numberOfLines={1}>{t(`roles.${profile?.role}`)}</Text>
+            <Text style={[s.title, { fontSize: 20, lineHeight: 26 }]} numberOfLines={2}>{t('mobile.hello', { name: profile?.name?.split(' (')[0] ?? '' })}</Text>
           </View>
-          <Btn small kind="outline" title={t('common.settings')} onPress={() => nav.push('Settings')} style={{ flexShrink: 0, maxWidth: '45%' }} />
+          <Pressable onPress={menu.open} accessibilityRole="button" accessibilityLabel={t('mobile.openMenu')} hitSlop={6}>
+            <Avatar name={profile?.name ?? '?'} size={44} />
+          </Pressable>
         </View>
       </View>
       <ScrollView contentContainerStyle={[s.body, { maxWidth: maxW + SP.lg * 2 }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} colors={[C.brand]} />}>
