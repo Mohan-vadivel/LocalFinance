@@ -4,7 +4,7 @@ import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { addDays, periodRange, type SummaryPeriod } from '@localfinance/shared';
 import { get } from '../api';
 import { getQueue, subscribe } from '../store';
-import { Btn, C, Card, Chips, ErrorText, Loading, Notice, Row, Screen, dateIN, money, s, todayIST } from '../ui';
+import { Amount, Btn, C, Card, Chips, ErrorText, Loading, Notice, Row, SP, Screen, Stat, dateIN, money, s, todayIST } from '../ui';
 
 interface Totals { total: number; cash: number; upi: number; bank: number; count: number }
 interface Summary {
@@ -53,8 +53,9 @@ export default function CollectionReport() {
   const label = range.from === range.to ? dateIN(range.from) : `${dateIN(range.from)} – ${dateIN(range.to)}`;
   return (
     <Screen title={t('collSummary.title')} scroll={false}>
-      <ScrollView contentContainerStyle={s.body} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} />}>
+      <ScrollView contentContainerStyle={s.body} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} colors={[C.brand]} />}>
         <Chips<SummaryPeriod>
+          segmented
           value={period}
           onChange={setPeriod}
           items={[
@@ -63,29 +64,34 @@ export default function CollectionReport() {
             { key: 'MONTH', label: t('collSummary.monthly') },
           ]}
         />
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-          <Btn small kind="plain" title="‹" onPress={() => setDate(addDays(range.from, -1))} />
-          <Text style={{ flex: 1, textAlign: 'center', fontWeight: '700', color: C.ink }}>{label}</Text>
-          <Btn small kind="plain" title="›" disabled={atCurrent} onPress={() => setDate(addDays(range.to, 1))} />
-        </View>
-        {!atCurrent && <Btn small kind="plain" title={t('collSummary.current')} onPress={() => setDate(todayIST())} style={{ alignSelf: 'center', marginBottom: 12 }} />}
+        <Card style={{ flexDirection: 'row', alignItems: 'center', gap: SP.sm, padding: SP.sm }}>
+          <Btn small kind="tonal" title="‹" accessibilityLabel={t('collSummary.prev')} onPress={() => setDate(addDays(range.from, -1))} style={{ width: 52 }} textStyle={{ fontSize: 28, lineHeight: 30, fontWeight: '500' }} />
+          <Text style={{ flex: 1, textAlign: 'center', fontWeight: '800', fontSize: 16, color: C.ink }}>{label}</Text>
+          <Btn small kind="tonal" title="›" accessibilityLabel={t('collSummary.next')} disabled={atCurrent} onPress={() => setDate(addDays(range.to, 1))} style={{ width: 52 }} textStyle={{ fontSize: 28, lineHeight: 30, fontWeight: '500' }} />
+        </Card>
+        {!atCurrent && <Btn small kind="outline" title={t('collSummary.current')} onPress={() => setDate(todayIST())} style={{ alignSelf: 'center', marginBottom: SP.md }} />}
         <ErrorText error={error} />
         {pending > 0 && atCurrent && <Notice tone="warn" text={`${t('mobile.pendingSync')}: ${pending}`} />}
         {!data && !error && <Loading />}
         {data && (
           <>
-            {data.mine && <Text style={[s.muted, { marginBottom: 8 }]}>{t('collSummary.onlyMine')}</Text>}
-            <Card>
-              <Text style={s.muted}>{t('report.collected')}</Text>
-              <Text style={{ fontSize: 28, fontWeight: '700', color: C.ink, marginBottom: 8 }}>{money(data.totals.total)}</Text>
-              <Row label={t('common.modes.CASH')} value={money(data.totals.cash)} strong />
-              <Row label={t('common.modes.UPI')} value={money(data.totals.upi)} strong />
-              {data.totals.bank > 0 && <Row label={t('common.modes.BANK')} value={money(data.totals.bank)} strong />}
-              <Row label={t('collSummary.receipts')} value={String(data.totals.count)} />
-              <Row label={t('collSummary.customersPaid')} value={String(data.totals.customers)} />
-              <Row label={t('collSummary.previousPeriod')} value={money(data.previousTotal)} />
+            {data.mine && <Notice tone="info" text={t('collSummary.onlyMine')} />}
+            <Card tone="brand" style={{ padding: SP.xl - 4 }}>
+              <Amount onBrand size="xl" label={t('report.collected')} value={money(data.totals.total)} />
+              <View style={{ flexDirection: 'row', gap: SP.xl, marginTop: SP.md, flexWrap: 'wrap' }}>
+                <Amount onBrand size="md" label={t('common.modes.CASH')} value={money(data.totals.cash)} />
+                <Amount onBrand size="md" label={t('common.modes.UPI')} value={money(data.totals.upi)} />
+                {data.totals.bank > 0 && <Amount onBrand size="md" label={t('common.modes.BANK')} value={money(data.totals.bank)} />}
+              </View>
             </Card>
-            {data.totals.count === 0 && <Text style={[s.muted, { textAlign: 'center', marginBottom: 12 }]}>{t('collSummary.nothing')}</Text>}
+            <View style={{ flexDirection: 'row', gap: SP.sm, marginBottom: SP.md }}>
+              <Stat label={t('collSummary.receipts')} value={String(data.totals.count)} />
+              <Stat label={t('collSummary.customersPaid')} value={String(data.totals.customers)} />
+            </View>
+            <Card>
+              <Row label={t('collSummary.previousPeriod')} value={money(data.previousTotal)} strong />
+            </Card>
+            {data.totals.count === 0 && <Text style={[s.muted, { textAlign: 'center', marginBottom: SP.md }]}>{t('collSummary.nothing')}</Text>}
             {period !== 'DAY' && (
               <Card>
                 <Text style={s.h2}>{t('collSummary.byDay')}</Text>
@@ -121,12 +127,12 @@ export default function CollectionReport() {
 function Line({ name, t: v }: { name: string; t: Totals }) {
   const { t } = useTranslation();
   return (
-    <View style={{ borderTopWidth: 1, borderColor: C.line, paddingVertical: 8, opacity: v.count ? 1 : 0.5 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text style={{ fontWeight: '700', color: C.ink }}>{name}</Text>
-        <Text style={{ fontWeight: '700', color: C.ink }}>{money(v.total)}</Text>
+    <View style={{ borderTopWidth: 1, borderColor: C.line, paddingVertical: SP.md, opacity: v.count ? 1 : 0.5 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: SP.md }}>
+        <Text style={{ fontWeight: '700', fontSize: 16, color: C.ink, flexShrink: 1 }}>{name}</Text>
+        <Text style={{ fontWeight: '800', fontSize: 17, color: C.ink }}>{money(v.total)}</Text>
       </View>
-      <Text style={s.muted}>
+      <Text style={[s.muted, { marginTop: 2 }]}>
         {t('common.modes.CASH')} {money(v.cash)} · {t('common.modes.UPI')} {money(v.upi)}
         {v.bank ? ` · ${t('common.modes.BANK')} ${money(v.bank)}` : ''} · {t('collSummary.receipts')} {v.count}
       </Text>

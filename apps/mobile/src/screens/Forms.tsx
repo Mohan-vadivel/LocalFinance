@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { LANGUAGES } from '@localfinance/shared';
 import { ApiError, get, newRef, post } from '../api';
 import { getPosition } from '../session';
 import type { MyRoute } from '../store';
-import { Badge, Btn, C, Card, Chips, ErrorText, Field, Loading, Notice, Row, Screen, dateIN, money, s, toPaise, useNav } from '../ui';
+import { Amount, Avatar, Badge, Btn, C, Card, Chevron, Chips, ErrorText, Field, Loading, Notice, Row, SP, Screen, dateIN, money, s, toPaise, useNav } from '../ui';
 
 // =====================================================================
 // Add customer (with GPS pin)
@@ -70,8 +70,9 @@ export function AddCustomer({ routes }: { routes: MyRoute[] }) {
   return (
     <Screen title={t('mobile.addCustomer')}>
       <Card>
-        <Text style={s.label}>{t('common.route')}</Text>
+        <Text style={s.h2}>{t('common.route')}</Text>
         <Chips value={routeId} onChange={setRouteId} items={routes.map((r) => ({ key: r.id, label: r.name }))} />
+        <View style={{ height: 1, backgroundColor: C.line, marginBottom: SP.lg }} />
         <Field label={t('common.name')} value={f.name} onChangeText={set('name')} />
         <Field label={t('common.phone')} value={f.phone} onChangeText={set('phone')} keyboardType="phone-pad" />
         <Field label={t('customerMod.altPhone')} value={f.altPhone} onChangeText={set('altPhone')} keyboardType="phone-pad" />
@@ -94,11 +95,11 @@ export function AddCustomer({ routes }: { routes: MyRoute[] }) {
         ) : (
           <Notice tone="warn" text={locating ? t('common.loading') : t('mobile.locationNeeded')} />
         )}
-        <Btn kind="plain" title={t('customerMod.captureLocation')} onPress={() => void capture()} busy={locating} />
+        <Btn kind="tonal" title={t('customerMod.captureLocation')} onPress={() => void capture()} busy={locating} />
         <Text style={s.muted}>{t('mobile.gpsHelp')}</Text>
       </Card>
       <ErrorText error={error} />
-      <Btn title={duplicate ? t('customerMod.saveAnyway') : t('common.save')} onPress={() => void save()} busy={busy} disabled={!f.name || !f.phone || !f.address} />
+      <Btn big title={duplicate ? t('customerMod.saveAnyway') : t('common.save')} onPress={() => void save()} busy={busy} disabled={!f.name || !f.phone || !f.address} />
     </Screen>
   );
 }
@@ -127,20 +128,22 @@ export function Search({ forLoan }: { forLoan?: boolean }) {
   };
   return (
     <Screen title={forLoan ? t('mobile.requestLoan') : t('mobile.searchCustomer')}>
-      <Field label={t('customerMod.searchHint')} value={q} onChangeText={setQ} onSubmitEditing={() => void run()} returnKeyType="search" autoFocus />
-      <Btn title={t('common.search')} onPress={() => void run()} busy={busy} />
+      <Card>
+        <Field label={t('customerMod.searchHint')} value={q} onChangeText={setQ} onSubmitEditing={() => void run()} returnKeyType="search" autoFocus />
+        <Btn title={t('common.search')} onPress={() => void run()} busy={busy} style={{ marginBottom: 0 }} />
+      </Card>
       <ErrorText error={error} />
       {rows?.length === 0 && <Notice tone="warn" text={t('common.noData')} />}
       {(rows ?? []).map((r) => (
-        <Pressable key={r.id} onPress={() => (forLoan ? nav.push('LoanRequest', { customerId: r.id, customerName: r.name }) : nav.push('Customer', { customerId: r.id }))}>
-          <Card style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: C.ink }}>{r.name}</Text>
-              <Text style={s.muted}>{r.code} · {r.phone}{r.routeName ? ` · ${r.routeName}` : ''}</Text>
-            </View>
-            {r.status !== 'ACTIVE' && <Badge text={t(`customerMod.statuses.${r.status}`)} color={C.danger} />}
-          </Card>
-        </Pressable>
+        <Card key={r.id} onPress={() => (forLoan ? nav.push('LoanRequest', { customerId: r.id, customerName: r.name }) : nav.push('Customer', { customerId: r.id }))} accessibilityLabel={r.name} style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md }}>
+          <Avatar name={r.name} size={44} color={r.status !== 'ACTIVE' ? C.danger : C.brand} />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ fontSize: 17, fontWeight: '800', color: C.ink }}>{r.name}</Text>
+            <Text style={s.muted}>{r.code} · {r.phone}{r.routeName ? ` · ${r.routeName}` : ''}</Text>
+            {r.status !== 'ACTIVE' && <View style={{ marginTop: 4 }}><Badge text={t(`customerMod.statuses.${r.status}`)} color={C.danger} /></View>}
+          </View>
+          <Chevron />
+        </Card>
       ))}
     </Screen>
   );
@@ -195,20 +198,24 @@ export function LoanRequest({ customerId, customerName }: { customerId: string; 
   if (!products) return <Screen title={t('mobile.requestLoan')}>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;
   return (
     <Screen title={t('mobile.requestLoan')}>
-      <Card>
-        <Text style={s.h2}>{customerName}</Text>
-        {grade && <Row label={t('customerMod.riskGrade')} value={t(`history.grades.${grade}`)} />}
+      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md }}>
+        <Avatar name={customerName} size={48} />
+        <View style={{ flex: 1 }}>
+          <Text style={[s.h2, { marginBottom: grade ? SP.xs : 0 }]}>{customerName}</Text>
+          {grade && <Row label={t('customerMod.riskGrade')} value={t(`history.grades.${grade}`)} strong />}
+        </View>
       </Card>
       <Card>
         <Text style={s.label}>{t('common.product')}</Text>
         <Chips value={productId} onChange={setProductId} items={products.map((p) => ({ key: p.id, label: p.name }))} />
-        {product && <Text style={[s.muted, { marginBottom: 10 }]}>{money(product.minAmount)} – {money(product.maxAmount)} · {t(`product.frequencies.${product.frequency}`)} × {product.tenure}</Text>}
-        <Field label={t('loanMod.principal')} value={amount} onChangeText={setAmount} keyboardType="numeric" />
+        {product && <Text style={[s.muted, { marginTop: -SP.sm, marginBottom: SP.lg }]}>{money(product.minAmount)} – {money(product.maxAmount)} · {t(`product.frequencies.${product.frequency}`)} × {product.tenure}</Text>}
+        <Field label={t('loanMod.principal')} value={amount} onChangeText={setAmount} keyboardType="numeric" prefix="₹" large />
         <Field label={t('loanMod.purpose')} value={purpose} onChangeText={setPurpose} />
       </Card>
       {preview && (
-        <Card>
-          <Row label={t('loanMod.netDisbursed')} value={money(preview.summary.netDisbursed)} strong />
+        <Card tone="soft">
+          <Amount label={t('loanMod.netDisbursed')} value={money(preview.summary.netDisbursed)} />
+          <View style={{ height: SP.sm }} />
           <Row label={t('loanMod.fee')} value={money(preview.summary.fee)} />
           {preview.summary.upfrontInterest > 0 && <Row label={t('loanMod.upfrontInterest')} value={money(preview.summary.upfrontInterest)} />}
           <Row label={t('loanMod.instalment')} value={`${money(preview.schedule[0]?.totalDue)} × ${preview.schedule.length}`} strong />
@@ -217,7 +224,7 @@ export function LoanRequest({ customerId, customerName }: { customerId: string; 
         </Card>
       )}
       <ErrorText error={error} />
-      <Btn title={t('common.submit')} onPress={() => void submit()} busy={busy} disabled={!preview} />
+      <Btn big title={t('common.submit')} onPress={() => void submit()} busy={busy} disabled={!preview} />
     </Screen>
   );
 }
@@ -240,12 +247,13 @@ export function MyRequests() {
       {rows?.length === 0 && <Notice tone="warn" text={t('common.noData')} />}
       {(rows ?? []).map((l) => (
         <Card key={l.id}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ fontSize: 16, fontWeight: '700', color: C.ink }}>{l.customer.name}</Text>
-            <Badge text={t(`loanMod.statuses.${l.status}`)} color={tone[l.status] ?? '#8a96a3'} />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: SP.sm }}>
+            <Text style={{ fontSize: 17, fontWeight: '800', color: C.ink, flex: 1 }}>{l.customer.name}</Text>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: C.ink }}>{money(l.principal)}</Text>
           </View>
-          <Text style={s.muted}>{l.number} · {money(l.principal)} · {dateIN(l.createdAt.slice(0, 10))}</Text>
-          {l.status === 'REQUESTED' && l.stage === 'ADMIN' && <Text style={{ color: C.warn }}>{t('loanMod.atAdmin')}</Text>}
+          <Text style={[s.muted, { marginTop: 2, marginBottom: SP.sm }]}>{l.number} · {dateIN(l.createdAt.slice(0, 10))}</Text>
+          <Badge text={t(`loanMod.statuses.${l.status}`)} color={tone[l.status] ?? C.grey} />
+          {l.status === 'REQUESTED' && l.stage === 'ADMIN' && <Text style={{ color: C.warn, fontWeight: '600', marginTop: SP.sm }}>{t('loanMod.atAdmin')}</Text>}
         </Card>
       ))}
     </Screen>

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '../session';
-import { getFailed, getLastSync, getQueue, myRoutes, subscribe, sync, type MyRoute } from '../store';
-import { Badge, Btn, C, Card, ErrorText, Notice, s, useNav } from '../ui';
+import { cachedRouteDay, getFailed, getLastSync, getQueue, myRoutes, subscribe, sync, type MyRoute } from '../store';
+import { Amount, Avatar, Badge, Btn, C, Card, Chevron, ErrorText, Notice, Progress, SP, Section, dateIN, money, s, todayIST, useNav } from '../ui';
 
 /** Pending, failed and last-sync state, kept current as the queue changes. */
 export function useSyncState() {
@@ -32,31 +32,38 @@ export function SyncBar() {
     setMsg(r.offline ? t('common.offline') : '');
     setBusy(false);
   };
+  const tone = st.failed > 0 ? C.danger : st.pending ? C.warn : C.ok;
   return (
-    <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+    <Card style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md, paddingVertical: SP.md }}>
+      <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: tone, boxShadow: `0px 0px 0px 4px ${tone}22` }} />
       <View style={{ flex: 1 }}>
-        <Text style={{ fontWeight: '700', color: st.pending ? C.warn : C.ok }}>
+        <Text style={{ fontWeight: '800', fontSize: 15, color: st.pending ? C.warn : C.ok }}>
           {st.pending ? `${t('mobile.pendingSync')}: ${st.pending}` : t('mobile.allSynced')}
         </Text>
-        <Text style={s.muted}>
+        <Text style={[s.muted, { fontSize: 13 }]}>
           {t('mobile.lastSync')}: {st.lastSync ? new Date(st.lastSync).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '-'} {msg ? `· ${msg}` : ''}
         </Text>
         {st.failed > 0 && (
-          <Pressable onPress={() => nav.push('Summary')}>
-            <Text style={{ color: C.danger, fontWeight: '600' }}>{t('mobile.failedItems', { count: st.failed })}</Text>
+          <Pressable onPress={() => nav.push('Summary')} hitSlop={8} style={{ paddingVertical: 4 }}>
+            <Text style={{ color: C.danger, fontWeight: '700' }}>{t('mobile.failedItems', { count: st.failed })}</Text>
           </Pressable>
         )}
       </View>
-      <Btn small kind="plain" title={t('mobile.syncNow')} onPress={() => void run()} busy={busy} />
+      <Btn small kind="tonal" title={t('mobile.syncNow')} onPress={() => void run()} busy={busy} />
     </Card>
   );
 }
 
+/** Progress of a route today, from the copy last downloaded on this phone. */
+interface DayProgress { visited: number; total: number; collected: number; due: number }
+
 export default function Home() {
   const { t } = useTranslation();
   const nav = useNav();
+  const insets = useSafeAreaInsets();
   const { profile, can } = useSession();
   const [routes, setRoutes] = useState<MyRoute[] | null>(null);
+  const [progress, setProgress] = useState<Record<string, DayProgress>>({});
   const [offline, setOffline] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -71,42 +78,134 @@ export default function Home() {
   useEffect(() => {
     void load();
   }, [load]);
+  // Read today's route copies already on the phone (no network) to show progress on the cards.
+  useEffect(() => {
+    if (!routes?.length) return;
+    const today = todayIST();
+    const read = () =>
+      void Promise.all(routes.map((r) => cachedRouteDay(r.id))).then((days) => {
+        const out: Record<string, DayProgress> = {};
+        days.forEach((d, i) => {
+          if (!d || d.date !== today) return;
+          const list = d.customers;
+          out[routes[i].id] = {
+            visited: list.filter((c) => c.pin !== 'PENDING').length,
+            total: list.length,
+            collected: list.reduce((sum, c) => sum + c.paidToday, 0),
+            due: list.reduce((sum, c) => sum + c.dueNow + c.paidToday, 0),
+          };
+        });
+        setProgress(out);
+      });
+    read();
+    return subscribe(read);
+  }, [routes]);
   const isManager = can('report.view', 'route.manage');
 
+  const todays = (routes ?? []).filter((r) => r.collectsToday);
+  const known = Object.values(progress);
+  const totals = known.reduce((a, p) => ({ visited: a.visited + p.visited, total: a.total + p.total, collected: a.collected + p.collected, due: a.due + p.due }), { visited: 0, total: 0, collected: 0, due: 0 });
+  const customersToday = todays.reduce((sum, r) => sum + r.customerCount, 0);
+
+  const actions: { title: string; onPress: () => void; show: boolean }[] = [
+    { title: t('mobile.daySummary'), onPress: () => nav.push('Summary'), show: true },
+    { title: t('collSummary.title'), onPress: () => nav.push('CollectionReport'), show: true },
+    { title: t('mobile.searchCustomer'), onPress: () => nav.push('Search'), show: can('customer.view', 'collection.record') },
+    { title: t('mobile.addCustomer'), onPress: () => nav.push('AddCustomer', { routes: routes ?? [] }), show: can('customer.create') },
+    { title: t('mobile.requestLoan'), onPress: () => nav.push('Search', { forLoan: true }), show: can('loan.request') },
+    { title: t('mobile.myRequests'), onPress: () => nav.push('MyRequests'), show: can('loan.request') },
+    { title: t('mobile.managerView'), onPress: () => nav.push('Manager'), show: isManager },
+  ];
+
   return (
-    <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
-      <View style={s.header}>
+    <SafeAreaView style={s.safe} edges={['bottom']}>
+      <View style={[s.header, { paddingTop: insets.top + SP.md, paddingHorizontal: SP.lg, paddingBottom: SP.lg, gap: SP.md }]}>
+        <Avatar name={profile?.name ?? '?'} size={48} />
         <View style={{ flex: 1 }}>
-          <Text style={s.title} numberOfLines={1}>{profile?.tenant?.name ?? t('common.appName')}</Text>
-          <Text style={{ color: '#cfe6e2' }} numberOfLines={1}>{profile?.name} · {t(`roles.${profile?.role}`)}</Text>
+          <Text style={s.eyebrow} numberOfLines={1}>{profile?.tenant?.name ?? t('common.appName')}</Text>
+          <Text style={[s.title, { fontSize: 22 }]} numberOfLines={1}>{profile?.name}</Text>
+          <Text style={s.subtitle} numberOfLines={1}>{t(`roles.${profile?.role}`)}</Text>
         </View>
-        <Btn small kind="plain" title={t('common.settings')} onPress={() => nav.push('Settings')} />
+        <Btn small kind="outline" title={t('common.settings')} onPress={() => nav.push('Settings')} />
       </View>
-      <ScrollView contentContainerStyle={s.body} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} />}>
+      <ScrollView contentContainerStyle={s.body} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} colors={[C.brand]} />}>
+        <Card tone="brand" style={{ padding: SP.xl - 4 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SP.md, gap: SP.sm }}>
+            <Text style={{ color: C.onBrand, fontWeight: '800', fontSize: 16, flexShrink: 1 }}>{t('common.today')}</Text>
+            <Text style={{ color: C.onBrandMuted, fontWeight: '600' }}>{dateIN(todayIST())}</Text>
+          </View>
+          {known.length > 0 ? (
+            <>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: SP.md }}>
+                <Amount onBrand size="xl" label={t('report.collected')} value={money(totals.collected)} />
+                <Amount onBrand size="md" align="right" label={t('report.due')} value={money(totals.due)} />
+              </View>
+              <View style={{ marginTop: SP.lg }}>
+                <Progress value={totals.total ? totals.visited / totals.total : 0} color="#ffffff" track="rgba(255,255,255,0.25)" />
+                <Text style={{ color: C.onBrandMuted, marginTop: SP.sm, fontWeight: '600' }}>{t('dashboard.visited')}: {totals.visited} / {totals.total}</Text>
+              </View>
+            </>
+          ) : (
+            <View style={{ flexDirection: 'row', gap: SP.xl }}>
+              <View style={{ flexShrink: 1 }}>
+                <Text style={{ color: C.onBrand, fontSize: 34, fontWeight: '800' }}>{todays.length}</Text>
+                <Text style={{ color: C.onBrandMuted, fontWeight: '600' }}>{t('mobile.myRoutes')}</Text>
+              </View>
+              <View style={{ flexShrink: 1 }}>
+                <Text style={{ color: C.onBrand, fontSize: 34, fontWeight: '800' }}>{customersToday}</Text>
+                <Text style={{ color: C.onBrandMuted, fontWeight: '600' }}>{t('nav.customers')}</Text>
+              </View>
+            </View>
+          )}
+        </Card>
         <SyncBar />
         {offline && <Notice tone="warn" text={t('mobile.offlineCopy')} />}
         <ErrorText error={error} />
-        <Text style={s.h2}>{t('mobile.myRoutes')}</Text>
+        <Section title={t('mobile.myRoutes')} />
         {routes && routes.length === 0 && <Notice tone="warn" text={t('mobile.noRoutes')} />}
-        {(routes ?? []).map((r) => (
-          <Pressable key={r.id} onPress={() => nav.push('RouteDay', { routeId: r.id, name: r.name })} accessibilityRole="button">
-            <Card style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 17, fontWeight: '700', color: C.ink }}>{r.name}</Text>
-                <Text style={s.muted}>{r.location} · {r.customerCount} {t('nav.customers')}</Text>
+        {(routes ?? []).map((r) => {
+          const p = progress[r.id];
+          return (
+            <Card key={r.id} onPress={() => nav.push('RouteDay', { routeId: r.id, name: r.name })} accessibilityLabel={r.name}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md }}>
+                <Avatar name={r.name} label={r.name.trim().slice(0, 1).toUpperCase()} color={r.collectsToday ? C.brand : C.grey} size={48} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: C.ink }}>{r.name}</Text>
+                  <Text style={[s.muted, { marginTop: 2 }]}>{r.location} · {r.customerCount} {t('nav.customers')}</Text>
+                </View>
+                <Chevron />
               </View>
-              {r.collectsToday ? <Badge text={t('common.today')} color={C.brand} /> : <Badge text={t('mobile.notToday')} color="#8a96a3" />}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: SP.md, gap: SP.sm, flexWrap: 'wrap' }}>
+                {r.collectsToday ? <Badge text={t('common.today')} color={C.brand} /> : <Badge text={t('mobile.notToday')} color={C.grey} />}
+                {p && <Text style={{ fontWeight: '800', color: C.ok, fontSize: 16 }}>{money(p.collected)}</Text>}
+              </View>
+              {p && (
+                <View style={{ marginTop: SP.md }}>
+                  <Progress value={p.total ? p.visited / p.total : 0} />
+                  <Text style={[s.muted, { marginTop: 6, fontSize: 13 }]}>{t('dashboard.visited')}: {p.visited} / {p.total}</Text>
+                </View>
+              )}
             </Card>
-          </Pressable>
-        ))}
-        <View style={{ height: 8 }} />
-        <Btn kind="plain" title={t('mobile.daySummary')} onPress={() => nav.push('Summary')} />
-        <Btn kind="plain" title={t('collSummary.title')} onPress={() => nav.push('CollectionReport')} />
-        {can('customer.view', 'collection.record') && <Btn kind="plain" title={t('mobile.searchCustomer')} onPress={() => nav.push('Search')} />}
-        {can('customer.create') && <Btn kind="plain" title={t('mobile.addCustomer')} onPress={() => nav.push('AddCustomer', { routes: routes ?? [] })} />}
-        {can('loan.request') && <Btn kind="plain" title={t('mobile.requestLoan')} onPress={() => nav.push('Search', { forLoan: true })} />}
-        {can('loan.request') && <Btn kind="plain" title={t('mobile.myRequests')} onPress={() => nav.push('MyRequests')} />}
-        {isManager && <Btn kind="plain" title={t('mobile.managerView')} onPress={() => nav.push('Manager')} />}
+          );
+        })}
+        <Section title={t('common.actions')} />
+        <Card style={{ paddingVertical: SP.xs, paddingHorizontal: 0 }}>
+          {actions
+            .filter((a) => a.show)
+            .map((a, i) => (
+              <Pressable
+                key={a.title}
+                onPress={a.onPress}
+                accessibilityRole="button"
+                android_ripple={{ color: C.surface }}
+                style={({ pressed }) => [{ minHeight: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: SP.lg, paddingVertical: SP.md, gap: SP.md }, i > 0 && { borderTopWidth: 1, borderTopColor: C.line }, pressed && { backgroundColor: C.bg }]}
+              >
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.brand }} />
+                <Text style={{ flex: 1, fontSize: 16, fontWeight: '700', color: C.ink }}>{a.title}</Text>
+                <Chevron />
+              </Pressable>
+            ))}
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );

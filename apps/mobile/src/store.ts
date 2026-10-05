@@ -222,3 +222,6 @@ export async function saveProfile(p: Profile | null) {
   else await AsyncStorage.multiRemove([K.profile, K.routes]);
 }
 export const cachedProfile = () => read<Profile | null>(K.profile, null);
+
+/** The last downloaded copy of a route's day, read from the phone only (no network). */
+export const cachedRouteDay = (routeId: string) => read<RouteDay | null>(K.day(routeId), null);

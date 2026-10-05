@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { View } from 'react-native';
 import { WebView } from 'react-native-webview';
 
 export interface MapPin {
@@ -20,8 +21,8 @@ export function MapPins({ pins, me, onOpen, height = 360 }: { pins: MapPin[]; me
     return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>html,body,#m{height:100%;margin:0}.pin{color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font:700 13px sans-serif;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
-.me{width:16px;height:16px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 2px #2563eb}.open{display:block;margin-top:6px;padding:6px 10px;background:#0f766e;color:#fff;border-radius:6px;text-align:center;text-decoration:none;font:600 14px sans-serif}</style>
+<style>html,body,#m{height:100%;margin:0}.pin{color:#fff;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font:800 14px sans-serif;border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+.me{width:16px;height:16px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 2px #2563eb}.leaflet-popup-content{font:600 15px sans-serif;color:#0f1a1a}.leaflet-popup-content-wrapper{border-radius:14px}.open{display:block;margin-top:8px;padding:12px 14px;background:#0f766e;color:#fff;border-radius:10px;text-align:center;text-decoration:none;font:800 18px sans-serif}</style>
 </head><body><div id="m"></div><script>
 var d=${data};
 var map=L.map('m',{zoomControl:true});
@@ -39,13 +40,15 @@ if(pts.length>1)map.fitBounds(pts,{padding:[30,30]});else if(pts.length===1)map.
 </script></body></html>`;
   }, [pins, me]);
   return (
-    <WebView
-      style={{ height, borderRadius: 10 }}
-      originWhitelist={['*']}
-      source={{ html }}
-      onMessage={(e) => onOpen?.(e.nativeEvent.data)}
-      javaScriptEnabled
-      setSupportMultipleWindows={false}
-    />
+    <View style={{ height, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#dfe6e4', backgroundColor: '#eaf0ee' }}>
+      <WebView
+        style={{ height, backgroundColor: '#eaf0ee' }}
+        originWhitelist={['*']}
+        source={{ html }}
+        onMessage={(e) => onOpen?.(e.nativeEvent.data)}
+        javaScriptEnabled
+        setSupportMultipleWindows={false}
+      />
+    </View>
   );
 }

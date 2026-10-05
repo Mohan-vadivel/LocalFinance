@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Linking, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Linking, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { MapPins } from '../MapPins';
 import { getPosition } from '../session';
 import { routeDay, subscribe, type DayCustomer, type RouteDay as Day } from '../store';
-import { Btn, C, Card, Chips, ErrorText, Loading, Notice, PIN_COLORS, Screen, money, s, useNav } from '../ui';
+import { Amount, Badge, Btn, C, Card, Chevron, Chips, ErrorText, Loading, Notice, PIN_COLORS, Progress, SP, Screen, dateIN, money, s, useNav } from '../ui';
 import { SyncBar } from './Home';
 
 /** Opens turn-by-turn directions in Google Maps (or any maps app). */
@@ -50,33 +50,30 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
   const label = (c: DayCustomer, i: number) => String(c.routeSeq ?? i + 1);
 
   return (
-    <Screen title={name} scroll={false}>
-      <ScrollView contentContainerStyle={s.body} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} />}>
+    <Screen title={name} subtitle={day.route.location ? `${day.route.location} · ${dateIN(day.date)}` : dateIN(day.date)} scroll={false}>
+      <ScrollView contentContainerStyle={s.body} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} colors={[C.brand]} />}>
         {offline && <Notice tone="warn" text={t('mobile.offlineCopy')} />}
         <ErrorText error={error} />
-        <Card>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <View>
-              <Text style={s.muted}>{t('report.collected')}</Text>
-              <Text style={s.big}>{money(collected)}</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={s.muted}>{t('report.due')}</Text>
-              <Text style={s.big}>{money(due)}</Text>
-            </View>
+        <Card tone="brand" style={{ padding: SP.xl - 4 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: SP.md }}>
+            <Amount onBrand size="xl" label={t('report.collected')} value={money(collected)} />
+            <Amount onBrand size="md" align="right" label={t('report.due')} value={money(due)} />
           </View>
-          <Text style={[s.muted, { marginTop: 6 }]}>{t('dashboard.visited')}: {done} / {list.length}</Text>
+          <View style={{ marginTop: SP.lg }}>
+            <Progress value={list.length ? done / list.length : 0} color="#ffffff" track="rgba(255,255,255,0.25)" />
+            <Text style={{ color: C.onBrandMuted, marginTop: SP.sm, fontWeight: '600' }}>{t('dashboard.visited')}: {done} / {list.length}</Text>
+          </View>
         </Card>
         {next && next.lat != null && next.lng != null && (
-          <Btn title={`${t('mobile.nextCustomer')}: ${label(next, list.indexOf(next))}. ${next.name}`} onPress={() => navigateTo(next.lat!, next.lng!)} />
+          <Btn big title={`${t('mobile.nextCustomer')}: ${label(next, list.indexOf(next))}. ${next.name}  ›`} onPress={() => navigateTo(next.lat!, next.lng!)} style={{ marginBottom: SP.md }} />
         )}
         <SyncBar />
-        <Chips value={view} onChange={setView} items={[{ key: 'list', label: t('mobile.listView') }, { key: 'map', label: t('mobile.mapView') }]} />
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
+        <Chips segmented value={view} onChange={setView} items={[{ key: 'list', label: t('mobile.listView') }, { key: 'map', label: t('mobile.mapView') }]} />
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: SP.lg, rowGap: SP.sm, marginBottom: SP.md, paddingHorizontal: SP.xs }}>
           {(['PENDING', 'PAID', 'PARTIAL', 'MISSED', 'NOTHING_DUE'] as const).map((p) => (
-            <View key={p} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: PIN_COLORS[p] }} />
-              <Text style={s.muted}>{t(`mobile.pins.${p}`)}</Text>
+            <View key={p} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: PIN_COLORS[p] }} />
+              <Text style={[s.muted, { fontSize: 13 }]}>{t(`mobile.pins.${p}`)}</Text>
             </View>
           ))}
         </View>
@@ -92,26 +89,25 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
           />
         ) : (
           list.map((c, i) => (
-            <Pressable key={c.id} onPress={() => open(c)} accessibilityRole="button">
-              <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <View style={[s.seq, { backgroundColor: PIN_COLORS[c.pin] }]}>
-                  <Text style={s.seqText}>{label(c, i)}</Text>
+            <Card key={c.id} onPress={() => open(c)} accessibilityLabel={c.name} style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md, paddingVertical: 14 }}>
+              <View style={[s.seq, { backgroundColor: PIN_COLORS[c.pin] }]}>
+                <Text style={s.seqText}>{label(c, i)}</Text>
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={{ fontSize: 17, fontWeight: '800', color: C.ink }}>{c.name}</Text>
+                <Text style={s.muted} numberOfLines={1}>{c.landmark ?? c.address}</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  <Badge text={t(`mobile.pins.${c.pin}`)} color={PIN_COLORS[c.pin]} />
+                  {c.paidToday ? <Text style={{ color: C.ok, fontWeight: '700' }}>{money(c.paidToday)}</Text> : null}
+                  {c.lastVisit?.outcome === 'PROMISED' && c.lastVisit.promiseDate ? <Text style={{ color: C.warn, fontWeight: '600' }}>{c.lastVisit.promiseDate}</Text> : null}
+                  {c.lat == null && <Text style={{ color: C.warn, fontSize: 13, fontWeight: '600' }}>{t('mobile.noGps')}</Text>}
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 16, fontWeight: '700', color: C.ink }}>{c.name}</Text>
-                  <Text style={s.muted} numberOfLines={1}>{c.landmark ?? c.address}</Text>
-                  <Text style={{ color: PIN_COLORS[c.pin], fontWeight: '600' }}>
-                    {t(`mobile.pins.${c.pin}`)}
-                    {c.paidToday ? ` · ${money(c.paidToday)}` : ''}
-                    {c.lastVisit?.outcome === 'PROMISED' && c.lastVisit.promiseDate ? ` · ${c.lastVisit.promiseDate}` : ''}
-                  </Text>
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={{ fontSize: 16, fontWeight: '700', color: C.ink }}>{money(c.dueNow)}</Text>
-                  {c.lat == null && <Text style={{ color: C.warn, fontSize: 12 }}>{t('mobile.noGps')}</Text>}
-                </View>
-              </Card>
-            </Pressable>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: c.dueNow ? C.ink : C.muted }}>{money(c.dueNow)}</Text>
+              </View>
+              <Chevron />
+            </Card>
           ))
         )}
       </ScrollView>
