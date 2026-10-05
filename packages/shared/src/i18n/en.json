@@ -411,7 +411,8 @@
     "reference": "Reference",
     "interestWaived": "Interest waived",
     "amountToCollect": "Amount to collect",
-    "writeOffWarning": "{{amount}} principal will be written off as a bad debt. This cannot be undone."
+    "writeOffWarning": "{{amount}} principal will be written off as a bad debt. This cannot be undone.",
+    "intoFund": "Paid into fund"
   },
   "collection": {
     "title": "Collections",

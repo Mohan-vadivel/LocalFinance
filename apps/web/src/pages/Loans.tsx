@@ -809,7 +809,7 @@ function CollectForm({ loan, onClose, onSaved }: { loan: LoanDetailData; onClose
         { label: t('loanMod.number'), value: loan.number },
         { label: t('collection.amountCollected'), value: money(amount), strong: true },
         { label: t('common.mode'), value: `${t(`common.modes.${f.mode}`)}${f.upiRef ? ` ${f.upiRef}` : ''}` },
-        { label: t('loanMod.fund'), value: loan.fundName },
+        { label: t('loanMod.intoFund'), value: loan.fundName },
         { label: t('common.date'), value: dateIN(today()) },
         { label: t('print.outstandingAfter'), value: money(p.totalOutstanding - amount) },
         { label: t('common.notes'), value: f.note },
@@ -881,7 +881,7 @@ function ForecloseForm({ loan, onClose, onSaved }: { loan: LoanDetailData; onClo
         { label: t('loanMod.amountToCollect'), value: money(payable), strong: true },
         { label: t('loanMod.interestWaived'), value: money(toPaise(f.interestWaived)) },
         { label: t('common.mode'), value: t(`common.modes.${f.mode}`) },
-        { label: t('loanMod.fund'), value: loan.fundName },
+        { label: t('loanMod.intoFund'), value: loan.fundName },
         { label: t('common.date'), value: dateIN(f.date) },
         { label: t('common.reason'), value: f.reason },
       ]}
