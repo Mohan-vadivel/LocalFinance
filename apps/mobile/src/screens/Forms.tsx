@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { LANGUAGES } from '@localfinance/shared';
-import { ApiError, get, newRef, post } from '../api';
+import { ApiError, get, newRef, post, put } from '../api';
 import { getPosition } from '../session';
-import { myRoutes, type MyRoute } from '../store';
+import { cachedRouteDay, cachedRoutes, myRoutes, type DayCustomer, type MyRoute } from '../store';
 import { Amount, Avatar, Badge, Btn, C, Card, Chevron, Chips, ErrorText, Field, Loading, Notice, Row, SP, Screen, dateIN, money, s, toPaise, useNav } from '../ui';
 
 // =====================================================================
@@ -116,24 +116,68 @@ export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
 // =====================================================================
 // Customer search
 // =====================================================================
+interface Found { id: string; name: string; code: string; phone: string; status: string; routeName?: string; local?: { customer: DayCustomer; routeId: string } }
+
 export function Search({ forLoan }: { forLoan?: boolean }) {
   const { t } = useTranslation();
   const nav = useNav();
   const [q, setQ] = useState('');
-  const [rows, setRows] = useState<{ id: string; name: string; code: string; phone: string; status: string; routeName?: string }[] | null>(null);
+  // Customers on the agent's route copies on the phone: searched as you type, with or without a connection.
+  const [onPhone, setOnPhone] = useState<Found[]>([]);
+  const [server, setServer] = useState<{ q: string; rows: Found[] } | null>(null);
+  const [offline, setOffline] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void cachedRoutes().then(async (routes) => {
+      const days = await Promise.all(routes.map((r) => cachedRouteDay(r.id)));
+      const seen = new Set<string>();
+      const out: Found[] = [];
+      days.forEach((d, i) => {
+        for (const c of d?.customers ?? []) {
+          if (seen.has(c.id)) continue;
+          seen.add(c.id);
+          out.push({ id: c.id, name: c.name, code: c.code, phone: c.phone, status: c.status, routeName: routes[i].name, local: { customer: c, routeId: routes[i].id } });
+        }
+      });
+      setOnPhone(out);
+    });
+  }, []);
+  const term = q.trim().toLowerCase();
+  const digits = term.replace(/\D/g, '');
+  const local =
+    term.length < 2
+      ? []
+      : onPhone.filter(
+          (r) =>
+            r.name.toLowerCase().includes(term) ||
+            r.code.toLowerCase().includes(term) ||
+            (digits.length >= 3 && r.phone.replace(/\D/g, '').includes(digits)) ||
+            !!r.local?.customer.loans.some((l) => l.number.toLowerCase().includes(term)),
+        );
+  // Phone matches first (they open with the full route copy), then anything more the office found.
+  const rows = [...local, ...(server && server.q === term ? server.rows.filter((r) => !local.some((x) => x.id === r.id)) : [])];
+
   const run = async () => {
-    if (q.trim().length < 2) return;
+    if (term.length < 2) return;
     setBusy(true);
     setError(null);
     try {
-      setRows((await get<{ rows: NonNullable<typeof rows> }>('/customers', { q: q.trim() })).rows);
+      setServer({ q: term, rows: (await get<{ rows: Found[] }>('/customers', { q: q.trim() })).rows });
+      setOffline(false);
     } catch (e) {
-      setError(e);
+      if (e instanceof ApiError && e.status === 0) setOffline(true);
+      else setError(e);
+      setServer({ q: term, rows: [] });
     } finally {
       setBusy(false);
     }
+  };
+  const searched = server?.q === term && !busy;
+  const open = (r: Found) => {
+    if (forLoan) nav.push('LoanRequest', { customerId: r.id, customerName: r.name });
+    else if (r.local) nav.push('Customer', { customer: r.local.customer, routeId: r.local.routeId });
+    else nav.push('Customer', { customerId: r.id });
   };
   return (
     <Screen title={forLoan ? t('mobile.requestLoan') : t('mobile.searchCustomer')}>
@@ -142,14 +186,20 @@ export function Search({ forLoan }: { forLoan?: boolean }) {
         <Btn title={t('common.search')} onPress={() => void run()} busy={busy} style={{ marginBottom: 0 }} />
       </Card>
       <ErrorText error={error} />
-      {rows?.length === 0 && <Notice tone="warn" text={t('common.noData')} />}
-      {(rows ?? []).map((r) => (
-        <Card key={r.id} onPress={() => (forLoan ? nav.push('LoanRequest', { customerId: r.id, customerName: r.name }) : nav.push('Customer', { customerId: r.id }))} accessibilityLabel={r.name} style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md }}>
+      {offline && searched && <Notice tone="warn" text={t('mobile.searchOffline')} />}
+      {term.length >= 2 && rows.length === 0 && !busy && <Notice tone="warn" text={searched ? t('mobile.noMatch') : t('mobile.noMatchOnPhone')} />}
+      {rows.map((r) => (
+        <Card key={r.id} onPress={() => open(r)} accessibilityLabel={r.name} style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md }}>
           <Avatar name={r.name} size={44} color={r.status !== 'ACTIVE' ? C.danger : C.brand} />
           <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
             <Text style={{ fontSize: 17, fontWeight: '800', color: C.ink }}>{r.name}</Text>
             <Text style={s.muted}>{r.code} · {r.phone}{r.routeName ? ` · ${r.routeName}` : ''}</Text>
-            {r.status !== 'ACTIVE' && <View style={{ marginTop: 4 }}><Badge text={t(`customerMod.statuses.${r.status}`)} color={C.danger} /></View>}
+            {(r.status !== 'ACTIVE' || r.local) && (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                {r.status !== 'ACTIVE' && <Badge text={t(`customerMod.statuses.${r.status}`)} color={C.danger} />}
+                {r.local && <Badge text={t('mobile.onPhone')} color={C.grey} />}
+              </View>
+            )}
           </View>
           <Chevron />
         </Card>
@@ -241,13 +291,34 @@ export function LoanRequest({ customerId, customerName }: { customerId: string; 
 // =====================================================================
 // My loan requests
 // =====================================================================
+interface MyLoanRow { id: string; number: string; customerId: string; productId: string; principal: number; purpose: string | null; notes: string | null; status: string; stage: string; createdAt: string; customer: { name: string } }
+interface Approval { decision: string; reason: string | null; createdAt: string; userName?: string }
+
 export function MyRequests() {
   const { t } = useTranslation();
-  const [rows, setRows] = useState<{ id: string; number: string; principal: number; status: string; stage: string; createdAt: string; customer: { name: string } }[] | null>(null);
+  const [rows, setRows] = useState<MyLoanRow[] | null>(null);
+  // The latest note from whoever decided, for requests that were sent back, rejected or approved.
+  const [notes, setNotes] = useState<Record<string, Approval>>({});
+  const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
-  useEffect(() => {
-    get<{ rows: NonNullable<typeof rows> }>('/loans', { queue: 'mine' }).then((r) => setRows(r.rows)).catch(setError);
+  const load = useCallback(() => {
+    get<{ rows: MyLoanRow[] }>('/loans', { queue: 'mine' })
+      .then((r) => {
+        setRows(r.rows);
+        for (const l of r.rows.filter((x) => ['SENT_BACK', 'REJECTED', 'APPROVED'].includes(x.status) || (x.status === 'REQUESTED' && x.stage === 'ADMIN'))) {
+          get<{ approvals: Approval[] }>(`/loans/${l.id}`)
+            .then((d) => {
+              const last = [...d.approvals].reverse().find((a) => a.reason && a.decision !== 'REQUEST' && a.decision !== 'RESUBMIT');
+              if (last) setNotes((n) => ({ ...n, [l.id]: last }));
+            })
+            .catch(() => undefined);
+        }
+      })
+      .catch(setError);
   }, []);
+  useEffect(() => {
+    load();
+  }, [load]);
   const tone: Record<string, string> = { REQUESTED: C.warn, SENT_BACK: C.warn, APPROVED: C.brand, ACTIVE: C.ok, REJECTED: C.danger };
   return (
     <Screen title={t('mobile.myRequests')}>
@@ -263,8 +334,56 @@ export function MyRequests() {
           <Text style={[s.muted, { marginTop: 2, marginBottom: SP.sm }]}>{l.number} · {dateIN(l.createdAt.slice(0, 10))}</Text>
           <Badge text={t(`loanMod.statuses.${l.status}`)} color={tone[l.status] ?? C.grey} />
           {l.status === 'REQUESTED' && l.stage === 'ADMIN' && <Text style={{ color: C.warn, fontWeight: '600', marginTop: SP.sm }}>{t('loanMod.atAdmin')}</Text>}
+          {notes[l.id] && (
+            <View style={{ marginTop: SP.md }}>
+              <Notice tone={l.status === 'REJECTED' ? 'danger' : l.status === 'SENT_BACK' ? 'warn' : 'info'} text={`${t('mobile.noteFrom', { name: notes[l.id].userName ?? '-' })}: ${notes[l.id].reason}`} />
+            </View>
+          )}
+          {l.status === 'SENT_BACK' &&
+            (editing === l.id ? (
+              <Resubmit
+                loan={l}
+                onCancel={() => setEditing(null)}
+                onDone={() => {
+                  setEditing(null);
+                  load();
+                }}
+              />
+            ) : (
+              <Btn small kind="tonal" title={t('mobile.editResubmit')} onPress={() => setEditing(l.id)} style={{ alignSelf: 'flex-start', marginTop: notes[l.id] ? 0 : SP.md }} />
+            ))}
         </Card>
       ))}
     </Screen>
+  );
+}
+
+/** Corrects a sent-back request (amount and purpose) and sends it for approval again, as the web app does. */
+function Resubmit({ loan, onCancel, onDone }: { loan: MyLoanRow; onCancel: () => void; onDone: () => void }) {
+  const { t } = useTranslation();
+  const [principal, setPrincipal] = useState(String(loan.principal / 100));
+  const [purpose, setPurpose] = useState(loan.purpose ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await put(`/loans/${loan.id}`, { customerId: loan.customerId, productId: loan.productId, principal: toPaise(principal), purpose: purpose || null, notes: loan.notes || null });
+      onDone();
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <View style={{ marginTop: SP.md, borderTopWidth: 1, borderColor: C.line, paddingTop: SP.md }}>
+      <Field label={t('loanMod.principal')} value={principal} onChangeText={setPrincipal} keyboardType="numeric" prefix="₹" large />
+      <Field label={t('loanMod.purpose')} value={purpose} onChangeText={setPurpose} />
+      <ErrorText error={error} />
+      <Btn title={t('loanMod.resubmit')} onPress={() => void submit()} busy={busy} disabled={toPaise(principal) <= 0} />
+      <Btn kind="ghost" title={t('common.cancel')} onPress={onCancel} style={{ marginBottom: 0 }} />
+    </View>
   );
 }

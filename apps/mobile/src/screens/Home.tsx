@@ -39,15 +39,19 @@ export function SyncBar() {
       <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: tone, boxShadow: `0px 0px 0px 4px ${tone}22` }} />
       {/* On a small phone the button drops under the text (full width) instead of squeezing it. */}
       <View style={{ flex: 1, minWidth: compact ? 150 : 0 }}>
-        <Text style={{ fontWeight: '800', fontSize: 15, color: st.pending ? C.warn : C.ok }}>
-          {st.pending ? `${t('mobile.pendingSync')}: ${st.pending}` : t('mobile.allSynced')}
+        {/* Never "everything is synced" while the office has refused something. */}
+        <Text style={{ fontWeight: '800', fontSize: 15, color: st.pending ? C.warn : st.failed ? C.danger : C.ok }}>
+          {st.pending ? `${t('mobile.pendingSync')}: ${st.pending}` : st.failed ? t('mobile.failedTitle') : t('mobile.allSynced')}
         </Text>
         <Text style={[s.muted, { fontSize: 13 }]}>
           {t('mobile.lastSync')}: {st.lastSync ? new Date(st.lastSync).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '-'} {msg ? `· ${msg}` : ''}
         </Text>
         {st.failed > 0 && (
-          <Pressable onPress={() => nav.push('Summary')} hitSlop={8} style={{ paddingVertical: 4 }}>
-            <Text style={{ color: C.danger, fontWeight: '700' }}>{t('mobile.failedItems', { count: st.failed })}</Text>
+          <Pressable onPress={() => nav.push('Summary')} hitSlop={8} style={{ paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ minWidth: 22, height: 22, borderRadius: 11, backgroundColor: C.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>{st.failed}</Text>
+            </View>
+            <Text style={{ color: C.danger, fontWeight: '700', flexShrink: 1 }}>{t('mobile.failedItems', { count: st.failed })}</Text>
           </Pressable>
         )}
       </View>

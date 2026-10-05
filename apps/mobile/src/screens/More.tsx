@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { BASE, get, post } from '../api';
 import { MapPins } from '../MapPins';
 import { useSession } from '../session';
-import { dismissFailed, getFailed, getQueue, getSynced, subscribe, sync, type FailedItem, type QueueItem, type SyncedItem } from '../store';
-import { Amount, AmountPair, Avatar, Btn, C, Card, Chevron, ErrorText, Field, Loading, Notice, Progress, Row, SP, Screen, Section, Stat, StatRow, money, s, useNav } from '../ui';
+import { dismissFailed, getFailed, getQueue, getSynced, retryFailed, subscribe, sync, todaysCachedDays, type FailedItem, type QueueItem, type SyncedItem } from '../store';
+import { Amount, AmountPair, Avatar, Btn, C, Card, Chevron, ErrorText, Field, Icon, Loading, Notice, Progress, Row, SP, Screen, Section, Stat, StatRow, money, s, todayIST, useNav } from '../ui';
 
 // =====================================================================
 // Day summary: today's totals from the server plus what is still on the phone
@@ -20,6 +20,8 @@ export function Summary() {
   const [failed, setFailed] = useState<FailedItem[]>([]);
   const [synced, setSynced] = useState<SyncedItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [confirmDismiss, setConfirmDismiss] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState<string | null>(null);
   const load = useCallback(async () => {
     setRefreshing(true);
     await sync();
@@ -43,11 +45,17 @@ export function Summary() {
     });
   }, [load]);
   const pendingCash = queue.filter((q) => q.kind === 'collection' && q.mode === 'CASH').reduce((sum, q) => sum + (q.kind === 'collection' ? q.amount : 0), 0);
+  const retry = async (ref: string) => {
+    setRetrying(ref);
+    await retryFailed(ref);
+    setRetrying(null);
+  };
 
   return (
     <Screen title={t('mobile.daySummary')} scroll={false}>
       <ScrollView contentContainerStyle={s.body} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} colors={[C.brand]} />}>
         <ErrorText error={error} />
+        <EndDay queued={queue.length} failed={failed.length} cash={day ? day.cashInHand + pendingCash : null} handedOver={!!day?.handover} />
         {day && (
           <>
             <Card tone="brand" style={{ padding: SP.xl - 4 }}>
@@ -71,7 +79,6 @@ export function Summary() {
           </>
         )}
         {!day && !error && <Loading />}
-        {queue.length > 0 && <Notice tone="warn" text={`${t('mobile.pendingSync')}: ${queue.length} · ${t('mobile.submitDayHelp')}`} />}
         {failed.length > 0 && (
           <Card>
             <Text style={[s.h2, { color: C.danger }]}>{t('mobile.failedTitle')}</Text>
@@ -79,7 +86,21 @@ export function Summary() {
               <View key={f.item.clientRef} style={{ borderTopWidth: 1, borderColor: C.line, paddingVertical: SP.md }}>
                 <Text style={{ fontWeight: '800', fontSize: 16, color: C.ink, flexShrink: 1 }}>{f.item.customerName}{f.item.kind === 'collection' ? ` · ${money(f.item.amount)}` : ''}</Text>
                 <Text style={{ color: C.danger }}>{f.error}</Text>
-                <Btn small kind="outline" title={t('mobile.dismiss')} onPress={() => void dismissFailed(f.item.clientRef)} style={{ alignSelf: 'flex-start', marginTop: SP.sm }} />
+                {/* Dismiss asks first, inline (Alert does nothing on the web build). */}
+                {confirmDismiss === f.item.clientRef ? (
+                  <View style={{ marginTop: SP.sm }}>
+                    <Notice tone="warn" text={f.item.kind === 'collection' ? t('mobile.dismissConfirm', { amount: money(f.item.amount), name: f.item.customerName }) : t('mobile.dismissConfirmVisit', { name: f.item.customerName })} />
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm }}>
+                      <Btn small kind="danger" title={t('mobile.dismissYes')} onPress={() => { setConfirmDismiss(null); void dismissFailed(f.item.clientRef); }} style={{ flexGrow: 1 }} />
+                      <Btn small kind="outline" title={t('mobile.keep')} onPress={() => setConfirmDismiss(null)} style={{ flexGrow: 1 }} />
+                    </View>
+                  </View>
+                ) : (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, marginTop: SP.sm }}>
+                    <Btn small kind="tonal" title={t('mobile.retry')} onPress={() => void retry(f.item.clientRef)} busy={retrying === f.item.clientRef} />
+                    <Btn small kind="outline" title={t('mobile.dismiss')} onPress={() => setConfirmDismiss(f.item.clientRef)} />
+                  </View>
+                )}
               </View>
             ))}
           </Card>
@@ -94,6 +115,59 @@ export function Summary() {
         )}
       </ScrollView>
     </Screen>
+  );
+}
+
+/**
+ * "End my day": what must be true before handing over cash. Not-visited counts come from today's route copies on
+ * the phone, so this works offline too.
+ */
+function EndDay({ queued, failed, cash, handedOver }: { queued: number; failed: number; cash: number | null; handedOver: boolean }) {
+  const { t } = useTranslation();
+  const [notVisited, setNotVisited] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  useEffect(() => {
+    const read = () =>
+      void todaysCachedDays(todayIST()).then(({ days }) => setNotVisited(days.length ? days.reduce((sum, d) => sum + d.customers.filter((c) => c.pin === 'PENDING').length, 0) : null));
+    read();
+    return subscribe(read);
+  }, []);
+  const run = async () => {
+    setBusy(true);
+    const r = await sync();
+    setMsg(r.offline ? t('common.offline') : '');
+    setBusy(false);
+  };
+  const synced = queued === 0 && failed === 0;
+  return (
+    <Card>
+      <Text style={s.h2}>{t('mobile.endDay')}</Text>
+      <Check ok={synced} title={synced ? t('mobile.allSynced') : t('mobile.notSynced', { queued, failed })} detail={msg || (synced ? undefined : t('mobile.submitDayHelp'))}>
+        {!synced && <Btn small kind="tonal" title={t('mobile.syncNow')} onPress={() => void run()} busy={busy} style={{ alignSelf: 'flex-start', marginTop: SP.sm }} />}
+      </Check>
+      <Check
+        ok={notVisited === 0}
+        warn
+        title={notVisited == null ? t('mobile.routesNotDownloaded') : notVisited === 0 ? t('mobile.allVisited') : t('mobile.notVisitedCount', { count: notVisited })}
+      />
+      <Check ok={handedOver} warn title={handedOver ? t('handover.done') : `${t('mobile.cashToHandOver')}: ${money(cash)}`} detail={handedOver ? undefined : t('handover.pending')} />
+      {synced && !handedOver && cash != null && <Notice text={t('mobile.readyHandover', { amount: money(cash) })} />}
+    </Card>
+  );
+}
+
+/** One line of the end-of-day checklist: a tick or a cross, a title and an optional detail or action. */
+function Check({ ok, warn, title, detail, children }: { ok: boolean; warn?: boolean; title: string; detail?: string; children?: ReactNode }) {
+  return (
+    <View style={{ flexDirection: 'row', gap: SP.md, alignItems: 'flex-start', borderTopWidth: 1, borderColor: C.line, paddingVertical: SP.md }}>
+      <Icon name={ok ? 'checkmark-circle' : 'close-circle'} size={26} color={ok ? C.ok : warn ? C.warn : C.danger} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontWeight: '800', fontSize: 16, color: C.ink }}>{title}</Text>
+        {detail ? <Text style={[s.muted, { marginTop: 2 }]}>{detail}</Text> : null}
+        {children}
+      </View>
+    </View>
   );
 }
 

@@ -111,6 +111,56 @@ export async function dismissFailed(clientRef: string) {
   changed();
 }
 
+/** Puts a rejected item back in the queue with the same clientRef (so the office never counts it twice) and sends it. */
+export async function retryFailed(clientRef: string) {
+  const failed = await getFailed();
+  const f = failed.find((x) => x.item.clientRef === clientRef);
+  if (!f) return null;
+  await write(K.failed, failed.filter((x) => x !== f));
+  const q = await getQueue();
+  if (!q.some((i) => i.clientRef === clientRef)) q.push(f.item);
+  await write(K.queue, q);
+  changed();
+  return sync();
+}
+
+/** True while the item is on the phone only: queued and not part of a send that is running now. */
+export async function isUnsent(clientRef: string) {
+  return !inFlight.has(clientRef) && (await getQueue()).some((i) => i.clientRef === clientRef);
+}
+
+/**
+ * Takes an unsent item back off the queue (the "Undo" after saving) and puts the customer on the cached route as
+ * it was before. Returns false when it has already gone (or is going) to the office.
+ */
+export async function removeQueued(clientRef: string) {
+  if (!(await isUnsent(clientRef))) return false;
+  const q = await getQueue();
+  const item = q.find((i) => i.clientRef === clientRef)!;
+  const rest = q.filter((i) => i.clientRef !== clientRef);
+  await write(K.queue, rest);
+  const before = snapshots.get(clientRef);
+  if (item.routeId && before) {
+    const day = await read<RouteDay | null>(K.day(item.routeId), null);
+    const at = day?.customers.findIndex((x) => x.id === item.customerId) ?? -1;
+    if (day && at >= 0) {
+      // Restore the copy from before this item, then re-apply anything saved for the customer after it.
+      const c: DayCustomer = JSON.parse(JSON.stringify(before));
+      for (const later of rest.slice(q.indexOf(item)).filter((i) => i.customerId === item.customerId)) applyLocal(c, later);
+      day.customers[at] = c;
+      await write(K.day(item.routeId), day);
+    }
+  }
+  snapshots.delete(clientRef);
+  changed();
+  return true;
+}
+
+/** The customer as it was on the cached route before each item was saved, for Undo (kept in memory only). */
+const snapshots = new Map<string, DayCustomer>();
+/** clientRefs in the send that is running now; these can no longer be undone. */
+const inFlight = new Set<string>();
+
 /** Saves on the phone first, updates the cached route so the pin changes at once, then tries to send. */
 export async function enqueue(item: QueueItem) {
   const q = await getQueue();
@@ -120,7 +170,10 @@ export async function enqueue(item: QueueItem) {
     const day = await read<RouteDay | null>(K.day(item.routeId), null);
     if (day) {
       const c = day.customers.find((x) => x.id === item.customerId);
-      if (c) applyLocal(c, item);
+      if (c) {
+        snapshots.set(item.clientRef, JSON.parse(JSON.stringify(c)));
+        applyLocal(c, item);
+      }
       await write(K.day(item.routeId), day);
     }
   }
@@ -154,6 +207,7 @@ export function sync() {
     if (!q.length) return { sent: 0, failed: 0, offline: false };
     const collections = q.filter((i): i is QueuedCollection => i.kind === 'collection');
     const visits = q.filter((i): i is QueuedVisit => i.kind === 'visit');
+    q.forEach((i) => inFlight.add(i.clientRef));
     let res: { results: { clientRef: string; status: 'OK' | 'DUPLICATE' | 'ERROR'; receiptNo?: string; error?: string }[] };
     try {
       res = await post('/collections/sync', {
@@ -183,6 +237,7 @@ export function sync() {
     return { sent: res.results.filter((r) => r.status !== 'ERROR').length, failed: res.results.filter((r) => r.status === 'ERROR').length, offline: false };
   })().finally(() => {
     syncing = null;
+    inFlight.clear();
   });
   return syncing;
 }
@@ -225,3 +280,15 @@ export const cachedProfile = () => read<Profile | null>(K.profile, null);
 
 /** The last downloaded copy of a route's day, read from the phone only (no network). */
 export const cachedRouteDay = (routeId: string) => read<RouteDay | null>(K.day(routeId), null);
+/** This agent's routes as last downloaded (no network). */
+export const cachedRoutes = () => read<MyRoute[] | null>(K.routes, null).then((r) => r ?? []);
+
+/** The first customer in route order not visited yet (skipping `skipId`, the one on screen). */
+export const nextPending = (day: RouteDay, skipId?: string) => day.customers.find((c) => c.pin === 'PENDING' && c.id !== skipId) ?? null;
+
+/** Today's copies of the agent's routes that collect today, as already on the phone. */
+export async function todaysCachedDays(today: string) {
+  const routes = (await cachedRoutes()).filter((r) => r.collectsToday);
+  const days = await Promise.all(routes.map((r) => cachedRouteDay(r.id)));
+  return { routes: routes.length, days: days.filter((d): d is RouteDay => !!d && d.date === today) };
+}

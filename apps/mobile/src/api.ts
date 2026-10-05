@@ -103,6 +103,7 @@ export const get = <T = unknown>(path: string, params?: Record<string, string | 
   return api<T>('GET', path + (qs.length ? '?' + qs.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&') : ''));
 };
 export const post = <T = unknown>(path: string, body?: unknown) => api<T>('POST', path, body ?? {});
+export const put = <T = unknown>(path: string, body?: unknown) => api<T>('PUT', path, body ?? {});
 
 /** Ends this phone's session on the server too (best effort). */
 export async function logoutRemote() {
