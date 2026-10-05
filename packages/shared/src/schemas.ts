@@ -45,6 +45,11 @@ export const tenantSettingsSchema = z.object({
   geoCheckMetres: z.number().int().min(0).default(200),
   receiptFooter: z.string().max(300).default(''),
   smsTemplates: z.record(z.string(), z.string()).default({}),
+  /**
+   * AI features that send this business's data to Claude (Anthropic): ask in plain words, the morning briefing write-up,
+   * ID card reading and reminder drafts. Off until the owner turns it on. Features that run on our own server are always on.
+   */
+  aiEnabled: z.boolean().default(false),
 });
 export type TenantSettings = z.infer<typeof tenantSettingsSchema>;
 

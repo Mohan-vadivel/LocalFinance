@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Injectable, Param, Post, Query } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import {
+  addDays,
   allocatePayment,
   collectionSchema,
   distanceMetres,
@@ -325,11 +326,32 @@ export class CollectionsService {
       include: { loans: { where: { status: 'ACTIVE' }, include: { instalments: { orderBy: { seq: 'asc' } } } } },
     });
     const loanIds = customers.flatMap((c) => c.loans.map((l) => l.id));
-    const [recent, todays, visits] = await Promise.all([
+    const [recent, todays, visits, promises] = await Promise.all([
       this.prisma.collection.findMany({ where: { loanId: { in: loanIds }, reversedAt: null }, orderBy: { collectedAt: 'desc' }, take: 2000 }),
       this.prisma.collection.findMany({ where: { loanId: { in: loanIds }, date, reversedAt: null } }),
       this.prisma.visitLog.findMany({ where: { tenantId: ctx.tenantId, customerId: { in: customers.map((c) => c.id) }, date } }),
+      this.prisma.visitLog.findMany({
+        where: { tenantId: ctx.tenantId, customerId: { in: customers.map((c) => c.id) }, outcome: 'PROMISED', promiseDate: { gte: addDays(date, -14), lte: date } },
+        orderBy: { visitedAt: 'desc' },
+        distinct: ['customerId'],
+        select: { customerId: true, promiseDate: true },
+      }),
     ]);
+    // For the smart visit order on the phone: the hour (IST) a customer usually pays at, from their last ten payments,
+    // and a promise to pay that is due and not yet kept.
+    const usualHour = (customerId: string) => {
+      const hours = recent
+        .filter((r) => r.customerId === customerId)
+        .slice(0, 10)
+        .map((r) => Math.floor(((r.collectedAt.getUTCHours() * 60 + r.collectedAt.getUTCMinutes() + 330) % 1440) / 60))
+        .sort((a, b) => a - b);
+      return hours.length >= 3 ? hours[Math.floor(hours.length / 2)] : null;
+    };
+    const openPromise = (customerId: string) => {
+      const p = promises.find((v) => v.customerId === customerId);
+      if (!p?.promiseDate) return null;
+      return recent.some((r) => r.customerId === customerId && r.date >= p.promiseDate!) ? null : p.promiseDate;
+    };
     return {
       route: { id: route.id, name: route.name, location: route.location.name },
       date,
@@ -379,6 +401,8 @@ export class CollectionsService {
           paidToday,
           pin,
           lastVisit: visit ? { outcome: visit.outcome, promiseDate: visit.promiseDate } : null,
+          usualHour: usualHour(c.id),
+          promiseDate: openPromise(c.id),
           loans,
         };
       }),

@@ -6,3 +6,4 @@ export * from './loan';
 export * from './schemas';
 export * from './i18n';
 export * from './imports';
+export * from './ai';

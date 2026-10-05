@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Injectable, Param, Post, Put, Query } from '@nestjs/common';
-import { customerSchema, customerStatusSchema, diffDays, riskGrade, todayIST } from '@localfinance/shared';
+import { customerSchema, customerStatusSchema, diffDays, riskScore, todayIST } from '@localfinance/shared';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { AuditService } from '../common/audit.service';
@@ -177,7 +177,7 @@ export class CustomersService {
    * Full repayment history for a customer and anyone matching their phone or ID number in this business, with an
    * advisory risk grade.
    */
-  async history(ctx: Ctx, id: string) {
+  async history(ctx: Ctx, id: string, requested?: number) {
     const c = await this.prisma.customer.findFirst({ where: { id, tenantId: ctx.tenantId } });
     if (!c) throw notFound('Customer');
     const matches = await this.prisma.customer.findMany({
@@ -199,6 +199,9 @@ export class CustomersService {
     let onTime = 0;
     let missed = 0;
     let maxDaysLate = 0;
+    let currentDaysPastDue = 0;
+    // Every instalment already due, newest last, to weigh the most recent ten more.
+    const dueRows: { dueDate: string; onTime: boolean }[] = [];
     const perLoan = loans.map((l) => {
       let lMax = 0;
       for (const i of l.instalments) {
@@ -206,6 +209,7 @@ export class CustomersService {
         dueCount++;
         const fully = i.principalPaid + i.interestPaid >= i.principalDue + i.interestDue;
         const late = fully && i.paidOn ? Math.max(0, diffDays(i.paidOn, i.dueDate) - l.graceDays) : Math.max(0, diffDays(today, i.dueDate));
+        dueRows.push({ dueDate: i.dueDate, onTime: fully && late === 0 });
         if (fully && late === 0) onTime++;
         if (!fully && i.dueDate < today) missed++;
         lMax = Math.max(lMax, late);
@@ -228,6 +232,23 @@ export class CustomersService {
     const writtenOff = loans.filter((l) => l.status === 'WRITTEN_OFF').length;
     const onTimeRatio = dueCount ? onTime / dueCount : 1;
     const blacklisted = c.status === 'BLACKLISTED' || matches.some((m) => m.status === 'BLACKLISTED');
+    const recent = dueRows.sort((a, b) => a.dueDate.localeCompare(b.dueDate)).slice(-10);
+    for (const l of perLoan) if (l.position) currentDaysPastDue = Math.max(currentDaysPastDue, l.position.daysPastDue);
+    const repaid = loans.filter((l) => l.status === 'CLOSED' || l.status === 'FORECLOSED');
+    const risk = riskScore({
+      loans: loans.length,
+      closedLoans: repaid.length,
+      onTimeRatio,
+      recentOnTimeRatio: recent.length ? recent.filter((r) => r.onTime).length / recent.length : onTimeRatio,
+      missed,
+      maxDaysLate,
+      currentDaysPastDue,
+      writtenOff,
+      blacklisted,
+      activeLoans: loans.filter((l) => l.status === 'ACTIVE').length,
+      requested: requested ?? null,
+      largestRepaid: repaid.length ? Math.max(...repaid.map((l) => l.principal)) : null,
+    });
     return {
       customer: { id: c.id, name: c.name, code: c.code, status: c.status, statusReason: c.statusReason },
       matches,
@@ -240,7 +261,9 @@ export class CustomersService {
         missed,
         maxDaysLate,
         writtenOff,
-        grade: riskGrade({ loans: loans.length, onTimeRatio, maxDaysLate, writtenOff }),
+        grade: risk.grade,
+        score: risk.score,
+        reasons: risk.reasons,
       },
       loans: perLoan,
     };
@@ -277,8 +300,10 @@ export class CustomersController {
   @Get(':id') @Perm('customer.view', 'collection.record', 'loan.request') get(@CurrentCtx() ctx: Ctx, @Param('id') id: string) {
     return this.svc.get(ctx, id);
   }
-  @Get(':id/history') @Perm('customer.view', 'loan.approve', 'loan.request') history(@CurrentCtx() ctx: Ctx, @Param('id') id: string) {
-    return this.svc.history(ctx, id);
+  @Get(':id/history') @Perm('customer.view', 'loan.approve', 'loan.request') history(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Query('amount') amount?: string) {
+    // Optional amount being asked for, in paise, so the risk score can compare it with past loans.
+    const requested = Number(amount);
+    return this.svc.history(ctx, id, Number.isFinite(requested) && requested > 0 ? Math.round(requested) : undefined);
   }
   @Get(':id/ledger') @Perm('customer.view') ledger(@CurrentCtx() ctx: Ctx, @Param('id') id: string) {
     return this.svc.ledger(ctx, id);

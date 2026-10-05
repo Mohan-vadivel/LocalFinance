@@ -102,7 +102,8 @@
     "deskEntry": "Quick collection entry",
     "lineAbstract": "Monthly abstract",
     "lineList": "Line list",
-    "import": "Import from old software"
+    "import": "Import from old software",
+    "ask": "Ask AI"
   },
   "roles": {
     "SUPER_ADMIN": "Super Admin",
@@ -1150,5 +1151,163 @@
     "customers": "No customers yet.",
     "firstCustomer": "Add your first customer",
     "noMatch": "Nothing matches. Try other words or clear the filters."
+  },
+  "ai": {
+    "title": "AI features",
+    "badge": "AI",
+    "settings": {
+      "title": "AI features",
+      "intro": "Smart helpers for owners, managers and agents. Some run on your own server; others use Claude, an AI service by Anthropic.",
+      "toggle": "Turn on AI features that use Claude",
+      "sendsData": "When this is on, the figures needed to answer a question, write the morning briefing, read an ID card or draft a reminder are sent to Claude. Only this business's data is sent, and only for the person asking.",
+      "local": "Always on, no data leaves your server: smart risk score, unusual activity alerts, cash forecast, smart visit order and voice entry.",
+      "cloud": "Needs this switch: ask in plain words, AI-written briefing, read ID cards, AI reminder drafts.",
+      "notConfigured": "The server has no Claude key yet. Ask your technical person to set ANTHROPIC_API_KEY on the API server.",
+      "on": "AI features are on",
+      "off": "AI features are off"
+    },
+    "errors": {
+      "notConfigured": "AI features are not set up on this server yet.",
+      "off": "AI features are turned off for this business. The owner can turn them on in Settings.",
+      "refused": "The AI could not help with this request.",
+      "busy": "The AI is busy. Try again in a minute.",
+      "unavailable": "The AI is not reachable right now. Try again shortly."
+    },
+    "brief": {
+      "title": "Morning briefing",
+      "byAi": "Written by AI from today's figures",
+      "byRules": "From today's figures",
+      "refresh": "Refresh",
+      "yesterday": "Yesterday {{collected}} was collected against {{due}} due ({{pct}}%).",
+      "yesterdayNoDue": "Yesterday {{collected}} was collected.",
+      "today": "Today {{due}} is due; {{collected}} collected so far.",
+      "newlyLate": "{{count}} loans fell behind in the last three days ({{amount}}). Call them before it grows.",
+      "late": "{{count}} loans are late in total, {{amount}} overdue.",
+      "short": "{{count}} agents were short at yesterday's handover, {{amount}} in all.",
+      "approvals": "{{count}} loan requests are waiting for approval.",
+      "forecast": "Expected collection over the next 7 days is {{expected}}; about {{free}} is free to lend.",
+      "alerts": "{{count}} unusual activity alerts need a look."
+    },
+    "alerts": {
+      "title": "Unusual activity",
+      "none": "Nothing unusual in the last few days.",
+      "high": "Check now",
+      "medium": "Worth a look",
+      "agentDrop": "{{agent}} collected {{yesterday}} yesterday, only {{pct}}% of the usual {{usual}}.",
+      "reversals": "{{count}} collections by {{agent}} were cancelled this week ({{amount}}), {{later}} of them on a later day.",
+      "dayReopened": "The closed day {{date}} at {{branch}} was opened again for changes.",
+      "sharedPhone": "{{count}} active customers share the phone number {{phone}}.",
+      "sharedId": "{{count}} active customers share the ID number {{id}}.",
+      "shortages": "{{agent}} was short of cash at {{count}} handovers in two weeks, {{amount}} in all.",
+      "flagged": "{{count}} collections by {{agent}} this week were saved far from the customer's address."
+    },
+    "forecast": {
+      "title": "Cash forecast",
+      "subtitle": "Next 7 days, from what is due and how well each weekday usually collects",
+      "expected": "Expected",
+      "due": "Due",
+      "holiday": "Holiday",
+      "rate": "Usual collection rate {{pct}}%",
+      "fundBalance": "Money in funds",
+      "approvedWaiting": "Approved, not yet paid out",
+      "freeToLend": "Free to lend",
+      "total": "Next 7 days",
+      "note": "Free to lend = money in funds + expected collection - approved loans waiting."
+    },
+    "ask": {
+      "title": "Ask AI",
+      "subtitle": "Ask about your business in English or Tamil. Answers come from your own figures.",
+      "placeholder": "Ask a question, e.g. Which line collected least this week?",
+      "send": "Ask",
+      "thinking": "Looking at your figures…",
+      "noAnswer": "Sorry, I could not find an answer to that.",
+      "clear": "New conversation",
+      "usedData": "Looked at: {{list}}",
+      "ex1": "Which line collected the least this week?",
+      "ex2": "Who are the top 5 customers with the most overdue?",
+      "ex3": "How much did we lend this month compared with last month?",
+      "ex4": "இந்த வாரம் எந்த முகவர் அதிகம் வசூல் செய்தார்?",
+      "offHint": "Ask in plain words needs AI features turned on in Settings.",
+      "checkFigures": "AI can make mistakes. Check important figures in Reports."
+    },
+    "risk": {
+      "score": "Risk score",
+      "outOf": "{{score}}/100",
+      "advisory": "Advice only, from this customer's own repayment history.",
+      "why": "Why",
+      "reasons": {
+        "newCustomer": "New customer, no repayment history yet",
+        "blacklisted": "Marked blacklisted",
+        "writtenOff": "{{count}} loan written off before",
+        "onTimeHigh": "Paid {{pct}}% of instalments on time",
+        "onTimeLow": "Paid only {{pct}}% of instalments on time",
+        "recentSlip": "Recent payments slipped: {{pct}}% on time in the last 10",
+        "recentGood": "Recent payments improved: {{pct}}% on time in the last 10",
+        "lateNow": "{{days}} days late on a running loan",
+        "veryLateBefore": "Was once {{days}} days late",
+        "missedMany": "{{count}} instalments missed and still unpaid",
+        "repaidBefore": "Fully repaid {{count}} loans before",
+        "manyActive": "Already has {{count}} running loans",
+        "biggerThanBefore": "Asking {{times}}x the largest loan repaid before"
+      }
+    },
+    "reminder": {
+      "button": "Reminder",
+      "title": "Payment reminder",
+      "intro": "Check the message, change it if you like, then send it.",
+      "overdue": "Dear {{name}}, your payment of {{amount}} is pending for {{days}} days. Please pay to our agent or at the office. Thank you, {{business}}.",
+      "upcoming": "Dear {{name}}, a gentle reminder that {{nextAmount}} is due on {{nextDate}}. Thank you, {{business}}.",
+      "none": "Dear {{name}}, thank you for your regular payments. {{business}}.",
+      "byAi": "Written by AI",
+      "gentle": "Gentle",
+      "firm": "Firm",
+      "regenerate": "Write again",
+      "copy": "Copy",
+      "copied": "Copied",
+      "whatsapp": "WhatsApp",
+      "sms": "SMS",
+      "language": "Message language"
+    },
+    "readId": {
+      "button": "Read ID card",
+      "take": "Take photo of ID card",
+      "choose": "Choose photo",
+      "reading": "Reading the card…",
+      "filled": "Filled from the card. Please check each field.",
+      "notReadable": "Could not read the card. Take a clearer photo in good light.",
+      "duplicates": "Already in your customers",
+      "sameId": "Same ID number",
+      "sameName": "Same name",
+      "otherBranch": "Another branch",
+      "privacy": "The photo is sent to Claude to read and is not saved.",
+      "dob": "Date of birth: {{value}}",
+      "guardian": "Father or husband: {{value}}"
+    },
+    "voice": {
+      "button": "Speak",
+      "title": "Speak or type a collection",
+      "hint": "Tap the microphone on your keyboard and say the name and amount, for example \"Murugan 500\" or \"முருகன் ஐநூறு\".",
+      "placeholder": "Name and amount",
+      "heard": "Heard: {{text}}",
+      "noMatch": "No customer on this route matches that name.",
+      "noAmount": "No amount heard. Say the amount after the name.",
+      "pick": "Which customer?",
+      "collect": "Collect {{amount}}",
+      "tryAgain": "Try again"
+    },
+    "visit": {
+      "smart": "Smart order",
+      "normal": "Route order",
+      "smartOn": "Sorted by who to visit first",
+      "reasons": {
+        "promiseToday": "Promised to pay today",
+        "promiseMissed": "Missed a promise",
+        "late": "{{days}} days late",
+        "usualTime": "Usually pays around {{hour}}:00",
+        "dueToday": "Due today",
+        "nearby": "On the way",
+        "done": "Done for today"
+      }
+    }
   }
 }

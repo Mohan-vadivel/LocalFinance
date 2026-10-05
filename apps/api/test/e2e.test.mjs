@@ -6,6 +6,7 @@ import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { createServer } from 'node:http';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,7 +16,35 @@ const DB_NAME = `localfinance_e2e_${Date.now().toString(36)}${Math.floor(Math.ra
 const DB = `${SERVER}/${DB_NAME}`;
 const PORT = 4100 + Math.floor(Math.random() * 500);
 const BASE = `http://127.0.0.1:${PORT}`;
-const env = { ...process.env, DATABASE_URL: DB, PORT: String(PORT), JWT_SECRET: 'test-secret-0123456789abcdef', SMS_PROVIDER: 'log', SUPER_ADMIN_PHONE: '9000000000', SUPER_ADMIN_PASSWORD: 'ChangeMe@123', UPLOAD_DIR: resolve(root, '.test-uploads') };
+// A stand-in for the Claude API, so the AI features are tested without a key or network. It records every request.
+const CLAUDE_PORT = PORT + 600;
+const claudeCalls = [];
+let idCardReply = null;
+const claude = createServer((req, res) => {
+  let raw = '';
+  req.on('data', (c) => (raw += c));
+  req.on('end', () => {
+    const body = JSON.parse(raw || '{}');
+    claudeCalls.push(body);
+    const msg = (content, stop = 'end_turn') => ({ id: 'msg_' + claudeCalls.length, type: 'message', role: 'assistant', model: body.model, content, stop_reason: stop, stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 } });
+    const props = body.output_config?.format?.schema?.properties ?? {};
+    let out;
+    if (body.tools?.length) {
+      const last = body.messages.at(-1);
+      const results = Array.isArray(last.content) ? last.content.filter((b) => b.type === 'tool_result') : [];
+      // First turn: look up places and today's figures. Second turn: answer with what the tools returned.
+      out = results.length
+        ? msg([{ type: 'text', text: 'ANSWER ' + results.map((r) => r.content).join(' | ') }])
+        : msg([{ type: 'tool_use', id: 'tu_1', name: 'places', input: {} }, { type: 'tool_use', id: 'tu_2', name: 'dashboard_today', input: {} }], 'tool_use');
+    } else if (props.bullets) out = msg([{ type: 'text', text: JSON.stringify({ bullets: ['AI bullet one', 'AI bullet two'] }) }]);
+    else if (props.message) out = msg([{ type: 'text', text: JSON.stringify({ message: 'AI reminder text' }) }]);
+    else if (props.documentType) out = msg([{ type: 'text', text: JSON.stringify(idCardReply) }]);
+    else out = msg([{ type: 'text', text: '{}' }]);
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(out));
+  });
+});
+const env = { ...process.env, ANTHROPIC_API_KEY: 'test-key', ANTHROPIC_BASE_URL: `http://127.0.0.1:${CLAUDE_PORT}`, DATABASE_URL: DB, PORT: String(PORT), JWT_SECRET: 'test-secret-0123456789abcdef', SMS_PROVIDER: 'log', SUPER_ADMIN_PHONE: '9000000000', SUPER_ADMIN_PASSWORD: 'ChangeMe@123', UPLOAD_DIR: resolve(root, '.test-uploads') };
 const sqlOnServer = (sql) => execSync(`npx prisma db execute --url "${SERVER}/postgres" --stdin`, { cwd: root, input: sql, stdio: ['pipe', 'ignore', 'inherit'] });
 let server;
 
@@ -44,6 +73,7 @@ const ok = async (p) => {
 const login = async (phone, password = 'Demo@1234', extra = {}) => (await ok(api('POST', '/auth/login', { body: { login: phone, password, ...extra } }))).accessToken;
 
 before(async () => {
+  await new Promise((r) => claude.listen(CLAUDE_PORT, '127.0.0.1', r));
   sqlOnServer(`CREATE DATABASE ${DB_NAME};`);
   execSync('npx prisma db push --skip-generate', { cwd: root, env, stdio: 'ignore' });
   execSync('node dist/seed.js --demo', { cwd: root, env, stdio: 'ignore' });
@@ -58,6 +88,7 @@ before(async () => {
 });
 after(async () => {
   server?.kill();
+  claude.close();
   await new Promise((r) => setTimeout(r, 500));
   // Removes only the database this run created.
   sqlOnServer(`DROP DATABASE IF EXISTS ${DB_NAME} WITH (FORCE);`);
@@ -670,5 +701,114 @@ describe('import from the old system', () => {
     const branchId = (await ok(api('GET', '/branches', { token: owner })))[0].id;
     const book = await ok(api('GET', `/daybook?branchId=${branchId}&from=${today()}`, { token: owner }));
     assert.ok(!book.entries.some((e) => /OLD-10/.test(e.particulars)));
+  });
+});
+
+describe('AI features', () => {
+  let third, demoCustomer;
+
+  test('everything that sends data to Claude is off until the owner turns it on', async () => {
+    const st = await ok(api('GET', '/ai/status', { token: owner }));
+    assert.deepEqual(st, { configured: true, enabled: false, switchedOn: false });
+    const before = claudeCalls.length;
+    const ask = await api('POST', '/ai/ask', { token: owner, body: { question: 'How much did we collect today?' } });
+    assert.equal(ask.status, 400);
+    assert.equal(ask.data.code, 'ai.errors.off');
+    assert.equal((await api('POST', '/ai/read-id', { token: owner, body: { mediaType: 'image/jpeg', image: 'A'.repeat(200) } })).data.code, 'ai.errors.off');
+    // The briefing and reminders still work, from plain rules, and nothing is sent out.
+    const brief = await ok(api('GET', '/ai/briefing?language=ta', { token: owner }));
+    assert.equal(brief.source, 'rules');
+    assert.ok(brief.bullets.length >= 2 && /இன்று/.test(brief.bullets.join(' ')));
+    demoCustomer = (await ok(api('GET', '/customers', { token: owner }))).rows[0];
+    const rem = await ok(api('POST', `/ai/customers/${demoCustomer.id}/reminder`, { token: owner, body: {} }));
+    assert.equal(rem.source, 'rules');
+    assert.ok(rem.text.includes(demoCustomer.name));
+    assert.equal(claudeCalls.length, before);
+    // Only the owner can turn it on.
+    assert.equal((await api('PUT', '/settings', { token: manager, body: { settings: { aiEnabled: true } } })).status, 403);
+    await ok(api('PUT', '/settings', { token: owner, body: { settings: { aiEnabled: true } } }));
+    assert.equal((await ok(api('GET', '/ai/status', { token: owner }))).enabled, true);
+  });
+
+  test('server-side helpers: alerts, forecast, risk score and visit-order data', async () => {
+    const alerts = await ok(api('GET', '/ai/alerts', { token: owner }));
+    assert.ok(Array.isArray(alerts));
+    for (const a of alerts) assert.ok(['agentDrop', 'reversals', 'dayReopened', 'sharedPhone', 'sharedId', 'shortages', 'flagged'].includes(a.kind));
+    const f = await ok(api('GET', '/ai/forecast', { token: manager }));
+    assert.equal(f.days.length, 7);
+    assert.equal(f.totalExpected, f.days.reduce((s, d) => s + d.expected, 0));
+    assert.equal(f.freeToLend, f.fundBalance + f.totalExpected - f.approvedWaiting);
+    assert.equal((await api('GET', '/ai/forecast', { token: agent })).status, 403);
+    const h = await ok(api('GET', `/customers/${demoCustomer.id}/history?amount=100000000`, { token: owner }));
+    assert.ok(['A', 'B', 'C', 'D', 'NEW'].includes(h.summary.grade));
+    assert.ok(Array.isArray(h.summary.reasons));
+    const route = (await ok(api('GET', '/routes/mine', { token: agent })))[0];
+    const day = await ok(api('GET', `/routes/${route.id}/day`, { token: agent }));
+    assert.ok(day.customers.every((c) => 'usualHour' in c && 'promiseDate' in c));
+    // The promise to pay made in the multi-tenancy test is still open.
+    assert.ok(day.customers.some((c) => c.promiseDate === today()));
+  });
+
+  test('ask, briefing, reminder and ID reading go through Claude when on', async () => {
+    let n = claudeCalls.length;
+    const ask = await ok(api('POST', '/ai/ask', { token: owner, body: { question: 'How are we doing today?', language: 'en' } }));
+    assert.ok(ask.answer.startsWith('ANSWER'));
+    assert.deepEqual(ask.tools.sort(), ['dashboard_today', 'places']);
+    assert.equal(claudeCalls.length, n + 2);
+    assert.equal(claudeCalls[n].model, 'claude-opus-5-5');
+    assert.equal(claudeCalls[n].fallbacks, 'default');
+    const brief = await ok(api('GET', '/ai/briefing', { token: owner }));
+    assert.equal(brief.source, 'ai');
+    assert.deepEqual(brief.bullets, ['AI bullet one', 'AI bullet two']);
+    // Same figures again: served from the cache, Claude is not asked twice.
+    n = claudeCalls.length;
+    await ok(api('GET', '/ai/briefing', { token: owner }));
+    assert.equal(claudeCalls.length, n);
+    const rem = await ok(api('POST', `/ai/customers/${demoCustomer.id}/reminder`, { token: owner, body: { language: 'ta' } }));
+    assert.equal(rem.source, 'ai');
+    assert.equal(rem.text, 'AI reminder text');
+    // The ID card names someone already on the books: the form is filled and the duplicate is shown.
+    const full = await ok(api('GET', `/customers/${demoCustomer.id}`, { token: owner }));
+    idCardReply = { documentType: 'AADHAAR', name: full.name, idNumber: full.idNumber ?? '', address: '12 Main Road, Madurai', pincode: '625001', dateOfBirth: '1980', fatherOrHusbandName: '', readable: true };
+    const id = await ok(api('POST', '/ai/read-id', { token: officer, body: { mediaType: 'image/jpeg', image: 'A'.repeat(200) } }));
+    assert.equal(id.fields.name, full.name);
+    assert.equal(id.fields.idType, 'AADHAAR');
+    assert.ok(id.fields.address.includes('625001'));
+    assert.ok(id.duplicates.some((d) => d.id === demoCustomer.id));
+    // Agents sign up customers in the field, so they may read cards; an auditor may not.
+    await ok(api('POST', '/ai/read-id', { token: agent, body: { mediaType: 'image/jpeg', image: 'A'.repeat(200) } }));
+    assert.equal((await api('POST', '/ai/read-id', { token: await login('9000000007'), body: { mediaType: 'image/jpeg', image: 'A'.repeat(200) } })).status, 403);
+    // Every call to Claude is in the audit log.
+    const log = await ok(api('GET', '/audit?entity=AI', { token: owner }));
+    assert.ok((log.rows ?? log).some((r) => r.action === 'AI_ASK'));
+  });
+
+  test("another business's AI sees only its own data", async () => {
+    await ok(api('POST', '/platform/tenants', { token: superAdmin, body: { name: 'Third Finance', ownerName: 'Third Owner', ownerPhone: '9222222222', ownerPassword: 'Third@1234' } }));
+    third = await login('9222222222', 'Third@1234');
+    await ok(api('PUT', '/settings', { token: third, body: { settings: { aiEnabled: true } } }));
+    const demoNames = (await ok(api('GET', '/customers', { token: owner }))).rows.map((c) => c.name);
+    const demoStaff = (await ok(api('GET', '/staff', { token: owner }))).map((s) => s.name);
+    const demoBranch = (await ok(api('GET', '/branches', { token: owner })))[0];
+    const n = claudeCalls.length;
+    const ask = await ok(api('POST', '/ai/ask', { token: third, body: { question: 'Who are my agents and customers?' } }));
+    // Everything the tools sent to Claude for this business, and the answer, mention none of the demo business.
+    // Whole words only, so a name like "Bala" does not match the field "fundBalance".
+    const mentions = (text, name) => new RegExp(`(^|[^A-Za-z])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^A-Za-z]|$)`).test(text);
+    const sent = JSON.stringify(claudeCalls.slice(n)) + ask.answer;
+    for (const name of [...demoNames, ...demoStaff, demoBranch.name, 'Demo Finance']) assert.ok(!mentions(sent, name), `leaked ${name}`);
+    for (const path of ['/ai/alerts', '/ai/forecast', '/ai/briefing']) {
+      const r = JSON.stringify(await ok(api('GET', path, { token: third })));
+      for (const name of [...demoNames, ...demoStaff]) assert.ok(!mentions(r, name), `${path} leaked ${name}`);
+    }
+    // Messaging the demo business's customer is refused; naming its branch finds nothing.
+    assert.equal((await api('POST', `/ai/customers/${demoCustomer.id}/reminder`, { token: third, body: {} })).status, 404);
+    const f = await ok(api('GET', `/ai/forecast?branchId=${demoBranch.id}`, { token: third }));
+    assert.equal(f.totalDue, 0);
+    assert.equal(f.fundBalance, 0);
+    // A duplicate check from an ID card never finds the demo business's customers.
+    idCardReply = { ...idCardReply, name: demoNames[0] };
+    const id = await ok(api('POST', '/ai/read-id', { token: third, body: { mediaType: 'image/jpeg', image: 'A'.repeat(200) } }));
+    assert.deepEqual(id.duplicates, []);
   });
 });

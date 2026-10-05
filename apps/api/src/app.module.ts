@@ -2,10 +2,12 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { AuditService } from './common/audit.service';
+import { ClaudeService } from './common/claude.service';
 import { AuthGuard } from './common/auth.guard';
 import { BooksService } from './common/books.service';
 import { NotifyService } from './common/notify.service';
 import { PrismaService } from './common/prisma.service';
+import { AiController, AiService } from './modules/ai';
 import { AuthController, AuthService } from './modules/auth';
 import { CollectionsController, CollectionsService } from './modules/collections';
 import { CustomersController, CustomersService } from './modules/customers';
@@ -52,6 +54,7 @@ if (!secret || secret.length < 16) {
     ReportsController,
     FilesController,
     ImportsController,
+    AiController,
   ],
   providers: [
     PrismaService,
@@ -74,6 +77,8 @@ if (!secret || secret.length < 16) {
     ReportsService,
     DashboardService,
     ImportsService,
+    ClaudeService,
+    AiService,
   ],
 })
 export class AppModule {}
