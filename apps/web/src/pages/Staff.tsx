@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { KeyRound, LogOut, Pencil, Smartphone } from 'lucide-react';
 import { LANGUAGES, PERMISSIONS, ROLES, type Permission } from '@localfinance/shared';
 import { BranchPicker, clearLookups } from '../components/pickers';
-import { Badge, DataTable, ErrorBox, Field, FormModal, Modal, useToast } from '../components/ui';
+import { Badge, DataTable, ErrorBox, Field, FormModal, Modal, useToast, RowActions } from '../components/ui';
 import { get, post, put } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateTime, toPaise, toRupeesInput } from '../lib/format';
@@ -153,12 +154,14 @@ export default function Staff() {
               label: t('common.actions'),
               value: () => '',
               render: (s) => (
-                <div className="row no-print">
-                  <button className="btn small" onClick={() => setEditing(s)}>{t('common.edit')}</button>
-                  <button className="btn small" onClick={() => void act(s, 'reset-password')}>{t('staff.resetPassword')}</button>
-                  {s.deviceId && <button className="btn small" onClick={() => void act(s, 'reset-device')}>{t('staff.resetDevice')}</button>}
-                  <button className="btn small" onClick={() => void act(s, 'force-logout')}>{t('staff.forceLogout')}</button>
-                </div>
+                <RowActions
+                  actions={[
+                    { icon: Pencil, label: t('common.edit'), onClick: () => setEditing(s) },
+                    { icon: KeyRound, label: t('staff.resetPassword'), onClick: () => void act(s, 'reset-password') },
+                    { icon: Smartphone, label: t('staff.resetDevice'), onClick: () => void act(s, 'reset-device'), hidden: !s.deviceId },
+                    { icon: LogOut, label: t('staff.forceLogout'), tone: 'danger', onClick: () => void act(s, 'force-logout') },
+                  ]}
+                />
               ),
             },
           ]}
@@ -241,6 +244,7 @@ export function Roles() {
           title={t('role.title')}
           rows={data}
           onRow={(r) => setEditing(r)}
+          actions={(r) => [{ icon: Pencil, label: t('common.edit'), onClick: () => setEditing(r) }]}
           columns={[
             { key: 'name', label: t('common.name') },
             { key: 'baseRole', label: t('role.baseRole'), value: (r) => t(`roles.${r.baseRole}`) },

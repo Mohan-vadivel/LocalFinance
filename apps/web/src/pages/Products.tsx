@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Pencil } from 'lucide-react';
 import { FREQUENCIES, INTEREST_METHODS, PENALTY_TYPES, summarize } from '@localfinance/shared';
 import { clearLookups } from '../components/pickers';
 import { Badge, DataTable, ErrorBox, Field, FormModal, useToast } from '../components/ui';
@@ -136,6 +137,7 @@ export default function Products() {
           title={t('product.title')}
           rows={data}
           onRow={(p) => setEditing(p)}
+          actions={(p) => [{ icon: Pencil, label: t('common.edit'), onClick: () => setEditing(p) }]}
           columns={[
             { key: 'name', label: t('common.name') },
             { key: 'frequency', label: t('product.frequency'), value: (p) => t(`product.frequencies.${p.frequency}`) },

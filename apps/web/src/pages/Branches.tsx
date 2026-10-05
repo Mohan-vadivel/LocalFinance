@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Pencil } from 'lucide-react';
 import { BranchPicker, clearLookups } from '../components/pickers';
 import { MapView } from '../components/MapView';
 import { Badge, DataTable, ErrorBox, Field, FormModal } from '../components/ui';
@@ -48,6 +49,7 @@ export default function Branches() {
           title={t('branch.title')}
           rows={branches.data}
           onRow={can('branch.manage') ? (r) => setBranch(r) : undefined}
+          actions={can('branch.manage') ? (r) => [{ icon: Pencil, label: t('common.edit'), onClick: () => setBranch(r) }] : undefined}
           columns={[
             { key: 'code', label: t('branch.code') },
             { key: 'name', label: t('common.name') },
@@ -63,6 +65,7 @@ export default function Branches() {
           title={t('locationMod.title')}
           rows={locations.data}
           onRow={(r) => setLoc(r)}
+          actions={(r) => [{ icon: Pencil, label: t('common.edit'), onClick: () => setLoc(r) }]}
           columns={[
             { key: 'name', label: t('common.name') },
             { key: 'branch', label: t('common.branch'), value: (r) => r.branch.name },

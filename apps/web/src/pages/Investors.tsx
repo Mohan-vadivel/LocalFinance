@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ArrowDownToLine, Eye, HandCoins } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { INVESTOR_RETURN_TYPES } from '@localfinance/shared';
 import { BranchPicker, FundPicker, ModeSelect, clearLookups } from '../components/pickers';
-import { DataTable, ErrorBox, Field, FormModal, Loading, Stat, useToast } from '../components/ui';
+import { DataTable, ErrorBox, Field, FormModal, Loading, Stat, useToast, RowActions } from '../components/ui';
 import { get, post, put } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateIN, money, monthStart, toPaise, toRupeesInput, today } from '../lib/format';
@@ -86,6 +87,7 @@ export default function Investors() {
           title={t('investor.title')}
           rows={data}
           onRow={(i) => nav(`/investors/${i.id}`)}
+          actions={(i) => [{ icon: Eye, label: t('common.view'), onClick: () => nav(`/investors/${i.id}`) }]}
           columns={[
             { key: 'name', label: t('common.name') },
             { key: 'phone', label: t('common.phone') },
@@ -190,10 +192,12 @@ export function InvestorDetail() {
               value: () => '',
               render: (i) =>
                 isAdmin && i.status === 'ACTIVE' ? (
-                  <div className="row no-print">
-                    {i.balanceDue > 0 && <button className="btn small" onClick={() => setPaying({ investment: i, kind: 'PAYOUT' })}>{t('investor.payout')}</button>}
-                    <button className="btn small" onClick={() => setPaying({ investment: i, kind: 'WITHDRAWAL' })}>{t('investor.withdrawal')}</button>
-                  </div>
+                  <RowActions
+                    actions={[
+                      { icon: HandCoins, label: t('investor.payout'), onClick: () => setPaying({ investment: i, kind: 'PAYOUT' }), hidden: i.balanceDue <= 0 },
+                      { icon: ArrowDownToLine, label: t('investor.withdrawal'), onClick: () => setPaying({ investment: i, kind: 'WITHDRAWAL' }) },
+                    ]}
+                  />
                 ) : null,
             },
           ]}

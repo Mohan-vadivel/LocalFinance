@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { CheckCheck } from 'lucide-react';
 import { BranchPicker, ModeSelect } from '../components/pickers';
-import { Badge, DataTable, ErrorBox, Field, FormModal, Modal, Stat, useToast } from '../components/ui';
+import { Badge, DataTable, ErrorBox, Field, FormModal, Modal, Stat, useToast, RowActions } from '../components/ui';
 import { get, openFile, post, upload } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateIN, dateTime, money, toPaise, today } from '../lib/format';
@@ -246,7 +247,7 @@ export function Handovers() {
                 ) : r.agentId === profile?.id ? (
                   <span className="muted">{t('handover.notSelf')}</span>
                 ) : (
-                  <button className="btn small primary" onClick={() => setVerifying(r)}>{t('handover.verify')}</button>
+                  <RowActions actions={[{ icon: CheckCheck, label: t('handover.verify'), tone: 'primary', onClick: () => setVerifying(r) }]} />
                 ),
             },
           ]}

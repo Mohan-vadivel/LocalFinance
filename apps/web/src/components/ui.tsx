@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useState, type ComponentType, type ReactNode, type SVGProps } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as XLSX from 'xlsx';
 import { CircleAlert, CircleCheck, FileSpreadsheet, Inbox, LoaderCircle, Printer, X } from 'lucide-react';
@@ -164,6 +164,43 @@ export const statusTone = (s: string): 'ok' | 'warn' | 'danger' | 'brand' | unde
   ({ ACTIVE: 'ok', APPROVED: 'brand', REQUESTED: 'warn', SENT_BACK: 'warn', REJECTED: 'danger', WRITTEN_OFF: 'danger', BLACKLISTED: 'danger', SUSPENDED: 'danger', CLOSED: undefined, FORECLOSED: undefined })[s] as never;
 
 // ---------- Data table with Excel and PDF export ----------
+// ---------- Row action icons ----------
+export interface RowAction {
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  label: string;
+  onClick: () => void;
+  tone?: 'danger' | 'primary';
+  hidden?: boolean;
+  disabled?: boolean;
+}
+
+/** A square icon button for one action on a row; the label shows as a tooltip and is read by screen readers. */
+export function IconBtn({ icon: Icon, label, onClick, tone, disabled }: Omit<RowAction, 'hidden'>) {
+  return (
+    <button
+      type="button"
+      className={`icon-btn row-act ${tone ?? ''}`}
+      aria-label={label}
+      data-tip={label}
+      disabled={disabled}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+    >
+      <Icon aria-hidden />
+    </button>
+  );
+}
+
+export function RowActions({ actions }: { actions: RowAction[] }) {
+  return (
+    <div className="row-actions no-print">
+      {actions.filter((a) => !a.hidden).map((a) => <IconBtn key={a.label} {...a} />)}
+    </div>
+  );
+}
+
 export interface Column<T> {
   key: string;
   label: string;
@@ -175,13 +212,14 @@ export interface Column<T> {
   total?: boolean;
 }
 
-export function DataTable<T extends object>({ rows, columns, title, empty, onRow }: { rows: T[] | null | undefined; columns: Column<T>[]; title?: string; empty?: string; onRow?: (row: T) => void }) {
+export function DataTable<T extends object>({ rows, columns: cols, title, empty, onRow, actions }: { rows: T[] | null | undefined; columns: Column<T>[]; title?: string; empty?: string; onRow?: (row: T) => void; actions?: (row: T) => RowAction[] }) {
   const { t } = useTranslation();
   const list = rows ?? [];
+  const columns: Column<T>[] = actions ? [...cols, { key: '__actions', label: t('common.actions'), render: (r) => <RowActions actions={actions(r)} /> }] : cols;
   const raw = (r: T, c: Column<T>) => (c.value ? c.value(r) : (r as Record<string, unknown>)[c.key]);
   const exportExcel = () => {
     const data = list.map((r) =>
-      Object.fromEntries(columns.map((c) => {
+      Object.fromEntries(cols.filter((c) => c.key !== 'actions').map((c) => {
         const v = raw(r, c);
         return [c.label, c.money && typeof v === 'number' ? v / 100 : (v as string | number | null | undefined) ?? ''];
       })),
@@ -213,7 +251,7 @@ export function DataTable<T extends object>({ rows, columns, title, empty, onRow
           <thead>
             <tr>
               {columns.map((c) => (
-                <th key={c.key} className={c.money || c.num ? 'num' : ''}>
+                <th key={c.key} className={c.money || c.num ? 'num' : c.key === '__actions' || c.key === 'actions' ? 'actions-col no-print' : ''}>
                   {c.label}
                 </th>
               ))}
@@ -223,7 +261,7 @@ export function DataTable<T extends object>({ rows, columns, title, empty, onRow
             {list.map((r, i) => (
               <tr key={(r as { id?: string }).id ?? i} onClick={onRow ? () => onRow(r) : undefined} className={onRow ? 'clickable' : undefined}>
                 {columns.map((c) => (
-                  <td key={c.key} className={c.money || c.num ? 'num' : ''}>
+                  <td key={c.key} className={c.money || c.num ? 'num' : c.key === '__actions' || c.key === 'actions' ? 'actions-col no-print' : ''}>
                     {c.render ? c.render(r) : c.money ? money(raw(r, c) as number) : String(raw(r, c) ?? '')}
                   </td>
                 ))}
@@ -246,7 +284,7 @@ export function DataTable<T extends object>({ rows, columns, title, empty, onRow
             <tfoot>
               <tr>
                 {columns.map((c, i) => (
-                  <td key={c.key} className={c.money || c.num ? 'num' : ''}>
+                  <td key={c.key} className={c.money || c.num ? 'num' : c.key === '__actions' || c.key === 'actions' ? 'actions-col no-print' : ''}>
                     {c.total ? (c.money ? money(list.reduce((s, r) => s + Number(raw(r, c) ?? 0), 0)) : list.reduce((s, r) => s + Number(raw(r, c) ?? 0), 0)) : i === 0 ? t('common.total') : ''}
                   </td>
                 ))}

@@ -61,7 +61,9 @@
       "UPI": "UPI",
       "CARD": "Card",
       "BANK": "Bank"
-    }
+    },
+    "moveUp": "Move up",
+    "moveDown": "Move down"
   },
   "auth": {
     "login": "Log in",

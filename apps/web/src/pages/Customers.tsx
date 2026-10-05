@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Eye } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { LANGUAGES } from '@localfinance/shared';
 import { MapView } from '../components/MapView';
@@ -209,6 +210,7 @@ export default function Customers() {
           title={t('customerMod.title')}
           rows={data?.rows}
           onRow={(c) => nav(`/customers/${c.id}`)}
+          actions={(c) => [{ icon: Eye, label: t('common.view'), onClick: () => nav(`/customers/${c.id}`) }]}
           columns={[
             { key: 'code', label: t('customerMod.code') },
             { key: 'name', label: t('common.name') },

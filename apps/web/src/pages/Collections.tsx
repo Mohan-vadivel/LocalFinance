@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Undo2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BranchPicker, RoutePicker, StaffPicker } from '../components/pickers';
-import { Badge, DataTable, ErrorBox, Stat, useToast } from '../components/ui';
+import { Badge, DataTable, ErrorBox, Stat, useToast, RowActions } from '../components/ui';
 import { get } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateTime, money, today } from '../lib/format';
@@ -104,7 +105,7 @@ export default function Collections() {
               key: 'actions',
               label: t('common.actions'),
               value: () => '',
-              render: (r) => !r.reversedAt && can('collection.reverse') && <button className="btn small no-print" onClick={() => setReversing(r)}>{t('collection.reverse')}</button>,
+              render: (r) => <RowActions actions={[{ icon: Undo2, label: t('collection.reverse'), tone: 'danger', onClick: () => setReversing(r), hidden: !!r.reversedAt || !can('collection.reverse') }]} />,
             },
           ]}
         />

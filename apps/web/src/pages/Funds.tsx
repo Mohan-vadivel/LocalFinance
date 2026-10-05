@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ArrowLeftRight, CirclePlus, ReceiptText } from 'lucide-react';
 import { FUND_SOURCE_TYPES } from '@localfinance/shared';
 import { BranchPicker, FundPicker, ModeSelect, StaffPicker, clearLookups } from '../components/pickers';
-import { DataTable, ErrorBox, Field, FormModal, Modal, Stat, useToast } from '../components/ui';
+import { DataTable, ErrorBox, Field, FormModal, Modal, Stat, useToast, RowActions } from '../components/ui';
 import { get, post } from '../lib/api';
 import { dateIN, dateTime, money, toPaise, today } from '../lib/format';
 import { useLoad } from '../lib/hooks';
@@ -59,11 +60,13 @@ export default function Funds() {
               label: t('common.actions'),
               value: () => '',
               render: (f) => (
-                <div className="row no-print">
-                  {f.sourceType !== 'INVESTOR' && <button className="btn small" onClick={() => setDepositing(f)}>{t('fund.deposit')}</button>}
-                  <button className="btn small" onClick={() => setTransferring(f)}>{t('fund.transfer')}</button>
-                  <button className="btn small" onClick={() => setViewing(f)}>{t('fund.transactions')}</button>
-                </div>
+                <RowActions
+                  actions={[
+                    { icon: CirclePlus, label: t('fund.deposit'), onClick: () => setDepositing(f), hidden: f.sourceType === 'INVESTOR' },
+                    { icon: ArrowLeftRight, label: t('fund.transfer'), onClick: () => setTransferring(f) },
+                    { icon: ReceiptText, label: t('fund.transactions'), onClick: () => setViewing(f) },
+                  ]}
+                />
               ),
             },
           ]}

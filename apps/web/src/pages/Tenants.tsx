@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { DataTable, ErrorBox, Field, FormModal, Stat, statusTone, Badge } from '../components/ui';
+import { Ban, CircleCheck, Eye, Pencil } from 'lucide-react';
+import { DataTable, ErrorBox, Field, FormModal, Stat, statusTone, Badge, RowActions } from '../components/ui';
 import { get, patch, post, setSupportTenant } from '../lib/api';
 import { dateIN } from '../lib/format';
 import { useLoad } from '../lib/hooks';
@@ -75,17 +76,15 @@ export default function Tenants() {
               label: t('common.actions'),
               value: () => '',
               render: (r) => (
-                <div className="row">
-                  <button className="btn small" onClick={() => setEditing(r)}>{t('common.edit')}</button>
-                  {r.status === 'ACTIVE' ? (
-                    <button className="btn small" onClick={() => void setStatus(r, 'SUSPENDED')}>{t('tenant.suspend')}</button>
-                  ) : (
-                    <button className="btn small" onClick={() => void setStatus(r, 'ACTIVE')}>{t('tenant.activate')}</button>
-                  )}
-                  {r.supportAccessUntil && new Date(r.supportAccessUntil) > new Date() && (
-                    <button className="btn small" onClick={() => open(r)}>{t('common.view')}</button>
-                  )}
-                </div>
+                <RowActions
+                  actions={[
+                    { icon: Eye, label: t('common.view'), onClick: () => open(r), hidden: !(r.supportAccessUntil && new Date(r.supportAccessUntil) > new Date()) },
+                    { icon: Pencil, label: t('common.edit'), onClick: () => setEditing(r) },
+                    r.status === 'ACTIVE'
+                      ? { icon: Ban, label: t('tenant.suspend'), tone: 'danger', onClick: () => void setStatus(r, 'SUSPENDED') }
+                      : { icon: CircleCheck, label: t('tenant.activate'), tone: 'primary', onClick: () => void setStatus(r, 'ACTIVE') },
+                  ]}
+                />
               ),
             },
           ]}

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Eye, Send, Undo2 } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { BranchPicker, FundPicker, ModeSelect, ProductPicker } from '../components/pickers';
-import { Badge, DataTable, ErrorBox, Field, FormModal, Loading, Stat, Tabs, statusTone, useToast } from '../components/ui';
+import { Badge, DataTable, ErrorBox, Field, FormModal, Loading, Stat, Tabs, statusTone, useToast, RowActions } from '../components/ui';
 import { get, post, put } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateIN, dateTime, money, toPaise, toRupeesInput, today } from '../lib/format';
@@ -214,6 +215,7 @@ function LoanTable({ rows, onRow }: { rows: LoanRow[] | undefined; onRow: (l: Lo
       title={t('loanMod.title')}
       rows={rows}
       onRow={onRow}
+      actions={(l) => [{ icon: Eye, label: t('common.view'), onClick: () => onRow(l) }]}
       columns={[
         { key: 'number', label: t('loanMod.number') },
         { key: 'customer', label: t('common.customer'), value: (l) => `${l.customer.name} (${l.customer.code})` },
@@ -404,10 +406,12 @@ export function LoanDetail() {
                 value: () => '',
                 render: (c) =>
                   !c.reversedAt && (
-                    <div className="row no-print">
-                      {can('collection.reverse') && <button className="btn small" onClick={() => setReversing(c)}>{t('collection.reverse')}</button>}
-                      <button className="btn small" onClick={() => void resend(c)}>{t('collection.resend')}</button>
-                    </div>
+                    <RowActions
+                      actions={[
+                        { icon: Send, label: t('collection.resend'), onClick: () => void resend(c) },
+                        { icon: Undo2, label: t('collection.reverse'), tone: 'danger', onClick: () => setReversing(c), hidden: !can('collection.reverse') },
+                      ]}
+                    />
                   ),
               },
             ]}

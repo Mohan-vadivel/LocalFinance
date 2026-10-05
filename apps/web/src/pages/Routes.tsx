@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ChevronDown, ChevronUp, Eye, Trash2 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { BranchPicker, clearLookups, LocationPicker, StaffPicker } from '../components/pickers';
 import { MapView } from '../components/MapView';
-import { DataTable, ErrorBox, Field, FormModal, Loading, useToast } from '../components/ui';
+import { DataTable, ErrorBox, Field, FormModal, Loading, useToast, RowActions } from '../components/ui';
 import { del, get, post, put } from '../lib/api';
 import { dateIN, today } from '../lib/format';
 import { useLoad } from '../lib/hooks';
@@ -86,6 +87,7 @@ export default function Routes() {
           title={t('routeMod.title')}
           rows={data}
           onRow={(r) => nav(`/routes/${r.id}`)}
+          actions={(r) => [{ icon: Eye, label: t('common.view'), onClick: () => nav(`/routes/${r.id}`) }]}
           columns={[
             { key: 'name', label: t('common.name') },
             { key: 'location', label: t('common.location'), value: (r) => r.location.name },
@@ -173,7 +175,7 @@ export function RouteDetail() {
             { key: 'fromDate', label: t('routeMod.fromDate'), value: (r) => dateIN(r.fromDate) },
             { key: 'toDate', label: t('routeMod.toDate'), value: (r) => (r.toDate ? dateIN(r.toDate) : '-') },
             { key: 'current', label: t('common.status'), value: (r) => (r.current ? t('common.active') : t('common.inactive')) },
-            { key: 'x', label: '', value: () => '', render: (r) => <button className="btn small" onClick={() => void unassign(r.id)}>{t('common.delete')}</button> },
+            { key: 'actions', label: t('common.actions'), value: () => '', render: (r) => <RowActions actions={[{ icon: Trash2, label: t('common.delete'), tone: 'danger', onClick: () => void unassign(r.id) }]} /> },
           ]}
         />
       </div>
@@ -197,8 +199,12 @@ export function RouteDetail() {
                     {c.lat == null && <span className="badge warn">{t('customerMod.gps')} -</span>}
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
-                    <button className="btn small" aria-label="Up" onClick={() => move(i, -1)} disabled={i === 0}>↑</button>{' '}
-                    <button className="btn small" aria-label="Down" onClick={() => move(i, 1)} disabled={i === list.length - 1}>↓</button>
+                    <RowActions
+                      actions={[
+                        { icon: ChevronUp, label: t('common.moveUp'), onClick: () => move(i, -1), disabled: i === 0 },
+                        { icon: ChevronDown, label: t('common.moveDown'), onClick: () => move(i, 1), disabled: i === list.length - 1 },
+                      ]}
+                    />
                   </td>
                 </tr>
               ))}
