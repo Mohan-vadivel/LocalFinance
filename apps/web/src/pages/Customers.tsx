@@ -86,10 +86,10 @@ export function CustomerForm({ customer, onClose, onSaved }: { customer: Partial
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const capture = () => {
     setGpsError('');
-    if (!navigator.geolocation) return setGpsError(t('mobile.locationNeeded'));
+    if (!navigator.geolocation) return setGpsError(t('customerMod.gpsDenied'));
     navigator.geolocation.getCurrentPosition(
       (p) => setF((x) => ({ ...x, lat: Number(p.coords.latitude.toFixed(6)), lng: Number(p.coords.longitude.toFixed(6)) })),
-      () => setGpsError(t('mobile.locationNeeded')),
+      () => setGpsError(t('customerMod.gpsDenied')),
       { enableHighAccuracy: true, timeout: 15000 },
     );
   };
@@ -99,6 +99,7 @@ export function CustomerForm({ customer, onClose, onSaved }: { customer: Partial
       title={customer.id ? `${t('common.edit')}: ${customer.name}` : t('customerMod.new')}
       onClose={onClose}
       onSubmit={async () => {
+        if (!f.locationId) throw new Error(t('customerMod.chooseLocation'));
         const body = {
           name: f.name,
           phone: f.phone,
@@ -149,7 +150,20 @@ export function CustomerForm({ customer, onClose, onSaved }: { customer: Partial
       <Field label={t('customerMod.monthlyIncome')}><input type="number" min="0" value={f.monthlyIncome} onChange={set('monthlyIncome')} /></Field>
       <Field label={t('common.branch')}><BranchPicker value={branchId} onChange={(v) => { setBranchId(v); setF({ ...f, locationId: '', routeId: '' }); }} /></Field>
       <Field label={t('common.location')}><LocationPicker branchId={branchId || undefined} value={f.locationId} onChange={(v) => setF({ ...f, locationId: v, routeId: '' })} /></Field>
-      <Field label={t('common.route')}><RoutePicker locationId={f.locationId || undefined} value={f.routeId} onChange={(v) => setF({ ...f, routeId: v })} /></Field>
+      <Field label={t('common.route')}>
+        <RoutePicker
+          branchId={branchId || undefined}
+          locationId={f.locationId || undefined}
+          value={f.routeId}
+          onChange={(v) => setF((x) => ({ ...x, routeId: v }))}
+          onPickRoute={(r) => {
+            // Choosing a route fills in its area and branch, so the two can never disagree.
+            if (!r) return;
+            setF((x) => ({ ...x, routeId: r.id, locationId: r.locationId }));
+            setBranchId(r.location.branchId);
+          }}
+        />
+      </Field>
       <Field label={t('customerMod.routeSeq')}><input type="number" min="1" value={f.routeSeq} onChange={set('routeSeq')} /></Field>
       <Field label={t('customerMod.guarantorName')}><input value={f.guarantorName} onChange={set('guarantorName')} /></Field>
       <Field label={t('customerMod.guarantorPhone')}><input value={f.guarantorPhone} onChange={set('guarantorPhone')} inputMode="tel" /></Field>
@@ -162,7 +176,7 @@ export function CustomerForm({ customer, onClose, onSaved }: { customer: Partial
           <span className="muted">{t('customerMod.pickOnMap')}</span>
         </div>
         {gpsError && <div className="error-box">{gpsError}</div>}
-        <MapView height={260} pins={f.lat != null && f.lng != null ? [{ id: 'c', lat: f.lat, lng: f.lng, label: '•', title: f.name }] : []} onPick={(lat, lng) => setF({ ...f, lat, lng })} />
+        <MapView height={260} pins={f.lat != null && f.lng != null ? [{ id: 'c', lat: f.lat, lng: f.lng, label: '•', title: f.name }] : []} onPick={(lat, lng) => { setGpsError(''); setF((x) => ({ ...x, lat, lng })); }} />
       </div>
     </FormModal>
   );

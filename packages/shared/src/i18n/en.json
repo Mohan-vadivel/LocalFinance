@@ -283,7 +283,9 @@
       "OTHER": "Other"
     },
     "blacklistWarning": "This customer, or the same person under another record, is blacklisted.",
-    "closedOn": "Closed on"
+    "closedOn": "Closed on",
+    "gpsDenied": "Couldn't get this device's location. Allow location for this site in the browser, or click the map to mark the customer's place.",
+    "chooseLocation": "Choose the customer's location (area), or pick a route to fill it in."
   },
   "history": {
     "pastLoans": "Past loans",

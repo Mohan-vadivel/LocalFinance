@@ -44,10 +44,16 @@ export function LocationPicker(p: PickerProps & { branchId?: string }) {
   return <Picker {...p} options={data} placeholder={t('common.location')} />;
 }
 
-export function RoutePicker(p: PickerProps & { branchId?: string; locationId?: string }) {
+export interface RouteOpt extends Opt { locationId: string; location: { name: string; branchId: string } }
+/** Routes, optionally narrowed to a branch or location. `onPickRoute` also gets the chosen route's location and branch. */
+export function RoutePicker(p: PickerProps & { branchId?: string; locationId?: string; onPickRoute?: (r: RouteOpt | null) => void }) {
   const { t } = useTranslation();
-  const { data } = useLoad(() => cached(`routes:${p.branchId ?? ''}:${p.locationId ?? ''}`, () => get<Opt[]>('/routes', { branchId: p.branchId, locationId: p.locationId })), [p.branchId, p.locationId]);
-  return <Picker {...p} options={data} placeholder={t('common.route')} />;
+  const { data } = useLoad(() => cached(`routes:${p.branchId ?? ''}:${p.locationId ?? ''}`, () => get<RouteOpt[]>('/routes', { branchId: p.branchId, locationId: p.locationId })), [p.branchId, p.locationId]);
+  const onChange = (v: string) => {
+    p.onChange(v);
+    p.onPickRoute?.((data ?? []).find((r) => r.id === v) ?? null);
+  };
+  return <Picker {...p} onChange={onChange} options={data} placeholder={t('common.route')} />;
 }
 
 export function StaffPicker(p: PickerProps & { role?: string; branchId?: string }) {
