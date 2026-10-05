@@ -186,6 +186,56 @@ describe('collections on the phone', () => {
     assert.ok((await ok(api('GET', `/reports/line-abstract?${q}`, { token: owner }))).profit);
   });
 
+  test('line list, growth and week-day reports agree with the other reports', async () => {
+    const m = today().slice(0, 7);
+    const q = `from=${m}-01&to=${today()}`;
+    const list = await ok(api('GET', `/reports/line-list?routeId=${routeId}&month=${m}`, { token: manager }));
+    assert.equal(list.route.id, routeId);
+    assert.equal(list.from, `${m}-01`);
+    assert.equal(list.days.length, list.totals.daily.length);
+    assert.ok(list.days.length >= 28 && list.days[list.days.length - 1].slice(0, 7) === m);
+    assert.ok(list.rows.length >= 6, 'every loan on the line is listed');
+    const seqs = list.rows.map((r) => r.routeSeq).filter((x) => x != null);
+    assert.deepEqual(seqs, [...seqs].sort((a, b) => a - b), 'rows follow the route order');
+    for (const r of list.rows) {
+      assert.equal(r.daily.length, list.days.length);
+      assert.equal(r.total, r.daily.reduce((s, x) => s + x, 0));
+    }
+    assert.equal(list.totals.total, list.rows.reduce((s, r) => s + r.total, 0));
+    assert.equal(list.totals.total, list.totals.daily.reduce((s, x) => s + x, 0));
+    const chitra = list.rows.find((r) => r.loanId === loan.id);
+    assert.ok(chitra && chitra.daily[list.days.indexOf(today())] >= 12000 + 5000 + 1000, "today's collections are in today's column");
+    const abs = await ok(api('GET', `/reports/line-abstract?${q}&routeId=${routeId}`, { token: manager }));
+    assert.equal(list.rows.filter((r) => !r.closedOn).reduce((s, r) => s + r.closing, 0), abs.lines.reduce((s, l) => s + l.balance, 0));
+    assert.equal((await api('GET', `/reports/line-list?routeId=${routeId}&from=2020-01-01&to=${today()}`, { token: manager })).status, 400);
+    assert.equal((await api('GET', `/reports/line-list?routeId=nope&month=${m}`, { token: manager })).status, 404);
+
+    const growth = await ok(api('GET', '/reports/growth', { token: owner }));
+    assert.equal(growth.length, 12);
+    assert.equal(growth[11].month, m);
+    const stmt = await ok(api('GET', `/reports/daily-statement?${q}`, { token: owner }));
+    assert.equal(growth[11].outstanding, stmt[0].loanBalance);
+    const disb = await ok(api('GET', `/reports/disbursements?from=${growth[0].month}-01&to=${today()}`, { token: owner }));
+    assert.equal(growth.reduce((s, g) => s + g.loanAmount, 0), disb.reduce((s, d) => s + d.principal, 0));
+    assert.equal(growth.reduce((s, g) => s + g.loans, 0), disb.length);
+    assert.equal(growth[11].closingAccounts, (await ok(api('GET', '/dashboard', { token: owner }))).activeLoans);
+    assert.ok(growth[11].interest != null);
+    const short = await ok(api('GET', `/reports/growth?months=3&routeId=${routeId}`, { token: manager }));
+    assert.equal(short.length, 3);
+    assert.equal(short[2].interest, null, 'a manager without P&L access sees no income');
+    assert.equal((await api('GET', '/reports/growth?months=99', { token: owner })).status, 400);
+
+    const week = await ok(api('GET', `/reports/weekday?${q}`, { token: manager }));
+    assert.deepEqual(week.map((w) => w.weekday), [1, 2, 3, 4, 5, 6, 0]);
+    const daily = await ok(api('GET', `/reports/daily-collection?${q}`, { token: manager }));
+    assert.equal(week.reduce((s, w) => s + w.amount, 0), daily.reduce((s, d) => s + d.collected, 0));
+    for (const w of week) {
+      assert.equal(w.amount, w.cash + w.upi);
+      assert.equal(w.average, w.days ? Math.round(w.amount / w.days) : 0);
+    }
+    assert.equal(week.reduce((s, w) => s + w.days, 0), Number(today().slice(8)));
+  });
+
   test('refuses more than the balance', async () => {
     const r = await api('POST', '/collections', { token: agent, body: { loanId: loan.id, amount: 99_999_999, mode: 'CASH', clientRef: randomUUID() } });
     assert.equal(r.status, 400);
@@ -362,9 +412,11 @@ describe('investors and profit and loss', () => {
   });
 
   test('every report answers', async () => {
-    for (const r of ['daily-collection', 'disbursements', 'outstanding', 'ageing', 'demand-vs-collection', 'agent-performance', 'cash-differences', 'fund-utilisation', 'income', 'closed-loans', 'location-wise', 'investor-statement', 'daily-statement', 'pending-list', 'line-abstract']) {
+    for (const r of ['daily-collection', 'disbursements', 'outstanding', 'ageing', 'demand-vs-collection', 'agent-performance', 'cash-differences', 'fund-utilisation', 'income', 'closed-loans', 'location-wise', 'investor-statement', 'daily-statement', 'pending-list', 'line-abstract', 'growth', 'weekday', 'scheme-wise']) {
       await ok(api('GET', `/reports/${r}?from=2020-01-01&to=${today()}`, { token: owner }));
     }
+    // The line list is a month sheet: one month at a time, for one line or all of them.
+    await ok(api('GET', `/reports/line-list?month=${today().slice(0, 7)}`, { token: owner }));
     const dash = await ok(api('GET', '/dashboard', { token: manager }));
     assert.ok(dash.activeLoans > 0);
     assert.ok(dash.routes.length >= 1);
@@ -413,9 +465,134 @@ describe('staff', () => {
     assert.equal((await api('GET', '/reports/outstanding', { token: auditor })).status, 401);
   });
 
+  test('scheme-wise report matches outstanding; owner can download a backup without passwords', async () => {
+    const schemes = await ok(api('GET', `/reports/scheme-wise?from=2020-01-01&to=${today()}`, { token: owner }));
+    const out = await ok(api('GET', `/reports/outstanding?to=${today()}`, { token: owner }));
+    assert.equal(schemes.reduce((s, r) => s + r.activeLoans, 0), out.length);
+    assert.equal(schemes.reduce((s, r) => s + r.totalOutstanding, 0), out.reduce((s, r) => s + r.totalOutstanding, 0));
+    const backup = await ok(api('GET', '/settings/backup', { token: owner }));
+    assert.equal(backup.format, 'localfinance-backup');
+    assert.ok(backup.tables.Loan.length > 0 && backup.tables.Collection.length > 0);
+    assert.ok(!JSON.stringify(backup).includes('passwordHash'));
+    assert.equal((await api('GET', '/settings/backup', { token: manager })).status, 403);
+  });
+
   test('every change is in the audit log', async () => {
     const log = await ok(api('GET', '/audit', { token: owner }));
     const actions = new Set(log.rows.map((r) => r.action));
     for (const a of ['DISBURSE', 'COLLECT', 'REVERSE', 'HANDOVER', 'CLOSE_DAY', 'REOPEN_DAY', 'FORCE_LOGOUT']) assert.ok(actions.has(a), `audit has ${a}`);
+  });
+});
+
+describe('import from the old system', () => {
+  const day = (n) => new Date(Date.now() + 330 * 60_000 + n * 86_400_000).toISOString().slice(0, 10);
+  const ddmmyyyy = (d) => `${d.slice(8, 10)}-${d.slice(5, 7)}-${d.slice(0, 4)}`;
+  const serial = (d) => Math.round((Date.parse(`${d}T00:00:00Z`) - Date.UTC(1899, 11, 30)) / 86_400_000);
+  let body, before, arun;
+
+  test('preview catches bad rows and writes nothing', async () => {
+    const routes = await ok(api('GET', '/routes', { token: owner }));
+    const daily = routes.find((r) => r.name === 'Anna Nagar Daily 1');
+    const products = await ok(api('GET', '/products', { token: owner }));
+    const product = products.find((p) => p.frequency === 'DAILY' && p.interestMethod === 'FLAT');
+    arun = (await ok(api('GET', '/customers?q=Arun', { token: owner }))).rows[0];
+    const rows = [
+      { rowNo: 2, accountNo: 'OLD-101', name: 'Murugesan', nameTamil: 'முருகேசன்', phone: '98765 43210', loanAmount: '10,000', totalPayable: 12000, loanDate: ddmmyyyy(day(-30)), instalment: 120, received: '3,600', balance: 8400 },
+      { rowNo: 3, accountNo: 'OLD-102', name: 'வள்ளி', phone: '+91 98765 43211', line: 'KK Nagar Weekly', loanAmount: 20000, totalPayable: 24000, loanDate: serial(day(-20)), instalment: 240, balance: '15,000' },
+      { rowNo: 4, accountNo: 'OLD-103', name: 'Arun', phone: arun.phone, loanAmount: 5000, totalPayable: 6000, loanDate: day(-10), instalment: 60, received: 0 },
+      { rowNo: 5, accountNo: 'OLD-104', name: 'No Phone', loanAmount: 5000, loanDate: day(-5) },
+      { rowNo: 6, accountNo: 'OLD-105', name: 'Bad Date', phone: '9876500005', loanAmount: 5000, loanDate: 'yesterday' },
+      { rowNo: 7, accountNo: 'OLD-106', name: 'Bad Line', phone: '9876500006', line: 'Nowhere', loanAmount: 5000, loanDate: day(-5) },
+      { rowNo: 8, accountNo: 'OLD-107', name: 'Mismatch', phone: '9876500007', loanAmount: 5000, totalPayable: 6000, received: 1000, balance: 1000, loanDate: day(-5) },
+      { rowNo: 9, accountNo: 'OLD-101', name: 'Twice', phone: '9876500008', loanAmount: 5000, loanDate: day(-5) },
+    ];
+    body = { routeId: daily.id, productId: product.id, rows, fileName: 'old.xlsx' };
+    assert.equal((await api('POST', '/imports/preview', { token: manager, body })).status, 403);
+    const custBefore = (await ok(api('GET', '/customers', { token: owner }))).total;
+    const p = await ok(api('POST', '/imports/preview', { token: owner, body }));
+    const st = Object.fromEntries(p.rows.map((r) => [r.rowNo, r]));
+    assert.equal(st[2].status, 'NEW');
+    assert.equal(st[2].tenure, 100);
+    assert.equal(st[3].status, 'NEW');
+    assert.equal(st[3].line, 'KK Nagar Weekly');
+    assert.equal(st[3].paid, 900_000);
+    assert.equal(st[4].customer.action, 'REUSE');
+    assert.equal(st[5].errors[0].code, 'required');
+    assert.equal(st[6].errors[0].code, 'badDate');
+    assert.equal(st[7].errors[0].code, 'lineNotFound');
+    assert.equal(st[8].errors[0].code, 'paidMismatch');
+    assert.equal(st[9].errors[0].code, 'duplicateInFile');
+    assert.deepEqual([p.summary.newLoans, p.summary.newCustomers, p.summary.reusedCustomers, p.summary.errors], [3, 2, 1, 5]);
+    assert.equal((await ok(api('GET', '/customers', { token: owner }))).total, custBefore);
+  });
+
+  test('import refuses rows with errors unless told to skip them, then creates customers and loans', async () => {
+    const r = await api('POST', '/imports/run', { token: owner, body });
+    assert.equal(r.status, 400);
+    assert.equal(r.data.code, 'import.hasErrors');
+    before = {
+      dash: await ok(api('GET', '/dashboard', { token: owner })),
+      day: await ok(api('GET', `/reports/daily-collection?from=${today()}&to=${today()}`, { token: owner })),
+      custs: (await ok(api('GET', '/customers', { token: owner }))).total,
+      audit: (await ok(api('GET', '/audit', { token: owner }))).rows.filter((x) => x.action === 'IMPORT').length,
+    };
+    const res = await ok(api('POST', '/imports/run', { token: owner, body: { ...body, skipErrors: true } }));
+    assert.equal(res.summary.imported, 3);
+    assert.equal((await ok(api('GET', '/customers', { token: owner }))).total, before.custs + 2);
+    const audit = (await ok(api('GET', '/audit', { token: owner }))).rows.filter((x) => x.action === 'IMPORT').length;
+    assert.equal(audit, before.audit + 1);
+  });
+
+  test('running it again does not duplicate', async () => {
+    const res = await ok(api('POST', '/imports/run', { token: owner, body: { ...body, skipErrors: true } }));
+    assert.equal(res.summary.imported, 0);
+    assert.equal(res.summary.existing, 4, 'the repeated account number in the file now matches the imported loan too');
+    assert.equal((await ok(api('GET', '/customers', { token: owner }))).total, before.custs + 2);
+    const found = await ok(api('GET', '/loans?q=OLD-101', { token: owner }));
+    assert.equal(found.total, 1);
+  });
+
+  test('imported loans carry the given balance and the old account number', async () => {
+    const list = await ok(api('GET', '/loans?q=OLD-101', { token: owner }));
+    const loan = await ok(api('GET', `/loans/${list.rows[0].id}`, { token: owner }));
+    assert.equal(loan.status, 'ACTIVE');
+    assert.equal(loan.legacyNo, 'OLD-101');
+    assert.equal(loan.migrated, true);
+    assert.equal(loan.position.totalOutstanding, 840_000);
+    assert.equal(loan.position.penaltyOutstanding, 0);
+    assert.equal(loan.instalments.length, 100);
+    assert.equal(loan.instalments.reduce((s, i) => s + i.principalDue + i.interestDue, 0), 1_200_000);
+    assert.equal(loan.instalments.reduce((s, i) => s + i.principalDue, 0), 1_000_000);
+    assert.equal(loan.ledger.at(-1).balance, 840_000);
+    assert.equal(loan.collections.length, 0);
+    assert.equal(loan.customer.name, 'Murugesan (முருகேசன்)');
+    const second = await ok(api('GET', `/loans/${(await ok(api('GET', '/loans?q=OLD-102', { token: owner }))).rows[0].id}`, { token: owner }));
+    assert.equal(second.position.totalOutstanding, 1_500_000);
+    assert.equal(second.customer.phone, '9876543211');
+    // The office desk finds it by the old number on the route day screen.
+    const routeDay = await ok(api('GET', `/routes/${body.routeId}/day`, { token: owner }));
+    const l = routeDay.customers.flatMap((c) => c.loans).find((x) => x.legacyNo === 'OLD-101');
+    assert.equal(l.outstanding, 840_000);
+    assert.equal(l.totalPaid, 360_000);
+    const arunLoans = await ok(api('GET', `/loans?customerId=${arun.id}`, { token: owner }));
+    assert.ok(arunLoans.rows.some((x) => x.legacyNo === 'OLD-103'));
+  });
+
+  test("today's collections, disbursements and cash are unaffected; outstanding includes the balances", async () => {
+    const dash = await ok(api('GET', '/dashboard', { token: owner }));
+    assert.equal(dash.collectedToday, before.dash.collectedToday);
+    assert.equal(dash.disbursedToday, before.dash.disbursedToday);
+    assert.equal(dash.newLoans, before.dash.newLoans);
+    assert.equal(dash.portfolio, before.dash.portfolio + 840_000 + 1_500_000 + 600_000);
+    const dayCol = await ok(api('GET', `/reports/daily-collection?from=${today()}&to=${today()}`, { token: owner }));
+    const collected = (rows) => rows.reduce((s, r) => s + r.collected, 0);
+    assert.equal(collected(dayCol), collected(before.day));
+    // The imported loans do have instalments due today, so today's demand grows.
+    assert.ok(dayCol.reduce((s, r) => s + r.due, 0) > before.day.reduce((s, r) => s + r.due, 0));
+    const stmt = await ok(api('GET', `/reports/daily-statement?from=${today()}&to=${today()}`, { token: owner }));
+    assert.equal(stmt[0].loans, 0 + before.dash.newLoans);
+    const branchId = (await ok(api('GET', '/branches', { token: owner })))[0].id;
+    const book = await ok(api('GET', `/daybook?branchId=${branchId}&from=${today()}`, { token: owner }));
+    assert.ok(!book.entries.some((e) => /OLD-10/.test(e.particulars)));
   });
 });

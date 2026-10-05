@@ -10,6 +10,7 @@ import { AuthController, AuthService } from './modules/auth';
 import { CollectionsController, CollectionsService } from './modules/collections';
 import { CustomersController, CustomersService } from './modules/customers';
 import { FilesController } from './modules/files';
+import { ImportsController, ImportsService } from './modules/imports';
 import { LoansController, LoansService } from './modules/loans';
 import {
   DaybookController,
@@ -50,6 +51,7 @@ if (!secret || secret.length < 16) {
     HandoverController,
     ReportsController,
     FilesController,
+    ImportsController,
   ],
   providers: [
     PrismaService,
@@ -71,6 +73,7 @@ if (!secret || secret.length < 16) {
     ProfitLossService,
     ReportsService,
     DashboardService,
+    ImportsService,
   ],
 })
 export class AppModule {}

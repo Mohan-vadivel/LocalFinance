@@ -10,6 +10,7 @@ interface RouteRow { id: string; name: string; location?: { name: string }; assi
 interface DayLoan {
   id: string;
   number: string;
+  legacyNo?: string | null;
   principal: number;
   instalmentAmount: number;
   dueNow: number;
@@ -37,6 +38,9 @@ function findLoan(day: RouteDay | null | undefined, typed: string): Match | null
   const digits = q.replace(/\D/g, '');
   const exact = all.find((m) => m.loan.number.toLowerCase() === q || m.customer.code.toLowerCase() === q);
   if (exact) return exact;
+  // Old account numbers from the previous software, kept on imported loans.
+  const legacy = all.filter((m) => m.loan.legacyNo?.toLowerCase() === q);
+  if (legacy.length === 1) return legacy[0];
   if (digits && digits === q.replace(/[^\d]/g, '') && /^\D*\d+$/.test(q)) {
     const byNumber = all.filter((m) => Number(m.loan.number.replace(/\D/g, '')) === Number(digits));
     if (byNumber.length === 1) return byNumber[0];
@@ -199,14 +203,14 @@ export default function DeskEntry() {
                   <button className="btn primary" disabled={busy || !match || !(Number(amount) > 0)}>{t('desk.save')}</button>
                 </div>
                 <datalist id="desk-loans">
-                  {(day.data?.customers ?? []).flatMap((c) => c.loans.map((l) => <option key={l.id} value={l.number}>{`${c.name} · ${c.code}`}</option>))}
+                  {(day.data?.customers ?? []).flatMap((c) => c.loans.map((l) => <option key={l.id} value={l.number}>{`${c.name} · ${c.code}${l.legacyNo ? ` · ${l.legacyNo}` : ''}`}</option>))}
                 </datalist>
               </form>
               <ErrorBox error={error} />
               {message && <p role="status"><Badge tone="ok">{message}</Badge></p>}
               {match && loan && (
                 <div style={{ marginTop: 12 }}>
-                  <h3 style={{ margin: '0 0 4px' }}>{match.customer.name} <span className="muted">· {loan.number} · {match.customer.phone}</span></h3>
+                  <h3 style={{ margin: '0 0 4px' }}>{match.customer.name} <span className="muted">· {loan.number}{loan.legacyNo ? ` (${loan.legacyNo})` : ''} · {match.customer.phone}</span></h3>
                   <div className="grid k4">
                     <Stat label={t('desk.loanAmount')} value={money(loan.principal)} sub={`${t('desk.loanDate')}: ${dateIN(loan.disbursedOn)}`} />
                     <Stat label={t('desk.totalPayable')} value={money(loan.totalPayable)} sub={`${t('desk.maturity')}: ${dateIN(loan.maturityDate)}`} />

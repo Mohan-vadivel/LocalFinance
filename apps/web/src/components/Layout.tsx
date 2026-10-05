@@ -5,6 +5,7 @@ import { LANGUAGES, type Permission } from '@localfinance/shared';
 import {
   Keyboard,
   Sheet,
+  FileUp,
   TableProperties,
   ArrowLeftRight,
   BadgeCheck,
@@ -95,6 +96,7 @@ const groups: { title: string; items: Item[] }[] = [
       { to: '/reports/line-abstract', key: 'nav.lineAbstract', perms: ['report.view'], icon: Sheet },
       { to: '/profit-loss', key: 'nav.profitLoss', perms: ['pl.view'], icon: TrendingUp },
       { to: '/audit', key: 'nav.audit', perms: ['audit.view', 'staff.manage'], icon: History },
+      { to: '/import', key: 'nav.import', perms: ['settings.manage'], icon: FileUp },
       { to: '/settings', key: 'nav.settings', perms: ['settings.manage'], icon: Settings },
     ],
   },

@@ -34,6 +34,7 @@ export class CustomersService {
               { code: { contains: q.q, mode: 'insensitive' } },
               { idNumber: { contains: q.q, mode: 'insensitive' } },
               { loans: { some: { number: { contains: q.q, mode: 'insensitive' } } } },
+              { loans: { some: { legacyNo: { equals: q.q.trim(), mode: 'insensitive' } } } },
             ],
           }
         : {}),

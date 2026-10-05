@@ -10,6 +10,7 @@ import CollectionSummary from './pages/CollectionSummary';
 import DeskEntry from './pages/DeskEntry';
 import LineAbstract from './pages/LineAbstract';
 import LineList from './pages/LineList';
+import Import from './pages/Import';
 import Collections from './pages/Collections';
 import Customers, { CustomerDetail } from './pages/Customers';
 import Dashboard from './pages/Dashboard';
@@ -74,6 +75,7 @@ function Guarded() {
         <Route path="reports" element={<Need perms={['report.view']}><Reports /></Need>} />
         <Route path="profit-loss" element={<Need perms={['pl.view']}><ProfitLoss /></Need>} />
         <Route path="audit" element={<Need perms={['audit.view', 'staff.manage']}><Audit /></Need>} />
+        <Route path="import" element={<Need perms={['settings.manage']}><Import /></Need>} />
         <Route path="settings" element={<Need perms={['settings.manage']}><Settings /></Need>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

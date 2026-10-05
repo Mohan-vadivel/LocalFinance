@@ -274,6 +274,12 @@ model Loan {
   writtenOffAmount Int            @default(0)
   closedOn         String?
   clientRef        String?
+  /// Account number in the business's previous software, kept for search after an import.
+  legacyNo         String?
+  /// Brought over from another system as an opening balance: no cash moved in this app when it was set up.
+  migrated         Boolean        @default(false)
+  /// Amount the customer had already repaid before the import (already applied to the instalments).
+  openingPaid      Int            @default(0)
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   instalments      Instalment[]
@@ -284,6 +290,7 @@ model Loan {
   @@index([tenantId, status])
   @@index([tenantId, branchId])
   @@index([customerId])
+  @@index([tenantId, legacyNo])
 }
 
 model LoanApproval {

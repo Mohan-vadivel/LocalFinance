@@ -77,7 +77,7 @@ export class LoansService {
       ...(q.status ? { status: { in: q.status.split(',') } } : {}),
       ...(q.stage ? { stage: q.stage } : {}),
       ...(q.customerId ? { customerId: q.customerId } : {}),
-      ...(q.q ? { OR: [{ number: { contains: q.q, mode: 'insensitive' } }, { customer: { name: { contains: q.q, mode: 'insensitive' } } }, { customer: { phone: { contains: q.q } } }] } : {}),
+      ...(q.q ? { OR: [{ number: { contains: q.q, mode: 'insensitive' } }, { legacyNo: { equals: q.q.trim(), mode: 'insensitive' } }, { customer: { name: { contains: q.q, mode: 'insensitive' } } }, { customer: { phone: { contains: q.q } } }] } : {}),
     };
     if (q.queue === 'approvals') {
       // What this user can act on: managers see branch stage, Tenant Admin sees everything waiting.

@@ -334,6 +334,7 @@ export class CollectionsService {
           return {
             id: l.id,
             number: l.number,
+            legacyNo: l.legacyNo,
             principal: l.principal,
             frequency: l.frequency,
             instalmentAmount: instalments[0] ? instalments[0].principalDue + instalments[0].interestDue : 0,

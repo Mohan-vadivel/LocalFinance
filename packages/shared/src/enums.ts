@@ -68,7 +68,7 @@ export const DAYBOOK_CATEGORIES_SYSTEM = [
 ] as const;
 export type DaybookSystemCategory = (typeof DAYBOOK_CATEGORIES_SYSTEM)[number];
 
-export const LEDGER_TYPES = ['DISBURSEMENT', 'INSTALMENT', 'PENALTY', 'WAIVER', 'REVERSAL', 'WRITE_OFF'] as const;
+export const LEDGER_TYPES = ['DISBURSEMENT', 'INSTALMENT', 'PENALTY', 'WAIVER', 'REVERSAL', 'WRITE_OFF', 'OPENING'] as const;
 export type LedgerType = (typeof LEDGER_TYPES)[number];
 
 export const PL_BASIS = ['CASH', 'ACCRUAL'] as const;

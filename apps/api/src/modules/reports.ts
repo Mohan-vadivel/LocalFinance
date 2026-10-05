@@ -37,7 +37,7 @@ export class ProfitLossService {
 
     const [collections, disbursed, writeOffs, manual, categories, returns] = await Promise.all([
       this.prisma.collection.findMany({ where: { ...scope, date: { gte: from, lte: to }, reversedAt: null, ...(f.productId ? { loanId: { in: (await this.prisma.loan.findMany({ where: { tenantId: ctx.tenantId, productId: f.productId }, select: { id: true } })).map((l) => l.id) } } : {}) } }),
-      this.prisma.loan.findMany({ where: { ...scope, ...productFilter, disbursedOn: { gte: from, lte: to } } }),
+      this.prisma.loan.findMany({ where: { ...scope, ...productFilter, disbursedOn: { gte: from, lte: to }, migrated: false } }),
       this.prisma.loan.findMany({ where: { ...scope, ...productFilter, status: 'WRITTEN_OFF', closedOn: { gte: from, lte: to } } }),
       this.prisma.daybookEntry.findMany({ where: { ...scope, date: { gte: from, lte: to }, source: 'MANUAL' } }),
       this.prisma.expenseCategory.findMany({ where: { tenantId: ctx.tenantId } }),
@@ -283,7 +283,7 @@ export class ReportsService {
     const scope = branchScope(ctx, f.branchId);
     const ids = await this.branchIds(ctx, f.branchId);
     const [loans, allLoans, cols, handovers, book, categories, opening] = await Promise.all([
-      this.prisma.loan.findMany({ where: { ...scope, disbursedOn: { gte: from, lte: to } }, select: { disbursedOn: true, principal: true, upfrontInterest: true, fee: true } }),
+      this.prisma.loan.findMany({ where: { ...scope, disbursedOn: { gte: from, lte: to }, migrated: false }, select: { disbursedOn: true, principal: true, upfrontInterest: true, fee: true } }),
       this.prisma.loan.findMany({ where: { ...scope, disbursedOn: { not: null } }, select: { id: true } }),
       this.prisma.collection.findMany({ where: { ...scope, date: { gte: from, lte: to }, reversedAt: null }, select: { date: true, amount: true, mode: true } }),
       this.prisma.handover.findMany({ where: { ...scope, date: { gte: from, lte: to } }, select: { date: true, difference: true } }),
@@ -381,7 +381,7 @@ export class ReportsService {
     const [loans, cols, book, categories, opening] = await Promise.all([
       this.prisma.loan.findMany({
         where: { ...scope, disbursedOn: { not: null, lte: to }, OR: [{ closedOn: null }, { closedOn: { gte: from } }], ...(f.routeId ? { customer: { routeId: f.routeId } } : {}) },
-        select: { id: true, principal: true, upfrontInterest: true, fee: true, disbursedOn: true, closedOn: true, status: true, customer: { select: { routeId: true } } },
+        select: { id: true, principal: true, upfrontInterest: true, fee: true, disbursedOn: true, closedOn: true, status: true, migrated: true, customer: { select: { routeId: true } } },
       }),
       this.prisma.collection.findMany({ where: { ...scope, date: { gte: from, lte: to }, reversedAt: null, ...(f.routeId ? { routeId: f.routeId } : {}) }, select: { routeId: true, amount: true, mode: true, interest: true, penalty: true, loanId: true } }),
       this.prisma.daybookEntry.findMany({ where: { ...scope, date: { gte: from, lte: to } }, select: { amount: true, mode: true, direction: true, categoryId: true, systemCategory: true } }),
@@ -401,7 +401,8 @@ export class ReportsService {
       const x = line(l.customer.routeId ?? '');
       const d = l.disbursedOn!;
       const closedIn = l.closedOn != null && l.closedOn >= from && l.closedOn <= to;
-      if (d < from) x.openingAccounts += 1;
+      // Loans brought over from the old software were not given out through this book.
+      if (d < from || l.migrated) x.openingAccounts += 1;
       else {
         x.newAccounts += 1;
         x.loanAmount += l.principal;
@@ -443,7 +444,7 @@ export class ReportsService {
     const { from, to } = range(f);
     const n = await this.names(ctx);
     const loans = await this.prisma.loan.findMany({
-      where: { ...branchScope(ctx, f.branchId), disbursedOn: { gte: from, lte: to }, ...(f.productId ? { productId: f.productId } : {}), customer: customerWhere(ctx, f) },
+      where: { ...branchScope(ctx, f.branchId), disbursedOn: { gte: from, lte: to }, migrated: false, ...(f.productId ? { productId: f.productId } : {}), customer: customerWhere(ctx, f) },
       include: { customer: { select: { name: true, code: true } } },
       orderBy: { disbursedOn: 'desc' },
     });
@@ -459,6 +460,41 @@ export class ReportsService {
       netDisbursed: l.netDisbursed,
       mode: l.disburseMode,
     }));
+  }
+
+  /** Scheme (loan product) wise: loans running, given and closed in the period, collected, outstanding and overdue. */
+  async schemeWise(ctx: Ctx, f: ReportFilter) {
+    const { from, to } = range(f);
+    const asOf = to < todayIST() ? to : todayIST();
+    const scope = { ...branchScope(ctx, f.branchId), customer: customerWhere(ctx, f) };
+    const [products, running, given, closed, cols] = await Promise.all([
+      this.prisma.loanProduct.findMany({ where: { tenantId: ctx.tenantId }, orderBy: { name: 'asc' } }),
+      this.activeLoans(ctx, f),
+      this.prisma.loan.findMany({ where: { ...scope, disbursedOn: { gte: from, lte: to }, migrated: false }, select: { productId: true, principal: true } }),
+      this.prisma.loan.findMany({ where: { ...scope, closedOn: { gte: from, lte: to } }, select: { productId: true } }),
+      this.prisma.collection.findMany({ where: this.collectionWhere(ctx, f, from, to), select: { amount: true, loanId: true } }),
+    ]);
+    const productOf = new Map(
+      (await this.prisma.loan.findMany({ where: { id: { in: [...new Set(cols.map((c) => c.loanId))] } }, select: { id: true, productId: true } })).map((l) => [l.id, l.productId]),
+    );
+    return products
+      .filter((p) => !f.productId || p.id === f.productId)
+      .map((p) => {
+        const mine = running.filter((l) => l.productId === p.id).map((l) => positionOf(l, asOf));
+        const g = given.filter((l) => l.productId === p.id);
+        return {
+          product: p.name,
+          activeLoans: mine.length,
+          newLoans: g.length,
+          loanAmount: g.reduce((sum, l) => sum + l.principal, 0),
+          closedLoans: closed.filter((l) => l.productId === p.id).length,
+          collected: cols.filter((c) => productOf.get(c.loanId) === p.id).reduce((sum, c) => sum + c.amount, 0),
+          totalOutstanding: mine.reduce((sum, x) => sum + x.totalOutstanding, 0),
+          overdue: mine.reduce((sum, x) => sum + x.overdue, 0),
+          overdueLoans: mine.filter((x) => x.overdue > 0).length,
+        };
+      })
+      .filter((r) => r.activeLoans || r.newLoans || r.closedLoans || r.collected);
   }
 
   async outstanding(ctx: Ctx, f: ReportFilter) {
@@ -753,7 +789,7 @@ export class ReportsService {
     const withIncome = ctx.permissions.has('pl.view');
     const loans = await this.prisma.loan.findMany({
       where: { ...scope, disbursedOn: { not: null, lte: end }, ...(f.productId ? { productId: f.productId } : {}), customer: customerWhere(ctx, f) },
-      select: { id: true, customerId: true, principal: true, fee: true, upfrontInterest: true, disbursedOn: true, closedOn: true },
+      select: { id: true, customerId: true, principal: true, fee: true, upfrontInterest: true, disbursedOn: true, closedOn: true, migrated: true },
     });
     const ids = loans.map((l) => l.id);
     const [cols, ledger] = await Promise.all([
@@ -768,7 +804,7 @@ export class ReportsService {
       const mFrom = addMonthsClamped(firstMonthStart, i, 1);
       const mTo = addDays(addMonthsClamped(mFrom, 1, 1), -1);
       const inMonth = (d: string | null) => d != null && d >= mFrom && d <= mTo;
-      const given = loans.filter((l) => inMonth(l.disbursedOn));
+      const given = loans.filter((l) => !l.migrated && inMonth(l.disbursedOn));
       const coll = cols.filter((c) => inMonth(c.date));
       rows.push({
         month: month(mFrom),
@@ -960,6 +996,9 @@ export class ReportsController {
   }
   @Get('reports/disbursements') @Perm('report.view') disb(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
     return this.reports.disbursements(ctx, f);
+  }
+  @Get('reports/scheme-wise') @Perm('report.view') schemes(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
+    return this.reports.schemeWise(ctx, f);
   }
   @Get('reports/outstanding') @Perm('report.view') out(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
     return this.reports.outstanding(ctx, f);

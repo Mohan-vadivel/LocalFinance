@@ -50,6 +50,9 @@ interface LoanDetailData extends LoanRow {
   closedOn: string | null;
   firstDueDate: string | null;
   disburseMode: string | null;
+  legacyNo: string | null;
+  migrated: boolean;
+  openingPaid: number;
   fundName?: string;
   requestedByName?: string;
   approvedByName?: string;
@@ -298,6 +301,7 @@ export function LoanDetail() {
           <h1>
             {l.number} <Badge tone={statusTone(l.status)}>{t(`loanMod.statuses.${l.status}`)}</Badge>
             {l.status === 'REQUESTED' && l.stage === 'ADMIN' && <> <Badge tone="warn">{t('loanMod.atAdmin')}</Badge></>}
+            {l.migrated && <> <Badge>{t('import.migrated')}{l.legacyNo ? ` · ${t('import.oldAccount')} ${l.legacyNo}` : ''}</Badge></>}
           </h1>
         </div>
         <div className="row no-print">
@@ -326,19 +330,19 @@ export function LoanDetail() {
           <Stat label={t('loanMod.outstanding')} value={money(p.totalOutstanding)} sub={`${t('loanMod.principalDue')} ${money(p.principalOutstanding)} · ${t('loanMod.interestDue')} ${money(p.interestOutstanding)}`} />
           <Stat label={t('loanMod.overdue')} value={money(p.overdue)} sub={`${t('loanMod.daysPastDue')}: ${p.daysPastDue}`} />
           <Stat label={t('collection.dueNow')} value={money(p.dueToday + p.overdue + p.penaltyOutstanding)} sub={`${t('loanMod.penalty')} ${money(p.penaltyOutstanding)}`} />
-          <Stat label={t('loanMod.paid')} value={money(l.collections.filter((c) => !c.reversedAt).reduce((s, c) => s + c.amount, 0))} />
+          <Stat label={t('loanMod.paid')} value={money(l.openingPaid + l.collections.filter((c) => !c.reversedAt).reduce((s, c) => s + c.amount, 0))} sub={l.openingPaid ? `${t('import.receivedBefore')} ${money(l.openingPaid)}` : undefined} />
         </div>
       )}
       <div className="card">
         <dl className="kv">
           <dt>{t('common.product')}</dt><dd>{l.productName} · {t(`product.frequencies.${l.frequency}`)} × {l.tenure} · {t(`product.methods.${l.interestMethod}`)} {l.interestRate}%</dd>
           <dt>{t('loanMod.principal')}</dt><dd>{money(l.principal)}</dd>
-          <dt>{t('loanMod.netDisbursed')}</dt><dd>{money(l.summary.netDisbursed)} ({t('loanMod.fee')} {money(l.summary.fee)}, {t('loanMod.upfrontInterest')} {money(l.summary.upfrontInterest)})</dd>
+          {!l.migrated && (<><dt>{t('loanMod.netDisbursed')}</dt><dd>{money(l.summary.netDisbursed)} ({t('loanMod.fee')} {money(l.summary.fee)}, {t('loanMod.upfrontInterest')} {money(l.summary.upfrontInterest)})</dd></>)}
           <dt>{t('loanMod.totalRepayable')}</dt><dd>{money(l.summary.totalRepayable)}</dd>
           <dt>{t('loanMod.purpose')}</dt><dd>{l.purpose ?? '-'} {l.notes ? `· ${l.notes}` : ''}</dd>
           <dt>{t('loanMod.requestedBy')}</dt><dd>{l.requestedByName} · {dateTime(l.createdAt)}</dd>
           {l.approvedByName && (<><dt>{t('loanMod.approvedBy')}</dt><dd>{l.approvedByName} · {dateTime(l.approvedAt)}</dd></>)}
-          {l.disbursedOn && (<><dt>{t('loanMod.disbursedOn')}</dt><dd>{dateIN(l.disbursedOn)} · {l.disburseMode && t(`common.modes.${l.disburseMode}`)} · {l.fundName}</dd></>)}
+          {l.disbursedOn && (<><dt>{t('loanMod.disbursedOn')}</dt><dd>{[dateIN(l.disbursedOn), l.disburseMode && t(`common.modes.${l.disburseMode}`), l.fundName].filter(Boolean).join(' · ')}</dd></>)}
           {l.closedOn && (<><dt>{t('customerMod.closedOn')}</dt><dd>{dateIN(l.closedOn)}</dd></>)}
           {(l.penaltyWaived > 0 || l.interestWaived > 0) && (<><dt>{t('loanMod.waived')}</dt><dd>{t('loanMod.penalty')} {money(l.penaltyWaived)} · {t('loanMod.interestDue')} {money(l.interestWaived)}</dd></>)}
           {l.writtenOffAmount > 0 && (<><dt>{t('loanMod.writeOff')}</dt><dd>{money(l.writtenOffAmount)}</dd></>)}
