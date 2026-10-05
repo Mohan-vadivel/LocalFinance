@@ -488,7 +488,8 @@
       "MISSED": "Missed",
       "NOTHING_DUE": "Nothing due",
       "PENDING": "Not visited"
-    }
+    },
+    "serverAddress": "Server address"
   },
   "fund": {
     "title": "Funds",

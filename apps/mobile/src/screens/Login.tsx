@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LANGUAGES } from '@localfinance/shared';
+import { BASE } from '../api';
 import { setLanguage } from '../i18n';
 import { useSession } from '../session';
 import { Btn, C, Card, Chips, ErrorText, Field, SP, s, useLayout } from '../ui';
@@ -46,6 +47,7 @@ export default function Login() {
           </View>
           <Card style={{ padding: compact ? SP.lg : SP.xl }}>
             <ErrorText error={error} />
+            {(error as { code?: string } | null)?.code === 'errors.network' && <Text style={[s.muted, { marginBottom: SP.md }]}>{`${t('mobile.serverAddress')}: ${BASE}`}</Text>}
             {tenants ? (
               <View>
                 <Text style={s.h2}>{t('auth.chooseTenant')}</Text>
