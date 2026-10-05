@@ -140,7 +140,7 @@ const TA_WORDS: [string, number][] = [
   ['இரண்டு', 2], ['ஒன்று', 1], ['ஒரு', 1],
 ];
 // Scale words must be the whole word, so a name like லட்சுமி is not read as a lakh.
-const TA_SCALES: [RegExp, number][] = [[/^லட்ச(ம்|த்து)?$/, 100000], [/^ஆயிர(ம்|த்து)?$/, 1000], [/^நூ(று|ற்று)$/, 100]];
+const TA_SCALES: [RegExp, number][] = [[/^லட்ச(ம்|த்து)?$/, 100000], [/^ஆயிர(ம்|த்து)?$/, 1000], [/^நூ(று|ற்று|ற்றி)$/, 100]];
 const CURRENCY_WORDS = /^(rs\.?|rupees?|rupee|inr|₹|ரூபாய்|ரூபாய|ரூ\.?|ரூபா)$/i;
 
 /** Reads an amount in rupees from words like "500", "1,500", "five hundred", "ஐநூற்று ஐம்பது". Null when there is none. */
@@ -209,7 +209,7 @@ function parseTamilNumberWord(word: string): { value: number; scale?: number } |
     if (!hit) break;
     value += hit[1];
     matched = true;
-    rest = rest.slice(hit[0].length).replace(/^(்று|்|ு|த்து|ம்)/, '');
+    rest = rest.slice(hit[0].length).replace(/^(்றி|்று|்|ு|த்து|ம்)/, '');
   }
   if (!matched) return null;
   // "ஆயிரத்து" style endings on a joined word mean thousands.

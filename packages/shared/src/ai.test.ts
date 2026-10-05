@@ -46,6 +46,9 @@ describe('spoken collection entry', () => {
     expect(parseSpokenEntry('லட்சுமி ஆயிரத்து ஐநூறு', route)).toMatchObject({ amount: 150_000 });
     expect(parseSpokenEntry('செல்வி இரண்டு ஆயிரம்', route).amount).toBe(200_000);
     expect(parseSpokenEntry('Selvi ஐநூற்று ஐம்பது', route).amount).toBe(55_000);
+    // The everyday spoken form ends in -றி rather than -று.
+    expect(parseSpokenEntry('Selvi நூற்றி இருபது', route)).toMatchObject({ amount: 12_000, heard: 'Selvi' });
+    expect(parseSpokenEntry('Selvi இருநூற்றி ஐம்பது', route).amount).toBe(25_000);
   });
   it('reads English number words and rupee symbols', () => {
     expect(parseSpokenEntry('Lakshmi one thousand two hundred', route).amount).toBe(120_000);

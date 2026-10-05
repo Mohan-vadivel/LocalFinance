@@ -43,6 +43,12 @@ export interface DayCustomer {
   paidToday: number;
   pin: PinStatus;
   lastVisit: { outcome: string; promiseDate: string | null } | null;
+  /** Hour of day (0 to 23, IST) this customer usually pays at; null when not known. */
+  usualHour?: number | null;
+  /** The customer's own language for messages (en or ta). */
+  language?: string;
+  /** Open promise-to-pay date (YYYY-MM-DD), if any. */
+  promiseDate?: string | null;
   loans: DayLoan[];
 }
 export interface RouteDay { route: { id: string; name: string; location: string }; date: string; customers: DayCustomer[] }

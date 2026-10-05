@@ -4,8 +4,9 @@ import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { BASE, get, post } from '../api';
 import { MapPins } from '../MapPins';
 import { useSession } from '../session';
+import { alertValues } from '../smart';
 import { dismissFailed, getFailed, getQueue, getSynced, retryFailed, subscribe, sync, todaysCachedDays, type FailedItem, type QueueItem, type SyncedItem } from '../store';
-import { Amount, AmountPair, Avatar, Btn, C, Card, Chevron, ErrorText, Field, Icon, Loading, Notice, Progress, Row, SP, Screen, Section, Stat, StatRow, money, s, todayIST, useNav } from '../ui';
+import { Amount, AmountPair, Avatar, Badge, Btn, C, Card, Chevron, ErrorText, Field, Icon, Loading, Notice, Progress, Row, SP, Screen, Section, Stat, StatRow, money, s, todayIST, useNav } from '../ui';
 
 // =====================================================================
 // Day summary: today's totals from the server plus what is still on the phone
@@ -182,14 +183,27 @@ interface Dash {
   routes: { routeId: string; name: string; agents: (string | undefined)[]; customers: number; visited: number }[];
 }
 
+interface Brief { bullets: string[]; source: 'ai' | 'rules' }
+interface Alert { kind: string; severity: 'high' | 'medium'; values: Record<string, string | number> }
+
 export function Manager() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const nav = useNav();
+  const { can } = useSession();
   const [d, setD] = useState<Dash | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // Morning briefing and unusual activity: only for staff who can see reports (agents never call these).
+  const reports = can('report.view');
+  const [brief, setBrief] = useState<Brief | null>(null);
+  const [alerts, setAlerts] = useState<Alert[] | null>(null);
+  const lang = i18n.language;
   const load = useCallback(async () => {
     setRefreshing(true);
+    if (reports) {
+      void get<Brief>('/ai/briefing', { language: lang }).then(setBrief).catch(() => setBrief(null));
+      void get<Alert[]>('/ai/alerts').then(setAlerts).catch(() => setAlerts(null));
+    }
     try {
       setD(await get<Dash>('/dashboard'));
       setError(null);
@@ -197,7 +211,7 @@ export function Manager() {
       setError(e);
     }
     setRefreshing(false);
-  }, []);
+  }, [reports, lang]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -215,6 +229,7 @@ export function Manager() {
                 <Text style={{ color: C.onBrandMuted, marginTop: SP.sm, fontWeight: '600' }}>{t('dashboard.collectionRate')}: {d.collectionRate == null ? '-' : `${d.collectionRate}%`}</Text>
               </View>
             </Card>
+            {reports && <Briefing brief={brief} alerts={alerts} />}
             <Section title={t('mobile.liveAgents')} />
             {d.agents.some((a) => a.lastLat != null) && (
               <View style={{ marginBottom: SP.md }}>
@@ -250,6 +265,49 @@ export function Manager() {
         )}
       </ScrollView>
     </Screen>
+  );
+}
+
+/** Morning briefing bullets and the top unusual-activity alerts, compact, above the agents. */
+function Briefing({ brief, alerts }: { brief: Brief | null; alerts: Alert[] | null }) {
+  const { t } = useTranslation();
+  if (!brief && !alerts) return null;
+  const top = [...(alerts ?? [])].sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'high' ? -1 : 1)).slice(0, 2);
+  return (
+    <Card>
+      {brief && (
+        <>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.sm, marginBottom: SP.sm }}>
+            <Icon name="sunny" size={22} color={C.warn} />
+            <Text style={[s.h2, { marginBottom: 0, flex: 1, minWidth: 0 }]}>{t('ai.brief.title')}</Text>
+          </View>
+          {brief.bullets.map((b, i) => (
+            <View key={i} style={{ flexDirection: 'row', gap: SP.sm, marginBottom: 6 }}>
+              <Text style={{ color: C.brand, fontWeight: '800', fontSize: 15, lineHeight: 21 }}>•</Text>
+              <Text style={{ flex: 1, color: C.ink, fontSize: 15, lineHeight: 21 }}>{b}</Text>
+            </View>
+          ))}
+          <Text style={[s.muted, { fontSize: 12, marginTop: 2 }]}>{brief.source === 'ai' ? t('ai.brief.byAi') : t('ai.brief.byRules')}</Text>
+        </>
+      )}
+      {alerts && (
+        <View style={brief ? { borderTopWidth: 1, borderColor: C.line, marginTop: SP.md, paddingTop: SP.md } : undefined}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.sm, marginBottom: SP.sm }}>
+            <Icon name="alert-circle" size={22} color={alerts.length ? C.danger : C.ok} />
+            <Text style={{ fontSize: 16, fontWeight: '800', color: C.ink, flex: 1, minWidth: 0 }}>{t('ai.alerts.title')}</Text>
+            {alerts.length > 0 && <Badge text={String(alerts.length)} color={C.danger} solid />}
+          </View>
+          {alerts.length === 0 && <Text style={s.muted}>{t('ai.alerts.none')}</Text>}
+          {top.map((a, i) => (
+            <View key={i} style={{ marginBottom: SP.sm, gap: 4 }}>
+              <Badge text={t(`ai.alerts.${a.severity}`)} color={a.severity === 'high' ? C.danger : C.warn} />
+              <Text style={{ color: C.ink, fontSize: 15, lineHeight: 21 }}>{t(`ai.alerts.${a.kind}`, alertValues(a.values))}</Text>
+            </View>
+          ))}
+          {alerts.length > 2 && <Text style={[s.muted, { fontSize: 13 }]}>{t('ai.mobile.moreAlerts', { count: alerts.length - 2 })}</Text>}
+        </View>
+      )}
+    </Card>
   );
 }
 

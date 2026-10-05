@@ -4,8 +4,10 @@ import { Linking, Share, Text, View } from 'react-native';
 import { addDays } from '@localfinance/shared';
 import { get, newRef } from '../api';
 import { getPosition, useSession } from '../session';
-import { cachedRouteDay, enqueue, getSynced, isUnsent, nextPending, removeQueued, routeDay, subscribe, type DayCustomer, type DayLoan } from '../store';
+import { getVisitOrder, nextInOrder } from '../smart';
+import { cachedRouteDay, enqueue, getSynced, isUnsent, removeQueued, routeDay, subscribe, type DayCustomer, type DayLoan } from '../store';
 import { Amount, Avatar, Badge, Btn, C, Card, Chips, ErrorText, Field, Loading, Notice, PIN_COLORS, R, Row, SP, Screen, dateIN, money, s, toPaise, todayIST, useNav } from '../ui';
+import { Reminder } from './Reminder';
 import { navigateTo } from './RouteDay';
 
 interface ApiCustomer {
@@ -44,13 +46,14 @@ function fromApi(c: ApiCustomer): DayCustomer {
   return { ...c, dueNow, paidToday: 0, pin: dueNow === 0 ? 'NOTHING_DUE' : 'PENDING', lastVisit: null, loans };
 }
 
-export default function Customer({ customer: initial, customerId, routeId }: { customer?: DayCustomer; customerId?: string; routeId?: string }) {
+/** `amount` (paise) opens the collect form with that amount filled in, e.g. from voice entry; the agent still confirms. */
+export default function Customer({ customer: initial, customerId, routeId, amount: given }: { customer?: DayCustomer; customerId?: string; routeId?: string; amount?: number | null }) {
   const { t } = useTranslation();
   const nav = useNav();
   const { can } = useSession();
   const [c, setC] = useState<DayCustomer | null>(initial ?? null);
   const [error, setError] = useState<unknown>(null);
-  const [mode, setMode] = useState<'none' | 'collect' | 'visit'>('none');
+  const [mode, setMode] = useState<'none' | 'collect' | 'visit' | 'reminder'>(given && initial?.loans.length ? 'collect' : 'none');
 
   useEffect(() => {
     if (!initial && customerId) {
@@ -84,6 +87,7 @@ export default function Customer({ customer: initial, customerId, routeId }: { c
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, marginTop: SP.lg }}>
           <Btn small kind="tonal" title={c.phone} onPress={() => void Linking.openURL(`tel:${c.phone}`)} style={{ flexGrow: 1, flexBasis: 120 }} />
           {c.lat != null && c.lng != null && <Btn small kind="tonal" title={t('mobile.navigate')} onPress={() => navigateTo(c.lat!, c.lng!)} style={{ flexGrow: 1, flexBasis: 120 }} />}
+          {can('collection.record', 'report.view', 'customer.view') && mode !== 'reminder' && <Btn small kind="tonal" title={t('ai.reminder.button')} onPress={() => setMode('reminder')} style={{ flexGrow: 1, flexBasis: 120 }} />}
         </View>
       </Card>
       {c.status !== 'ACTIVE' && <Notice tone="danger" text={t(`customerMod.statuses.${c.status}`)} />}
@@ -99,7 +103,8 @@ export default function Customer({ customer: initial, customerId, routeId }: { c
           <Btn kind="outline" title={t('collection.noPayment')} onPress={() => setMode('visit')} />
         </View>
       )}
-      {mode === 'collect' && <CollectForm customer={c} routeId={routeId} onDone={() => setMode('none')} />}
+      {mode === 'reminder' && <Reminder customer={c} onDone={() => setMode('none')} />}
+      {mode === 'collect' && <CollectForm customer={c} routeId={routeId} initialAmount={given ?? undefined} onDone={() => setMode('none')} />}
       {mode === 'visit' && <VisitForm customer={c} routeId={routeId} onDone={() => setMode('none')} />}
       {c.loans.map((l) => (
         <Card key={l.id}>
@@ -145,7 +150,8 @@ function NextCustomer({ routeId, currentId }: { routeId: string; currentId: stri
   const nav = useNav();
   const [next, setNext] = useState<DayCustomer | null | undefined>(undefined);
   useEffect(() => {
-    const read = () => void cachedRouteDay(routeId).then((d) => setNext(d ? nextPending(d, currentId) : null));
+    // In the order the agent chose on the route list (route order or smart order).
+    const read = () => void Promise.all([cachedRouteDay(routeId), getVisitOrder()]).then(([d, order]) => setNext(d ? nextInOrder(d, order, currentId) : null));
     read();
     return subscribe(read);
   }, [routeId, currentId]);
@@ -156,12 +162,12 @@ function NextCustomer({ routeId, currentId }: { routeId: string; currentId: stri
 
 interface Saved { clientRef: string; at: string; amount: number; mode: 'CASH' | 'UPI'; upiRef: string | null; loanNumber: string; message: string }
 
-function CollectForm({ customer, routeId, onDone }: { customer: DayCustomer; routeId?: string; onDone: () => void }) {
+function CollectForm({ customer, routeId, initialAmount, onDone }: { customer: DayCustomer; routeId?: string; initialAmount?: number; onDone: () => void }) {
   const { t } = useTranslation();
   const { profile } = useSession();
   const [loanId, setLoanId] = useState(customer.loans.find((l) => l.dueNow > 0)?.id ?? customer.loans[0].id);
   const loan = customer.loans.find((l) => l.id === loanId)!;
-  const [amount, setAmount] = useState(String((loan.dueNow || loan.instalmentAmount) / 100));
+  const [amount, setAmount] = useState(String((initialAmount || loan.dueNow || loan.instalmentAmount) / 100));
   const [payMode, setPayMode] = useState<'CASH' | 'UPI'>('CASH');
   const [upiRef, setUpiRef] = useState('');
   const [note, setNote] = useState('');

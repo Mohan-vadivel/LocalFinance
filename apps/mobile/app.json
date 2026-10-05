@@ -9,12 +9,13 @@
     "android": {
       "package": "com.witstech.localfinance",
       "versionCode": 1,
-      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"],
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "CAMERA"],
       "usesCleartextTraffic": true
     },
     "plugins": [
       ["expo-location", { "locationWhenInUsePermission": "Location is saved with each collection and new customer." }],
-      "expo-secure-store"
+      "expo-secure-store",
+      ["expo-image-picker", { "cameraPermission": "The camera is used to read a customer's ID card when you add them.", "photosPermission": "Photos are used to read a customer's ID card when you add them.", "microphonePermission": false }]
     ]
   }
 }

@@ -391,6 +391,7 @@ export class CollectionsService {
           code: c.code,
           name: c.name,
           phone: c.phone,
+          language: c.language,
           address: c.address,
           landmark: c.landmark,
           lat: c.lat,

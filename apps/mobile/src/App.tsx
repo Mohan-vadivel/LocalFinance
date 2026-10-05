@@ -20,7 +20,7 @@ function Screens({ route }: { route: Route }) {
     case 'RouteDay':
       return <RouteDay routeId={p.routeId as string} name={p.name as string} />;
     case 'Customer':
-      return <Customer customer={p.customer as DayCustomer | undefined} customerId={p.customerId as string | undefined} routeId={p.routeId as string | undefined} />;
+      return <Customer customer={p.customer as DayCustomer | undefined} customerId={p.customerId as string | undefined} routeId={p.routeId as string | undefined} amount={p.amount as number | null | undefined} />;
     case 'AddCustomer':
       return <AddCustomer routes={(p.routes as MyRoute[]) ?? []} />;
     case 'Search':

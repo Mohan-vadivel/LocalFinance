@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { Pressable, Text, View } from 'react-native';
 import { LANGUAGES } from '@localfinance/shared';
 import { ApiError, get, newRef, post, put } from '../api';
 import { getPosition } from '../session';
 import { cachedRouteDay, cachedRoutes, myRoutes, type DayCustomer, type MyRoute } from '../store';
-import { Amount, Avatar, Badge, Btn, C, Card, Chevron, Chips, ErrorText, Field, Loading, Notice, Row, SP, Screen, dateIN, money, s, toPaise, useNav } from '../ui';
+import { Amount, Avatar, Badge, Btn, C, Card, Chevron, Chips, ErrorText, Field, Icon, Loading, Notice, R, Row, SP, Screen, dateIN, money, s, toPaise, useNav } from '../ui';
 
 // =====================================================================
 // Add customer (with GPS pin)
@@ -78,6 +79,7 @@ export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
 
   return (
     <Screen title={t('mobile.addCustomer')}>
+      <ReadIdCard onRead={(x) => setF((cur) => ({ ...cur, name: x.name || cur.name, idType: x.idType && ID_TYPES.includes(x.idType) ? x.idType : cur.idType, idNumber: x.idNumber || cur.idNumber, address: x.address || cur.address }))} />
       <Card>
         <Text style={s.h2}>{t('common.route')}</Text>
         <Chips value={routeId} onChange={setRouteId} items={routes.map((r) => ({ key: r.id, label: r.name }))} />
@@ -88,7 +90,7 @@ export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
         <Field label={t('common.address')} value={f.address} onChangeText={set('address')} multiline />
         <Field label={t('customerMod.landmark')} value={f.landmark} onChangeText={set('landmark')} />
         <Text style={s.label}>{t('customerMod.idType')}</Text>
-        <Chips value={f.idType} onChange={set('idType')} items={['AADHAAR', 'PAN', 'VOTER_ID', 'DRIVING_LICENCE', 'OTHER'].map((x) => ({ key: x, label: t(`customerMod.idTypes.${x}`) }))} />
+        <Chips value={f.idType} onChange={set('idType')} items={ID_TYPES.map((x) => ({ key: x, label: t(`customerMod.idTypes.${x}`) }))} />
         <Field label={t('customerMod.idNumber')} value={f.idNumber} onChangeText={set('idNumber')} />
         <Field label={t('customerMod.occupation')} value={f.occupation} onChangeText={set('occupation')} />
         <Field label={t('customerMod.monthlyIncome')} value={f.monthlyIncome} onChangeText={set('monthlyIncome')} keyboardType="numeric" />
@@ -110,6 +112,118 @@ export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
       <ErrorText error={error} />
       <Btn big title={duplicate ? t('customerMod.saveAnyway') : t('common.save')} onPress={() => void save()} busy={busy} disabled={!f.name || !f.phone || !f.address} />
     </Screen>
+  );
+}
+
+const ID_TYPES = ['AADHAAR', 'PAN', 'VOTER_ID', 'DRIVING_LICENCE', 'OTHER'];
+
+interface IdRead {
+  documentType: string;
+  readable: boolean;
+  fields: { name: string; idType: string | null; idNumber: string; address: string; dateOfBirth: string; guardian: string };
+  duplicates: { id: string; code: string; name: string; phone: string; status: string; sameId: boolean; otherBranch: boolean }[];
+}
+
+/**
+ * "Read ID card": a photo of the customer's ID is read by Claude on the server and fills name, ID and address.
+ * Shown only with a connection and AI features on; the agent checks every field before saving.
+ */
+function ReadIdCard({ onRead }: { onRead: (f: IdRead['fields']) => void }) {
+  const { t } = useTranslation();
+  const nav = useNav();
+  const [enabled, setEnabled] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState<IdRead | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  useEffect(() => {
+    // Offline or AI off: the button stays hidden.
+    get<{ enabled: boolean }>('/ai/status').then((st) => setEnabled(!!st.enabled)).catch(() => setEnabled(false));
+  }, []);
+  if (!enabled) return null;
+
+  const read = async (from: 'camera' | 'library') => {
+    setError(null);
+    const perm = from === 'camera' ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return setError(new Error(t('ai.mobile.cameraDenied')));
+    const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.5, base64: true, exif: false };
+    const pick = from === 'camera' ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
+    const photo = pick.canceled ? null : pick.assets[0];
+    if (!photo?.base64) return;
+    // The server takes about 3.5 MB of picture; a bigger one is asked again rather than sent.
+    if (photo.base64.length > 4_700_000) return setError(new Error(t('ai.readId.notReadable')));
+    setBusy(true);
+    setRes(null);
+    try {
+      const r = await post<IdRead>('/ai/read-id', { mediaType: photo.mimeType === 'image/png' ? 'image/png' : 'image/jpeg', image: photo.base64 });
+      setRes(r);
+      if (r.readable) onRead(r.fields);
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md, marginBottom: SP.md }}>
+        <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: C.brandSoft, alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="id-card" size={24} color={C.brand} />
+        </View>
+        <Text style={[s.h2, { marginBottom: 0, flex: 1, minWidth: 0 }]}>{t('ai.readId.button')}</Text>
+        <View style={{ alignSelf: 'center' }}>
+          <Badge text={t('ai.badge')} color={C.brand} />
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, marginBottom: SP.sm }}>
+        <Btn title={busy ? t('ai.readId.reading') : t('ai.readId.take')} onPress={() => void read('camera')} busy={busy} style={{ flexGrow: 2, flexBasis: 180, marginBottom: 0 }} />
+        <Btn kind="outline" title={t('ai.readId.choose')} onPress={() => void read('library')} disabled={busy} style={{ flexGrow: 1, flexBasis: 120, marginBottom: 0 }} />
+      </View>
+      {busy && <Text style={[s.muted, { marginBottom: SP.sm }]}>{t('ai.readId.reading')}</Text>}
+      <ErrorText error={error} />
+      {res && !res.readable && <Notice tone="warn" text={t('ai.readId.notReadable')} />}
+      {res?.readable && (
+        <>
+          <Notice text={t('ai.readId.filled')} />
+          {(res.fields.dateOfBirth || res.fields.guardian) && (
+            <View style={{ marginBottom: SP.md, gap: 2 }}>
+              {res.fields.dateOfBirth ? <Text style={{ color: C.ink2, fontWeight: '600' }}>{t('ai.readId.dob', { value: /^\d{4}-\d{2}-\d{2}$/.test(res.fields.dateOfBirth) ? dateIN(res.fields.dateOfBirth) : res.fields.dateOfBirth })}</Text> : null}
+              {res.fields.guardian ? <Text style={{ color: C.ink2, fontWeight: '600' }}>{t('ai.readId.guardian', { value: res.fields.guardian })}</Text> : null}
+            </View>
+          )}
+        </>
+      )}
+      {res && res.duplicates.length > 0 && (
+        <View style={{ marginBottom: SP.md }}>
+          <Text style={[s.label, { color: C.danger }]}>{t('ai.readId.duplicates')}</Text>
+          {res.duplicates.map((d) => (
+            <Pressable
+              key={d.id}
+              disabled={d.otherBranch}
+              onPress={() => nav.push('Customer', { customerId: d.id })}
+              accessibilityRole="button"
+              accessibilityLabel={d.name}
+              style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: SP.md, padding: SP.md, borderRadius: R.md, borderWidth: 1, borderColor: C.line, backgroundColor: pressed ? C.bg : C.dangerSoft, marginBottom: SP.sm }]}
+            >
+              <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+                <Text style={{ fontWeight: '800', fontSize: 16, color: C.ink }}>{d.name}</Text>
+                <Text style={s.muted}>{d.code} · {d.phone}</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  <Badge text={d.sameId ? t('ai.readId.sameId') : t('ai.readId.sameName')} color={d.sameId ? C.danger : C.warn} />
+                  {d.otherBranch && <Badge text={t('ai.readId.otherBranch')} color={C.grey} />}
+                  {d.status !== 'ACTIVE' && <Badge text={t(`customerMod.statuses.${d.status}`)} color={C.grey} />}
+                </View>
+              </View>
+              {!d.otherBranch && <Chevron />}
+            </Pressable>
+          ))}
+        </View>
+      )}
+      <View style={{ flexDirection: 'row', gap: 6, alignItems: 'flex-start' }}>
+        <Icon name="lock-closed-outline" size={14} color={C.muted} />
+        <Text style={[s.muted, { fontSize: 13, flex: 1 }]}>{t('ai.readId.privacy')}</Text>
+      </View>
+    </Card>
   );
 }
 
@@ -211,6 +325,7 @@ export function Search({ forLoan }: { forLoan?: boolean }) {
 // =====================================================================
 // Loan request with schedule preview and history check
 // =====================================================================
+interface Risk { score: number | null; grade: string; reasons: { key: string; tone: 'good' | 'bad'; values?: Record<string, number> }[] }
 interface Product { id: string; name: string; frequency: string; minAmount: number; maxAmount: number; tenure: number }
 interface Preview { summary: { netDisbursed: number; fee: number; upfrontInterest: number; totalRepayable: number }; schedule: { dueDate: string; totalDue: number }[] }
 
@@ -222,7 +337,7 @@ export function LoanRequest({ customerId, customerName }: { customerId: string; 
   const [amount, setAmount] = useState('');
   const [purpose, setPurpose] = useState('');
   const [preview, setPreview] = useState<Preview | null>(null);
-  const [grade, setGrade] = useState<string | null>(null);
+  const [risk, setRisk] = useState<Risk | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [ref] = useState(newRef);
@@ -231,8 +346,15 @@ export function LoanRequest({ customerId, customerName }: { customerId: string; 
       setProducts(p);
       if (p[0]) setProductId(p[0].id);
     }).catch(setError);
-    get<{ summary: { grade: string } }>(`/customers/${customerId}/history`).then((h) => setGrade(h.summary.grade)).catch(() => undefined);
   }, [customerId]);
+  // Risk score from the customer's own history; with the amount typed, it also compares it with past loans.
+  const asked = toPaise(amount);
+  useEffect(() => {
+    const h = setTimeout(() => {
+      get<{ summary: Risk }>(`/customers/${customerId}/history`, { amount: asked > 0 ? asked : undefined }).then((x) => setRisk(x.summary)).catch(() => undefined);
+    }, asked > 0 ? 500 : 0);
+    return () => clearTimeout(h);
+  }, [customerId, asked]);
   useEffect(() => {
     setPreview(null);
     if (!productId || !toPaise(amount)) return;
@@ -260,10 +382,23 @@ export function LoanRequest({ customerId, customerName }: { customerId: string; 
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md }}>
         <Avatar name={customerName} size={48} />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[s.h2, { marginBottom: grade ? SP.xs : 0 }]}>{customerName}</Text>
-          {grade && <Row label={t('customerMod.riskGrade')} value={t(`history.grades.${grade}`)} strong />}
+          <Text style={[s.h2, { marginBottom: risk ? SP.xs : 0 }]}>{customerName}</Text>
+          {risk && <Row label={t('customerMod.riskGrade')} value={t(`history.grades.${risk.grade}`)} strong />}
+          {risk?.score != null && <Row label={t('ai.risk.score')} value={t('ai.risk.outOf', { score: risk.score })} strong tone={risk.score >= 70 ? C.ok : risk.score >= 45 ? C.warn : C.danger} />}
         </View>
       </Card>
+      {risk && risk.reasons.length > 0 && (
+        <Card tone="soft" style={{ marginTop: -SP.xs }}>
+          <Text style={[s.label, { marginBottom: SP.xs }]}>{t('ai.risk.why')}</Text>
+          {risk.reasons.slice(0, 2).map((r) => (
+            <View key={r.key} style={{ flexDirection: 'row', gap: SP.sm, alignItems: 'flex-start', marginBottom: 4 }}>
+              <Icon name={r.tone === 'good' ? 'arrow-up-circle' : 'arrow-down-circle'} size={18} color={r.tone === 'good' ? C.ok : C.danger} />
+              <Text style={{ flex: 1, color: r.tone === 'good' ? C.ok : C.danger, fontWeight: '700', fontSize: 15 }}>{t(`ai.risk.reasons.${r.key}`, r.values)}</Text>
+            </View>
+          ))}
+          <Text style={[s.muted, { fontSize: 13, marginTop: SP.xs }]}>{t('ai.risk.advisory')}</Text>
+        </Card>
+      )}
       <Card>
         <Text style={s.label}>{t('common.product')}</Text>
         <Chips value={productId} onChange={setProductId} items={products.map((p) => ({ key: p.id, label: p.name }))} />
