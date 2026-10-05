@@ -1,5 +1,5 @@
 import { Controller, Get, Injectable, Query } from '@nestjs/common';
-import { ageingBucket, AGEING_BUCKETS, addDays, addMonthsClamped, diffDays, weekday, periodRange, reportFilterSchema, todayIST, type ReportFilter, type SummaryPeriod } from '@localfinance/shared';
+import { ageingBucket, AGEING_BUCKETS, addDays, addMonthsClamped, diffDays, weekday, periodRange, reportFilterSchema, todayIST, type Permission, type ReportFilter, type SummaryPeriod } from '@localfinance/shared';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { positionOf } from '../common/books.service';
@@ -942,9 +942,100 @@ export class DashboardService {
       };
     });
   }
+
+  /**
+   * What needs this user's attention, for the "Action needed" strip and the Approvals badge.
+   * Each count is null when the user lacks the right to act on it. Look-back items cover the last ACTION_DAYS days.
+   */
+  async actions(ctx: Ctx, branchId?: string) {
+    const today = todayIST();
+    const since = addDays(today, -ACTION_DAYS);
+    const scope = branchScope(ctx, branchId);
+    const has = (p: Permission) => ctx.permissions.has(p);
+    const [pendingApprovals, toDisburse, handovers, dayBooks, flaggedCollections, missedPromises] = await Promise.all([
+      // Same queue as GET /loans?queue=approvals: managers act on the branch stage, the Tenant Admin on everything.
+      has('loan.approve') ? this.prisma.loan.count({ where: { ...scope, status: 'REQUESTED', ...(ctx.role === 'TENANT_ADMIN' ? {} : { stage: 'BRANCH' }) } }) : null,
+      has('loan.disburse') ? this.prisma.loan.count({ where: { ...scope, status: 'APPROVED' } }) : null,
+      has('handover.verify') ? this.handoversWaiting(ctx, scope, since, today) : null,
+      has('daybook.manage') ? this.dayBooksOpen(scope, since, today) : null,
+      has('report.view') ? this.prisma.collection.count({ where: { ...scope, flagged: true, reversedAt: null, date: { gte: since, lte: today } } }) : null,
+      // Supervisors see every agent's promises; an agent sees only the ones they took.
+      has('report.view') || has('collection.record') ? this.missedPromises(ctx, scope, since, today, !has('report.view')) : null,
+    ]);
+    return { date: today, since, pendingApprovals, toDisburse, handovers, dayBooks, flaggedCollections, missedPromises };
+  }
+
+  /** Agent-days with cash collected or a float given but no handover yet (the same rule that blocks a day close). */
+  private async handoversWaiting(ctx: Ctx, scope: Scope, since: string, today: string) {
+    const date = { gte: since, lte: today };
+    const [cols, floats, done] = await Promise.all([
+      this.prisma.collection.groupBy({ by: ['branchId', 'agentId', 'date'], where: { ...scope, date, reversedAt: null, mode: 'CASH' } }),
+      this.prisma.agentFloat.groupBy({ by: ['branchId', 'agentId', 'date'], where: { ...scope, date } }),
+      this.prisma.handover.findMany({ where: { tenantId: ctx.tenantId, date }, select: { agentId: true, date: true } }),
+    ]);
+    const handed = new Set(done.map((h) => `${h.agentId}|${h.date}`));
+    const waiting = new Map<string, { branchId: string; date: string }>();
+    for (const r of [...cols, ...floats]) if (!handed.has(`${r.agentId}|${r.date}`)) waiting.set(`${r.agentId}|${r.date}`, { branchId: r.branchId, date: r.date });
+    return { count: waiting.size, ...oldest([...waiting.values()]) };
+  }
+
+  /** Past branch-days with day book entries that nobody has closed. */
+  private async dayBooksOpen(scope: Scope, since: string, today: string) {
+    const date = { gte: since, lt: today };
+    const [days, closes] = await Promise.all([
+      this.prisma.daybookEntry.groupBy({ by: ['branchId', 'date'], where: { ...scope, date } }),
+      this.prisma.dayClose.findMany({ where: { ...scope, date }, select: { branchId: true, date: true } }),
+    ]);
+    const closed = new Set(closes.map((c) => `${c.branchId}|${c.date}`));
+    const open = days.filter((d) => !closed.has(`${d.branchId}|${d.date}`));
+    return { count: open.length, ...oldest(open) };
+  }
+
+  /** Customers whose latest promise to pay fell due by today with no payment on or after that date. */
+  private async missedPromises(ctx: Ctx, scope: Scope, since: string, today: string, ownOnly: boolean) {
+    const visits = await this.prisma.visitLog.findMany({
+      where: { tenantId: ctx.tenantId, outcome: 'PROMISED', promiseDate: { gte: since, lte: today }, ...(ownOnly ? { agentId: ctx.userId } : {}) },
+      orderBy: { visitedAt: 'desc' },
+      distinct: ['customerId'],
+      select: { customerId: true, promiseDate: true },
+    });
+    if (!visits.length) return 0;
+    const ids = visits.map((v) => v.customerId);
+    const [customers, paid] = await Promise.all([
+      this.prisma.customer.findMany({ where: { ...scope, id: { in: ids } }, select: { id: true } }),
+      this.prisma.collection.findMany({ where: { ...scope, customerId: { in: ids }, date: { gte: since }, reversedAt: null }, select: { customerId: true, date: true } }),
+    ]);
+    const inScope = new Set(customers.map((c) => c.id));
+    return visits.filter((v) => inScope.has(v.customerId) && !paid.some((p) => p.customerId === v.customerId && p.date >= v.promiseDate!)).length;
+  }
+
+  /** Counts behind the first-run "Get started" checklist; a step is done when its count is above zero. */
+  async setup(ctx: Ctx) {
+    const today = todayIST();
+    const t = { tenantId: ctx.tenantId };
+    const [branches, locations, routes, agents, assignedRoutes, products, fundedFunds] = await Promise.all([
+      this.prisma.branch.count({ where: { ...t, active: true } }),
+      this.prisma.location.count({ where: { ...t, active: true } }),
+      this.prisma.route.count({ where: { ...t, active: true } }),
+      this.prisma.user.count({ where: { ...t, active: true, role: { baseRole: 'COLLECTION_AGENT' } } }),
+      this.prisma.routeAssignment.count({ where: { ...t, route: { active: true }, OR: [{ toDate: null }, { toDate: { gte: today } }] } }),
+      this.prisma.loanProduct.count({ where: { ...t, active: true } }),
+      this.prisma.fund.count({ where: { ...t, active: true, balance: { gt: 0 } } }),
+    ]);
+    return { branches, locations, routes, agents, assignedRoutes, products, fundedFunds };
+  }
 }
 
-const filter = reportFilterSchema.extend({ investorId: z.string().optional() });
+type Scope = ReturnType<typeof branchScope>;
+/** How far back the "Action needed" strip looks for handovers, open day books, flags and promises. */
+const ACTION_DAYS = 7;
+/** The earliest of some branch-days, so a link can open the page on that day. */
+const oldest = (rows: { branchId: string; date: string }[]) => {
+  const first = [...rows].sort((a, b) => a.date.localeCompare(b.date))[0];
+  return first ? { date: first.date, branchId: first.branchId } : { date: null, branchId: null };
+};
+
+const filter =reportFilterSchema.extend({ investorId: z.string().optional() });
 type Filter = z.infer<typeof filter>;
 const lineListQuery = reportFilterSchema.extend({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional() });
 const growthQuery = reportFilterSchema.extend({ months: z.coerce.number().int().min(1).max(36).optional() });
@@ -968,6 +1059,12 @@ export class ReportsController {
 
   @Get('dashboard') @Perm('report.view') dash(@CurrentCtx() ctx: Ctx, @Query('branchId') branchId?: string) {
     return this.dashboard.get(ctx, branchId);
+  }
+  @Get('dashboard/actions') @Perm('report.view', 'loan.approve', 'loan.disburse', 'handover.verify', 'daybook.manage', 'collection.record') actions(@CurrentCtx() ctx: Ctx, @Query('branchId') branchId?: string) {
+    return this.dashboard.actions(ctx, branchId);
+  }
+  @Get('dashboard/setup') @Perm('settings.manage') setup(@CurrentCtx() ctx: Ctx) {
+    return this.dashboard.setup(ctx);
   }
   @Get('reports/daily-collection') @Perm('report.view') daily(@CurrentCtx() ctx: Ctx, @Query(V(filter)) f: Filter) {
     return this.reports.dailyCollection(ctx, f);

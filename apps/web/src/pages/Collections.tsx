@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Undo2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BranchPicker, RoutePicker, StaffPicker } from '../components/pickers';
 import { Badge, DataTable, ErrorBox, Stat, useToast, RowActions } from '../components/ui';
 import { get } from '../lib/api';
@@ -37,12 +37,14 @@ export default function Collections() {
   const nav = useNavigate();
   const toast = useToast();
   const { can } = useAuth();
-  const [from, setFrom] = useState(today());
+  // The dashboard's "Action needed" links open this page on ?flagged=true&from=...
+  const [params] = useSearchParams();
+  const [from, setFrom] = useState(params.get('from') ?? today());
   const [to, setTo] = useState(today());
   const [branchId, setBranchId] = useState('');
   const [routeId, setRouteId] = useState('');
   const [agentId, setAgentId] = useState('');
-  const [flagged, setFlagged] = useState(false);
+  const [flagged, setFlagged] = useState(params.get('flagged') === 'true');
   const [page, setPage] = useState(1);
   const { data, error, reload } = useLoad(
     () => get<{ total: number; pageSize: number; totals: Record<string, number>; rows: Row[] }>('/collections', { from, to, branchId, routeId, agentId, flagged: flagged ? 'true' : undefined, page }),

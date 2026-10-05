@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { BranchPicker, LocationPicker, ProductPicker, RoutePicker, StaffPicker } from '../components/pickers';
 import { DataTable, ErrorBox, Loading, Stat, type Column } from '../components/ui';
 import { get } from '../lib/api';
@@ -57,7 +58,9 @@ export default function Reports() {
   const { t, i18n } = useTranslation();
   const { can } = useAuth();
   const visible = REPORTS.filter((r) => !r.perm || can(r.perm, 'pl.view'));
-  const [key, setKey] = useState(visible[0]?.key ?? '');
+  // ?r=<key> opens a given report, e.g. the pending list from the dashboard's "Action needed" strip.
+  const [search] = useSearchParams();
+  const [key, setKey] = useState(search.get('r') ?? visible[0]?.key ?? '');
   const def = visible.find((r) => r.key === key) ?? visible[0];
   const [f, setF] = useState({ from: monthStart(), to: today(), branchId: '', locationId: '', routeId: '', agentId: '', productId: '', months: '12' });
   const [applied, setApplied] = useState(f);

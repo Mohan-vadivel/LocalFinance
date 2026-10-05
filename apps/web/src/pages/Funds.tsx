@@ -48,6 +48,7 @@ export default function Funds() {
         <DataTable
           title={t('fund.title')}
           rows={data}
+          empty={branchId ? t('empty.noMatch') : { message: t('empty.funds'), action: { label: t('empty.firstFund'), onClick: () => setCreating(true) } }}
           columns={[
             { key: 'name', label: t('common.name') },
             { key: 'branchName', label: t('common.branch') },

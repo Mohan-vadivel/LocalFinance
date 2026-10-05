@@ -140,6 +140,7 @@ export default function Staff() {
         <DataTable
           title={t('staff.title')}
           rows={data}
+          empty={branchId ? t('empty.noMatch') : { message: t('empty.staff'), action: { label: t('empty.firstStaff'), onClick: () => setEditing({}) } }}
           columns={[
             { key: 'name', label: t('common.name') },
             { key: 'phone', label: t('common.phone') },

@@ -2,7 +2,7 @@ import { createContext, Fragment, useContext, useState, type ComponentType, type
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import * as XLSX from 'xlsx';
-import { CircleAlert, CircleCheck, FileSpreadsheet, Inbox, LoaderCircle, Printer, X } from 'lucide-react';
+import { CircleAlert, CircleCheck, FileSpreadsheet, Inbox, LoaderCircle, Plus, Printer, X } from 'lucide-react';
 import { ApiError } from '../lib/api';
 import { money } from '../lib/format';
 
@@ -29,25 +29,77 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 export const useToast = () => useContext(ToastCtx);
 
 // ---------- Errors ----------
-/** Shows an API error in the user's language when the server sent a known key. */
+/** Error codes whose message is replaced by a plainer one, and the next step to suggest. */
+const ERROR_TEXT: Record<string, { text?: string; hint?: string }> = {
+  'errors.network': { hint: 'errors.hints.network' },
+  'errors.notFound': { hint: 'errors.hints.notFound' },
+  'errors.dayClosed': { hint: 'errors.hints.dayClosed' },
+  'errors.tenantSuspended': { hint: 'errors.hints.tenantSuspended' },
+  'errors.forbidden': { hint: 'errors.hints.forbidden' },
+  'fund.insufficient': { hint: 'errors.hints.fundInsufficient' },
+  'auth.login': { text: 'errors.sessionExpired', hint: 'errors.hints.sessionExpired' },
+};
+
+/** Labels for the form fields the API names in validation errors; unknown paths show as sent. */
+const FIELD_LABELS: Record<string, string> = {
+  name: 'common.name',
+  phone: 'common.phone',
+  address: 'common.address',
+  amount: 'common.amount',
+  date: 'common.date',
+  mode: 'common.mode',
+  note: 'common.notes',
+  notes: 'common.notes',
+  reason: 'common.reason',
+  branchId: 'common.branch',
+  locationId: 'common.location',
+  routeId: 'common.route',
+  productId: 'common.product',
+  customerId: 'common.customer',
+  loanId: 'common.loan',
+  agentId: 'common.agent',
+  principal: 'loanMod.principal',
+  code: 'branch.code',
+  password: 'auth.password',
+};
+
+/** Shows an API error in plain words in the user's language, with a next step where there is an obvious one. */
 export function ErrorBox({ error }: { error: unknown }) {
   const { t, i18n } = useTranslation();
   if (!error) return null;
   const e = error as ApiError;
-  const text = e.code && i18n.exists(e.code) && e.code !== 'errors.validation' ? t(e.code) : e.message;
+  const known = e.code ? ERROR_TEXT[e.code] : undefined;
+  const serverFault = !e.code && (e.status ?? 0) >= 500;
+  // Validation errors carry a specific English message from the server; other known codes have a translation.
+  const text = known?.text
+    ? t(known.text)
+    : serverFault
+      ? t('errors.server')
+      : e.code && i18n.exists(e.code) && e.code !== 'errors.validation'
+        ? t(e.code)
+        : e.fields?.length
+          ? t('errors.checkFields')
+          : e.message;
+  const hint = known?.hint ?? (serverFault ? 'errors.hints.server' : undefined);
   return (
     <div className="error-box" role="alert">
       <div className="notice">
         <CircleAlert aria-hidden />
-        <div>{text}</div>
+        <div>
+          {text}
+          {hint && <div style={{ marginTop: 2, opacity: 0.85 }}>{t(hint)}</div>}
+        </div>
       </div>
       {e.fields?.length ? (
         <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
-          {e.fields.map((f) => (
-            <li key={f.path}>
-              {f.path}: {f.message}
-            </li>
-          ))}
+          {e.fields.map((f) => {
+            const label = FIELD_LABELS[f.path.split('.').pop() ?? ''];
+            return (
+              <li key={f.path}>
+                {label ? t(label) : f.path}: {f.message}
+              </li>
+            );
+          })}
         </ul>
       ) : null}
     </div>
@@ -213,9 +265,17 @@ export interface Column<T> {
   total?: boolean;
 }
 
-export function DataTable<T extends object>({ rows, columns: cols, title, empty, onRow, actions }: { rows: T[] | null | undefined; columns: Column<T>[]; title?: string; empty?: string; onRow?: (row: T) => void; actions?: (row: T) => RowAction[] }) {
+/** What an empty table says, with an optional button for the obvious next step (e.g. "Create your first branch"). */
+export interface EmptyState {
+  message: string;
+  action?: { label: string; onClick: () => void };
+}
+
+export function DataTable<T extends object>({ rows, columns: cols, title, empty, onRow, actions }: { rows: T[] | null | undefined; columns: Column<T>[]; title?: string; empty?: string | EmptyState; onRow?: (row: T) => void; actions?: (row: T) => RowAction[] }) {
   const { t } = useTranslation();
   const list = rows ?? [];
+  // While rows are still loading (null) keep the neutral message so a "create" button does not flash.
+  const emptyState: EmptyState = rows == null || !empty ? { message: t('common.noData') } : typeof empty === 'string' ? { message: empty } : empty;
   const columns: Column<T>[] = actions ? [...cols, { key: '__actions', label: t('common.actions'), render: (r) => <RowActions actions={actions(r)} /> }] : cols;
   const raw = (r: T, c: Column<T>) => (c.value ? c.value(r) : (r as Record<string, unknown>)[c.key]);
   const exportExcel = () => {
@@ -275,7 +335,13 @@ export function DataTable<T extends object>({ rows, columns: cols, title, empty,
                     <span className="ico">
                       <Inbox aria-hidden />
                     </span>
-                    <span>{empty ?? t('common.noData')}</span>
+                    <span>{emptyState.message}</span>
+                    {emptyState.action && (
+                      <button type="button" className="btn primary small no-print" onClick={emptyState.action.onClick}>
+                        <Plus aria-hidden />
+                        {emptyState.action.label}
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>

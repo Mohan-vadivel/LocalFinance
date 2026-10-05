@@ -1,13 +1,35 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate } from 'react-router-dom';
-import { AlarmClock, BadgeCheck, Briefcase, CalendarClock, CircleDollarSign, FilePlus2, Gauge, MapPin, Route, Wallet } from 'lucide-react';
+import type { Permission } from '@localfinance/shared';
+import {
+  AlarmClock,
+  ArrowLeftRight,
+  BadgeCheck,
+  BellRing,
+  BookOpen,
+  Briefcase,
+  CalendarClock,
+  CalendarX,
+  ChevronRight,
+  Circle,
+  CircleCheck,
+  CircleDollarSign,
+  FilePlus2,
+  Gauge,
+  HandCoins,
+  MapPin,
+  MapPinOff,
+  Rocket,
+  Route,
+  Wallet,
+} from 'lucide-react';
 import { BranchPicker } from '../components/pickers';
 import { Badge, DataTable, ErrorBox, Loading, Stat } from '../components/ui';
 import { MapView } from '../components/MapView';
 import { get } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { money, pct } from '../lib/format';
+import { dateIN, money, pct } from '../lib/format';
 import { useLoad } from '../lib/hooks';
 
 interface Dash {
@@ -28,11 +50,160 @@ interface Dash {
   routes: { routeId: string; name: string; agents: string[]; customers: number; visited: number }[];
 }
 
+/** Per-branch-day items carry the oldest day so the link can open the page on it. */
+type DayCount = { count: number; date: string | null; branchId: string | null } | null;
+/** GET /dashboard/actions: each count is null when the user has no right to act on it. */
+export interface Actions {
+  date: string;
+  since: string;
+  pendingApprovals: number | null;
+  toDisburse: number | null;
+  handovers: DayCount;
+  dayBooks: DayCount;
+  flaggedCollections: number | null;
+  missedPromises: number | null;
+}
+/** Days the API looks back for handovers, day books, flags and promises (ACTION_DAYS in reports.ts). */
+const ACTION_DAYS = 7;
+/** Rights that give a user something to act on from the "Action needed" strip. */
+export const ACTION_PERMS: Permission[] = ['loan.approve', 'loan.disburse', 'handover.verify', 'daybook.manage'];
+
+const dayLink = (path: string, d: DayCount) => (d?.date ? `${path}?${new URLSearchParams({ branchId: d.branchId ?? '', date: d.date })}` : path);
+
+/** The "Action needed" strip: one tile per thing waiting on this user, each linking to where it is done. */
+export function ActionStrip({ data }: { data: Actions }) {
+  const { t } = useTranslation();
+  const { can } = useAuth();
+  const items: { key: string; n: number | null | undefined; to: string; icon: ReactNode; tone: 'warn' | 'danger' | 'info'; sub?: string; show: boolean }[] = [
+    { key: 'pendingApprovals', n: data.pendingApprovals, to: '/approvals', icon: <BadgeCheck />, tone: 'warn', show: can('loan.approve') },
+    { key: 'toDisburse', n: data.toDisburse, to: '/loans', icon: <HandCoins />, tone: 'info', show: can('customer.view', 'loan.request', 'loan.approve', 'report.view') },
+    { key: 'handovers', n: data.handovers?.count, to: dayLink('/handovers', data.handovers), icon: <ArrowLeftRight />, tone: 'warn', sub: data.handovers?.date ? t('actions.oldest', { date: dateIN(data.handovers.date) }) : undefined, show: can('handover.verify') },
+    { key: 'dayBooks', n: data.dayBooks?.count, to: dayLink('/daybook', data.dayBooks), icon: <BookOpen />, tone: 'danger', sub: data.dayBooks?.date ? t('actions.oldest', { date: dateIN(data.dayBooks.date) }) : undefined, show: can('daybook.manage') },
+    { key: 'flaggedCollections', n: data.flaggedCollections, to: `/collections?flagged=true&from=${data.since}`, icon: <MapPinOff />, tone: 'danger', sub: t('actions.lastDays', { n: ACTION_DAYS }), show: can('collection.record', 'report.view') },
+    { key: 'missedPromises', n: data.missedPromises, to: can('report.view') ? '/reports?r=pendingList' : '/customers', icon: <CalendarX />, tone: 'warn', sub: t('actions.lastDays', { n: ACTION_DAYS }), show: can('report.view', 'customer.view') },
+  ];
+  const due = items.filter((i) => i.show && (i.n ?? 0) > 0);
+  if (!due.length) {
+    return (
+      <div className="card row action-clear">
+        <span className="chip-icon sm ok">
+          <CircleCheck />
+        </span>
+        <span className="muted">{t('actions.allClear')}</span>
+      </div>
+    );
+  }
+  return (
+    <section className="card" aria-labelledby="actions-title">
+      <div className="card-head">
+        <span className="chip-icon sm warn">
+          <BellRing />
+        </span>
+        <h2 id="actions-title">{t('actions.title')}</h2>
+      </div>
+      <div className="action-strip">
+        {due.map((i) => (
+          <Link key={i.key} to={i.to} className="action-item">
+            <span className={`chip-icon sm ${i.tone}`}>{i.icon}</span>
+            <span className="n">{i.n}</span>
+            <span className="txt">
+              <span className="l">{t(`actions.${i.key}`)}</span>
+              {i.sub && <span className="s">{i.sub}</span>}
+            </span>
+            <ChevronRight aria-hidden className="go" />
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+const SETUP_STEPS: { key: string; to: string }[] = [
+  { key: 'branches', to: '/branches' },
+  { key: 'locations', to: '/branches' },
+  { key: 'routes', to: '/routes' },
+  { key: 'agents', to: '/staff' },
+  { key: 'assignedRoutes', to: '/routes' },
+  { key: 'products', to: '/products' },
+  { key: 'fundedFunds', to: '/funds' },
+];
+
+/** First-run checklist for the business owner; hidden once every step is done. */
+function GetStarted() {
+  const { t } = useTranslation();
+  const { data } = useLoad(() => get<Record<string, number>>('/dashboard/setup'), []);
+  if (!data) return null;
+  const steps = SETUP_STEPS.map((s) => ({ ...s, done: (data[s.key] ?? 0) > 0 }));
+  const done = steps.filter((s) => s.done).length;
+  if (done === steps.length) return null;
+  const next = steps.find((s) => !s.done)?.key;
+  return (
+    <section className="card get-started" aria-labelledby="setup-title">
+      <div className="card-head">
+        <span className="chip-icon sm">
+          <Rocket />
+        </span>
+        <h2 id="setup-title">{t('setup.title')}</h2>
+        <span className="muted">{t('setup.progress', { done, total: steps.length })}</span>
+      </div>
+      <p className="muted" style={{ margin: '-6px 0 10px' }}>{t('setup.intro')}</p>
+      <div className="bar" style={{ marginBottom: 12 }}>
+        <span style={{ width: `${(done / steps.length) * 100}%` }} />
+      </div>
+      <ol className="checklist">
+        {steps.map((s) => (
+          <li key={s.key} className={s.done ? 'done' : s.key === next ? 'next' : ''}>
+            {s.done ? <CircleCheck aria-label={t('setup.done')} className="ok" /> : <Circle aria-hidden />}
+            <span className="l">{t(`setup.steps.${s.key}`)}</span>
+            {!s.done && (
+              <Link to={s.to} className={`btn small${s.key === next ? ' primary' : ''}`}>
+                {t('setup.open')}
+              </Link>
+            )}
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+/** Loads what is waiting on this user; skipped (null) for users who can act on nothing. */
+export function useActions(branchId = '') {
+  const { can } = useAuth();
+  const allowed = can('report.view', ...ACTION_PERMS);
+  return useLoad(() => (allowed ? get<Actions>('/dashboard/actions', { branchId }) : Promise.resolve(null)), [branchId, allowed]);
+}
+
+/** First page after login for users without reports: what is waiting on them, or their main page when nothing is. */
+export function ActionHome({ fallback }: { fallback: { to: string; key: string } | null }) {
+  const { t } = useTranslation();
+  const { can } = useAuth();
+  const { data, error, loading } = useActions();
+  if (!can(...ACTION_PERMS)) return fallback ? <Navigate to={fallback.to} replace /> : <div className="error-box">{t('errors.forbidden')}</div>;
+  if (loading && !data) return <Loading />;
+  return (
+    <div>
+      <div className="page-head">
+        <h1>{t('nav.dashboard')}</h1>
+        {fallback && (
+          <Link to={fallback.to} className="btn">
+            {t('actions.goTo', { page: t(fallback.key) })}
+            <ChevronRight aria-hidden />
+          </Link>
+        )}
+      </div>
+      <ErrorBox error={error} />
+      {data && <ActionStrip data={data} />}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { t } = useTranslation();
   const { profile, can } = useAuth();
   const [branchId, setBranchId] = useState('');
   const { data, error, loading } = useLoad(() => get<Dash>('/dashboard', { branchId }), [branchId]);
+  const actions = useActions(branchId);
   if (profile?.role === 'SUPER_ADMIN' && !profile.tenant) return <Navigate to="/tenants" />;
   if (!can('report.view')) return <Navigate to={can('customer.view') ? '/customers' : '/collections'} />;
   const located = (data?.agents ?? []).filter((a) => a.lastLat != null && a.lastLng != null);
@@ -42,6 +213,8 @@ export default function Dashboard() {
         <h1>{t('nav.dashboard')}</h1>
         <BranchPicker value={branchId} onChange={setBranchId} allowAll />
       </div>
+      {can('settings.manage') && !profile?.readOnly && <GetStarted />}
+      {actions.data && <ActionStrip data={actions.data} />}
       <ErrorBox error={error} />
       {loading && !data ? (
         <Loading />

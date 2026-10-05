@@ -10,7 +10,7 @@ import { Badge, DataTable, DocHead, ErrorBox, Field, FormModal, Loading, PrintDo
 import { ApiError, get, openFile, post, put, upload } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateIN, dateTime, money, toPaise, toRupeesInput } from '../lib/format';
-import { useLoad } from '../lib/hooks';
+import { useDebounced, useLoad } from '../lib/hooks';
 import { CollectFlow, LoanRequestForm } from './Loans';
 
 export interface Customer {
@@ -203,7 +203,8 @@ export default function Customers() {
   const nav = useNavigate();
   const { can } = useAuth();
   const [q, setQ] = useState('');
-  const [search, setSearch] = useState('');
+  // Searches as you type, once typing pauses.
+  const search = useDebounced(q.trim());
   const [branchId, setBranchId] = useState('');
   const [locationId, setLocationId] = useState('');
   const [routeId, setRouteId] = useState('');
@@ -222,9 +223,8 @@ export default function Customers() {
         {can('customer.create') && <button className="btn primary" onClick={() => setCreating(true)}>{t('customerMod.new')}</button>}
       </div>
       <div className="card no-print">
-        <form className="row" onSubmit={(e) => { e.preventDefault(); setPage(1); setSearch(q); }}>
-          <input placeholder={t('customerMod.searchHint')} value={q} onChange={(e) => setQ(e.target.value)} style={{ minWidth: 260 }} />
-          <button className="btn">{t('common.search')}</button>
+        <form className="row" role="search" onSubmit={(e) => e.preventDefault()}>
+          <input type="search" aria-label={t('common.search')} placeholder={t('customerMod.searchHint')} value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} style={{ minWidth: 260 }} />
           <BranchPicker value={branchId} onChange={(v) => { setBranchId(v); setLocationId(''); setRouteId(''); setPage(1); }} allowAll />
           <LocationPicker branchId={branchId || undefined} value={locationId} onChange={(v) => { setLocationId(v); setRouteId(''); setPage(1); }} allowAll />
           <RoutePicker branchId={branchId || undefined} locationId={locationId || undefined} value={routeId} onChange={(v) => { setRouteId(v); setPage(1); }} allowAll />
@@ -239,6 +239,11 @@ export default function Customers() {
         <DataTable
           title={t('customerMod.title')}
           rows={data?.rows}
+          empty={
+            search || branchId || locationId || routeId || status
+              ? t('empty.noMatch')
+              : { message: t('empty.customers'), action: can('customer.create') ? { label: t('empty.firstCustomer'), onClick: () => setCreating(true) } : undefined }
+          }
           onRow={(c) => nav(`/customers/${c.id}`)}
           actions={(c) => [{ icon: Eye, label: t('common.view'), onClick: () => nav(`/customers/${c.id}`) }]}
           columns={[

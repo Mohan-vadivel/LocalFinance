@@ -672,7 +672,10 @@
     "float": "Float given",
     "done": "Handed over",
     "notSelf": "Another person must confirm",
-    "history": "Handovers this month"
+    "history": "Handovers this month",
+    "countCash": "Count the cash and enter the amount received",
+    "noteRequired": "Write why the cash is short",
+    "noteForShortage": "Note (needed for a shortage)"
   },
   "report": {
     "title": "Reports",
@@ -782,11 +785,24 @@
   },
   "errors": {
     "forbidden": "You do not have permission for this",
-    "notFound": "Not found",
+    "notFound": "We could not find this record. It may have been removed.",
     "tenantSuspended": "This business is suspended; changes are not allowed",
     "dayClosed": "That day is already closed",
     "validation": "Please check the highlighted fields",
-    "network": "Cannot reach the server"
+    "network": "Cannot reach the server",
+    "sessionExpired": "Your session has ended. Please log in again.",
+    "server": "Something went wrong on the server.",
+    "checkFields": "Please check these fields:",
+    "hints": {
+      "network": "Check your internet connection, then try again.",
+      "notFound": "Go back to the list and open it again.",
+      "dayClosed": "Pick another date, or ask the Tenant Admin to reopen that day.",
+      "tenantSuspended": "You can still view data. Contact the platform administrator to restore changes.",
+      "forbidden": "Ask your administrator to give your role this right.",
+      "server": "Wait a minute and try again. If it keeps happening, tell your administrator.",
+      "fundInsufficient": "Add money to the fund, or choose another fund.",
+      "sessionExpired": "Your work on this screen was not saved."
+    }
   },
   "reportCols": {
     "date": "Date",
@@ -1078,5 +1094,60 @@
     "outstandingAfter": "Outstanding after this",
     "signature": "Signature",
     "sign": "Sign"
+  },
+  "search": {
+    "open": "Search",
+    "placeholder": "Search customers and loans by name, phone or number",
+    "hint": "Type at least 2 letters",
+    "noResults": "Nothing found for \"{{q}}\"",
+    "customers": "Customers",
+    "loans": "Loans",
+    "keys": "Use the arrow keys to move and Enter to open"
+  },
+  "setup": {
+    "title": "Get started",
+    "intro": "Finish these steps to start lending and collecting.",
+    "progress": "{{done}} of {{total}} done",
+    "open": "Open",
+    "steps": {
+      "branches": "Add a branch",
+      "locations": "Add a location (area) to the branch",
+      "routes": "Create a collection route",
+      "agents": "Add a collection agent",
+      "assignedRoutes": "Assign a route to an agent",
+      "products": "Set up a loan product",
+      "fundedFunds": "Create a fund and put money in it"
+    },
+    "done": "Done"
+  },
+  "actions": {
+    "title": "Action needed",
+    "allClear": "Nothing needs your attention right now.",
+    "lastDays": "Last {{n}} days",
+    "pendingApprovals": "Loan requests to approve",
+    "toDisburse": "Approved loans to disburse",
+    "handovers": "Cash handovers to verify",
+    "dayBooks": "Day books not closed",
+    "flaggedCollections": "Collections far from the customer",
+    "missedPromises": "Promises to pay not kept",
+    "oldest": "Oldest: {{date}}",
+    "goTo": "Go to {{page}}"
+  },
+  "empty": {
+    "branches": "No branches yet. Every customer, loan and fund belongs to a branch.",
+    "firstBranch": "Create your first branch",
+    "locations": "No locations yet. Locations are the areas a branch serves.",
+    "firstLocation": "Create your first location",
+    "routes": "No routes yet. A route is the daily path an agent walks to collect.",
+    "firstRoute": "Create your first route",
+    "staff": "No staff yet. Add managers, loan officers and collection agents.",
+    "firstStaff": "Add your first staff member",
+    "products": "No loan products yet. A product sets the amount, tenure and interest.",
+    "firstProduct": "Create your first loan product",
+    "funds": "No funds yet. Loans are paid out of a fund.",
+    "firstFund": "Create your first fund",
+    "customers": "No customers yet.",
+    "firstCustomer": "Add your first customer",
+    "noMatch": "Nothing matches. Try other words or clear the filters."
   }
 }

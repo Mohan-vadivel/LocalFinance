@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { LANGUAGES, type Permission } from '@localfinance/shared';
@@ -39,7 +39,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { setLanguage } from '../lib/i18n';
-import { setSupportTenant, supportTenant } from '../lib/api';
+import { get, setSupportTenant, supportTenant } from '../lib/api';
+import { GlobalSearch } from './GlobalSearch';
 
 interface Item {
   to: string;
@@ -54,7 +55,8 @@ const groups: { title: string; items: Item[] }[] = [
   {
     title: 'nav.dashboard',
     items: [
-      { to: '/', key: 'nav.dashboard', perms: ['report.view'], icon: LayoutDashboard },
+      // Users without reports still get a home page listing what is waiting on them.
+      { to: '/', key: 'nav.dashboard', perms: ['report.view', 'loan.approve', 'loan.disburse', 'handover.verify', 'daybook.manage'], icon: LayoutDashboard },
       { to: '/tenants', key: 'nav.tenants', roles: ['SUPER_ADMIN'], icon: Building2 },
     ],
   },
@@ -125,6 +127,27 @@ function useTheme() {
   return { theme, toggle };
 }
 
+/** Loan requests waiting on this user, for the badge on Approvals. Rechecked on navigation, at most every 30 s. */
+function usePendingApprovals(enabled: boolean, pathname: string) {
+  const [count, setCount] = useState(0);
+  const last = useRef(0);
+  useEffect(() => {
+    if (!enabled) return;
+    // Pages where a decision may just have been made refresh at once.
+    const fresh = pathname.startsWith('/approvals') || pathname.startsWith('/loans');
+    if (!fresh && Date.now() - last.current < 30_000) return;
+    last.current = Date.now();
+    let live = true;
+    get<{ pendingApprovals: number | null }>('/dashboard/actions')
+      .then((a) => live && setCount(a.pendingApprovals ?? 0))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [enabled, pathname]);
+  return enabled ? count : 0;
+}
+
 const initials = (name: string) =>
   name
     .split(/\s+/)
@@ -140,6 +163,7 @@ export function Layout() {
   const { pathname } = useLocation();
   const { theme, toggle } = useTheme();
   const [navOpen, setNavOpen] = useState(false);
+  const pendingApprovals = usePendingApprovals(!!profile?.tenant && can('loan.approve'), pathname);
 
   useEffect(() => setNavOpen(false), [pathname]);
   useEffect(() => {
@@ -192,6 +216,11 @@ export function Layout() {
                     <NavLink key={i.to} to={i.to} end={i.to === '/' || i.to === '/collections' || i.to === '/reports'} className={({ isActive }) => (isActive ? 'active' : '')}>
                       <Icon aria-hidden style={i.icon ? undefined : { width: 8, height: 8, margin: '0 4.5px', fill: 'currentColor' }} />
                       <span className="label">{t(i.key)}</span>
+                      {i.to === '/approvals' && pendingApprovals > 0 && (
+                        <span className="nav-count" aria-label={`${pendingApprovals} ${t('dashboard.pendingApprovals')}`}>
+                          {pendingApprovals > 99 ? '99+' : pendingApprovals}
+                        </span>
+                      )}
                     </NavLink>
                   );
                 })}
@@ -234,6 +263,7 @@ export function Layout() {
             )}
           </div>
           <div className="right">
+            {profile.tenant && <GlobalSearch />}
             {isSuper && supportTenant && (
               <button
                 className="btn small"

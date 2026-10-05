@@ -478,6 +478,42 @@ describe('multi-tenancy', () => {
     assert.equal((await api('GET', `/customers?access_token=${otherAdmin}`)).status, 401);
   });
 
+  test('action counts and setup status stay inside the tenant', async () => {
+    // A promise to pay today from a customer who has not paid today counts as missed for the agent and the owner.
+    const route = (await ok(api('GET', '/routes/mine', { token: agent })))[0];
+    const day = await ok(api('GET', `/routes/${route.id}/day`, { token: agent }));
+    const unpaid = day.customers.find((c) => c.paidToday === 0);
+    await ok(api('POST', '/visits', { token: agent, body: { customerId: unpaid.id, outcome: 'PROMISED', promiseDate: today(), clientRef: randomUUID() } }));
+    const mine = await ok(api('GET', '/dashboard/actions', { token: owner }));
+    assert.ok(mine.toDisburse >= 1, 'the loan approved in the fund test still waits for disbursal');
+    assert.ok(mine.missedPromises >= 1);
+    assert.equal(typeof mine.pendingApprovals, 'number');
+    assert.equal(typeof mine.handovers.count, 'number');
+    const own = await ok(api('GET', '/dashboard/actions', { token: agent }));
+    assert.ok(own.missedPromises >= 1);
+    assert.equal(own.pendingApprovals, null, 'an agent cannot approve, so gets no approvals count');
+    assert.equal(own.handovers, null);
+
+    const demoBranch = (await ok(api('GET', '/branches', { token: owner })))[0].id;
+    for (const q of ['', `?branchId=${demoBranch}`]) {
+      const other = await ok(api('GET', `/dashboard/actions${q}`, { token: otherAdmin }));
+      assert.equal(other.pendingApprovals, 0);
+      assert.equal(other.toDisburse, 0);
+      assert.equal(other.handovers.count, 0);
+      assert.equal(other.dayBooks.count, 0);
+      assert.equal(other.flaggedCollections, 0);
+      assert.equal(other.missedPromises, 0);
+    }
+
+    const setup = await ok(api('GET', '/dashboard/setup', { token: otherAdmin }));
+    // The other business has only the one branch it made in the test above; nothing of the demo business is counted.
+    const ownBranches = (await ok(api('GET', '/branches', { token: otherAdmin }))).length;
+    assert.deepEqual(Object.values(setup), [ownBranches, 0, 0, 0, 0, 0, 0]);
+    const demoSetup = await ok(api('GET', '/dashboard/setup', { token: owner }));
+    assert.ok(demoSetup.branches > 0 && demoSetup.agents > 0 && demoSetup.fundedFunds > 0);
+    assert.equal((await api('GET', '/dashboard/setup', { token: agent })).status, 403);
+  });
+
   test('support access is read-only and needs the tenant\'s consent', async () => {
     const demo = (await ok(api('GET', '/auth/me', { token: owner }))).tenant.id;
     assert.equal((await api('GET', '/customers', { token: superAdmin, headers: { 'x-tenant-id': demo } })).status, 403);
