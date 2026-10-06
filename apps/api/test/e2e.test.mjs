@@ -388,15 +388,52 @@ describe('loans', () => {
 describe('day book, handover and day close', () => {
   let branchId;
 
+  let fuelId;
+
   test('day book shows automatic and manual entries with balances', async () => {
     branchId = (await ok(api('GET', '/branches', { token: owner })))[0].id;
-    const cats = await ok(api('GET', '/daybook/categories', { token: accountant }));
+    const cats = await ok(api('GET', '/daybook/categories', { token: manager }));
     const rent = cats.find((c) => c.name === 'Rent');
-    await ok(api('POST', '/daybook/entries', { token: accountant, body: { branchId, date: today(), direction: 'OUT', categoryId: rent.id, amount: 500_000, mode: 'CASH', particulars: 'Office rent' } }));
+    await ok(api('POST', '/daybook/entries', { token: manager, body: { branchId, date: today(), direction: 'OUT', categoryId: rent.id, amount: 500_000, mode: 'CASH', particulars: 'Office rent' } }));
     const day = await ok(api('GET', `/daybook?branchId=${branchId}&from=${today()}`, { token: accountant }));
     assert.ok(day.entries.some((e) => e.systemCategory === 'COLLECTION'));
     assert.ok(day.entries.some((e) => e.particulars === 'Office rent'));
     assert.equal(day.closing.cash + day.closing.bank, day.opening.cash + day.opening.bank + day.receipts - day.payments);
+  });
+
+  test('entries from agents and other staff wait for the branch manager before reaching the day book', async () => {
+    const cats = await ok(api('GET', '/daybook/categories', { token: agent }));
+    const fuel = cats.find((c) => c.name === 'Fuel and travel');
+    const stationery = cats.find((c) => c.name === 'Stationery and printing');
+    const sent = await ok(api('POST', '/daybook/entries', { token: agent, body: { branchId, date: today(), direction: 'OUT', categoryId: fuel.id, amount: 25_000, mode: 'CASH', particulars: 'Petrol for the route' } }));
+    assert.equal(sent.pending, true);
+    fuelId = sent.request.id;
+    const paper = await ok(api('POST', '/daybook/entries', { token: accountant, body: { branchId, date: today(), direction: 'OUT', categoryId: stationery.id, amount: 12_000, mode: 'CASH', particulars: 'Receipt books' } }));
+    assert.equal(paper.pending, true, 'the accountant also needs approval');
+    let day = await ok(api('GET', `/daybook?branchId=${branchId}&from=${today()}`, { token: manager }));
+    assert.ok(!day.entries.some((e) => e.particulars === 'Petrol for the route' || e.particulars === 'Receipt books'), 'nothing reaches the day book before approval');
+
+    // The agent sees only their own entries, cannot read the whole day book and cannot decide.
+    const mine = await ok(api('GET', '/daybook/requests?status=PENDING', { token: agent }));
+    assert.deepEqual(mine.map((r) => r.particulars), ['Petrol for the route']);
+    assert.equal((await api('GET', `/daybook?branchId=${branchId}&from=${today()}`, { token: agent })).status, 403);
+    assert.equal((await api('POST', `/daybook/requests/${fuelId}/approve`, { token: agent })).status, 403);
+    assert.equal((await api('POST', `/daybook/requests/${paper.request.id}/approve`, { token: accountant })).status, 403);
+
+    // The branch manager sees both, with a count on the dashboard, and approves one.
+    const waiting = await ok(api('GET', '/daybook/requests?status=PENDING', { token: manager }));
+    assert.equal(waiting.length, 2);
+    assert.equal(waiting.find((r) => r.id === fuelId).requestedByName.length > 0, true);
+    assert.equal((await ok(api('GET', '/dashboard/actions', { token: manager }))).dayBookApprovals, 2);
+    assert.equal((await ok(api('GET', '/dashboard/actions', { token: agent }))).dayBookApprovals, null);
+    await ok(api('POST', `/daybook/requests/${paper.request.id}/approve`, { token: manager }));
+    assert.equal((await api('POST', `/daybook/requests/${paper.request.id}/approve`, { token: manager })).status, 400, 'cannot be approved twice');
+    day = await ok(api('GET', `/daybook?branchId=${branchId}&from=${today()}`, { token: manager }));
+    const posted = day.entries.find((e) => e.particulars === 'Receipt books');
+    assert.ok(posted, 'approved entry is in the day book');
+    assert.equal(posted.amount, 12_000);
+    assert.match(posted.createdByName, /.+/);
+    assert.match(posted.approvedByName, /.+/);
   });
 
   test('closing waits for cash handover, then locks the day', async () => {
@@ -411,7 +448,23 @@ describe('day book, handover and day close', () => {
       const h = await ok(api('POST', '/handovers', { token: manager, body: { agentId: p.agentId, branchId, date: today(), received: p.expected - short } }));
       assert.equal(h.difference, short ? -short : 0);
     }
+    // An entry still waiting for the branch manager also holds the day open.
+    const waiting = await api('POST', '/daybook/close', { token: owner, body: { branchId, date: today() } });
+    assert.equal(waiting.status, 400);
+    assert.equal(waiting.data.code, 'errors.daybookApprovalsPending');
+    // Rejecting needs a reason; the person who entered it is responsible unless the manager names someone else.
+    assert.equal((await api('POST', `/daybook/requests/${fuelId}/reject`, { token: manager, body: { reason: '' } })).status, 400);
+    const rejected = await ok(api('POST', `/daybook/requests/${fuelId}/reject`, { token: manager, body: { reason: 'No bill for the petrol' } }));
+    assert.equal(rejected.status, 'REJECTED');
+    const agentView = await ok(api('GET', '/daybook/requests?status=REJECTED', { token: agent }));
+    assert.equal(agentView.length, 1);
+    assert.equal(agentView[0].reason, 'No bill for the petrol');
+    assert.equal(agentView[0].responsibleId, agentView[0].requestedById);
+    assert.match(agentView[0].responsibleName, /.+/);
+    assert.match(agentView[0].decidedByName, /.+/);
     await ok(api('POST', '/daybook/close', { token: owner, body: { branchId, date: today() } }));
+    const day = await ok(api('GET', `/daybook?branchId=${branchId}&from=${today()}`, { token: manager }));
+    assert.ok(!day.entries.some((e) => e.particulars === 'Petrol for the route'), 'a rejected entry never reaches the day book');
     const cats = await ok(api('GET', '/daybook/categories', { token: accountant }));
     const late = await api('POST', '/daybook/entries', { token: accountant, body: { branchId, date: today(), direction: 'OUT', categoryId: cats[0].id, amount: 100, mode: 'CASH', particulars: 'Late entry' } });
     assert.equal(late.status, 400);
@@ -496,6 +549,12 @@ describe('multi-tenancy', () => {
     await refused('POST', '/daybook/entries', { branchId: demoBranch.id, date: today(), direction: 'OUT', categoryId: cat.id, amount: 100, mode: 'CASH', particulars: 'probe' });
     await refused('POST', '/daybook/close', { branchId: demoBranch.id, date: today() });
     await refused('POST', '/daybook/reopen', { branchId: demoBranch.id, date: today() });
+    // Another business's day book entries waiting for approval can be neither seen nor decided.
+    const demoRequests = await ok(api('GET', '/daybook/requests', { token: owner }));
+    assert.ok(demoRequests.length > 0);
+    assert.equal((await ok(api('GET', '/daybook/requests', { token: otherAdmin }))).length, 0);
+    await refused('POST', `/daybook/requests/${demoRequests[0].id}/approve`, {});
+    await refused('POST', `/daybook/requests/${demoRequests[0].id}/reject`, { reason: 'probe reason' });
     // Links from this business's rows to the other business's people and records.
     await refused('POST', '/branches', { name: 'Linked', code: 'LK', managerId: demoAgent.id });
     await refused('PUT', `/branches/${own.id}`, { name: own.name, code: own.code, managerId: demoAgent.id });

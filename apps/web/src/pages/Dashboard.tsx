@@ -63,11 +63,12 @@ export interface Actions {
   dayBooks: DayCount;
   flaggedCollections: number | null;
   missedPromises: number | null;
+  dayBookApprovals?: number | null;
 }
 /** Days the API looks back for handovers, day books, flags and promises (ACTION_DAYS in reports.ts). */
 const ACTION_DAYS = 7;
 /** Rights that give a user something to act on from the "Action needed" strip. */
-export const ACTION_PERMS: Permission[] = ['loan.approve', 'loan.disburse', 'handover.verify', 'daybook.manage'];
+export const ACTION_PERMS: Permission[] = ['loan.approve', 'loan.disburse', 'handover.verify', 'daybook.manage', 'daybook.approve'];
 
 const dayLink = (path: string, d: DayCount) => (d?.date ? `${path}?${new URLSearchParams({ branchId: d.branchId ?? '', date: d.date })}` : path);
 
@@ -79,6 +80,7 @@ export function ActionStrip({ data }: { data: Actions }) {
     { key: 'pendingApprovals', n: data.pendingApprovals, to: '/approvals', icon: <BadgeCheck />, tone: 'warn', show: can('loan.approve') },
     { key: 'toDisburse', n: data.toDisburse, to: '/loans', icon: <HandCoins />, tone: 'info', show: can('customer.view', 'loan.request', 'loan.approve', 'report.view') },
     { key: 'handovers', n: data.handovers?.count, to: dayLink('/handovers', data.handovers), icon: <ArrowLeftRight />, tone: 'warn', sub: data.handovers?.date ? t('actions.oldest', { date: dateIN(data.handovers.date) }) : undefined, show: can('handover.verify') },
+    { key: 'dayBookApprovals', n: data.dayBookApprovals, to: '/daybook', icon: <BookOpen />, tone: 'warn', show: can('daybook.approve') },
     { key: 'dayBooks', n: data.dayBooks?.count, to: dayLink('/daybook', data.dayBooks), icon: <BookOpen />, tone: 'danger', sub: data.dayBooks?.date ? t('actions.oldest', { date: dateIN(data.dayBooks.date) }) : undefined, show: can('daybook.manage') },
     { key: 'flaggedCollections', n: data.flaggedCollections, to: `/collections?flagged=true&from=${data.since}`, icon: <MapPinOff />, tone: 'danger', sub: t('actions.lastDays', { n: ACTION_DAYS }), show: can('collection.record', 'report.view') },
     { key: 'missedPromises', n: data.missedPromises, to: can('report.view') ? '/reports?r=pendingList' : '/customers', icon: <CalendarX />, tone: 'warn', sub: t('actions.lastDays', { n: ACTION_DAYS }), show: can('report.view', 'customer.view') },

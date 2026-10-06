@@ -35,7 +35,7 @@ const LANDING: { to: string; key: string; perms: Permission[] }[] = [
   { to: '/loans', key: 'nav.loans', perms: ['loan.request'] },
   { to: '/collections', key: 'nav.collections', perms: ['collection.record'] },
   { to: '/handovers', key: 'nav.handovers', perms: ['handover.verify'] },
-  { to: '/daybook', key: 'nav.daybook', perms: ['daybook.view', 'daybook.manage'] },
+  { to: '/daybook', key: 'nav.daybook', perms: ['daybook.view', 'daybook.manage', 'daybook.request', 'daybook.approve'] },
   { to: '/funds', key: 'nav.funds', perms: ['fund.manage'] },
   { to: '/investors', key: 'nav.investors', perms: ['investor.manage'] },
   { to: '/staff', key: 'nav.staff', perms: ['staff.manage'] },
@@ -88,7 +88,7 @@ function Guarded() {
         <Route path="funds" element={<Need perms={['fund.manage']}><Funds /></Need>} />
         <Route path="investors" element={<Need perms={['investor.manage']}><Investors /></Need>} />
         <Route path="investors/:id" element={<Need perms={['investor.manage']}><InvestorDetail /></Need>} />
-        <Route path="daybook" element={<Need perms={['daybook.view', 'daybook.manage']}><Daybook /></Need>} />
+        <Route path="daybook" element={<Need perms={['daybook.view', 'daybook.manage', 'daybook.request', 'daybook.approve']}><Daybook /></Need>} />
         <Route path="handovers" element={<Need perms={['handover.verify']}><Handovers /></Need>} />
         <Route path="ask" element={<Need perms={['report.view']}><Ask /></Need>} />
         <Route path="reports" element={<Need perms={['report.view']}><Reports /></Need>} />

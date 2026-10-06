@@ -88,7 +88,7 @@ const groups: { title: string; items: Item[] }[] = [
     items: [
       { to: '/funds', key: 'nav.funds', perms: ['fund.manage'], icon: Landmark },
       { to: '/investors', key: 'nav.investors', perms: ['investor.manage'], icon: PiggyBank },
-      { to: '/daybook', key: 'nav.daybook', perms: ['daybook.view', 'daybook.manage'], icon: BookOpen },
+      { to: '/daybook', key: 'nav.daybook', perms: ['daybook.view', 'daybook.manage', 'daybook.request', 'daybook.approve'], icon: BookOpen },
       { to: '/handovers', key: 'nav.handovers', perms: ['handover.verify'], icon: ArrowLeftRight },
     ],
   },

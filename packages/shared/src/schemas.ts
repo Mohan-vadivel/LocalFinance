@@ -299,6 +299,12 @@ export const daybookEntrySchema = z.object({
   particulars: z.string().trim().min(2).max(300),
   billUrl: optStr,
 });
+export const DAYBOOK_REQUEST_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'] as const;
+export const daybookRejectSchema = z.object({
+  reason: z.string().trim().min(3).max(300),
+  /** Who must answer for the rejected amount; the person who entered it when omitted. */
+  responsibleId: id.optional(),
+});
 export const expenseCategorySchema = z.object({
   name: z.string().trim().min(2),
   kind: z.enum(['EXPENSE', 'INCOME', 'DRAWING', 'BANK']),

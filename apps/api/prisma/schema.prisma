@@ -36,14 +36,16 @@ model Tenant {
 }
 
 model Role {
-  id          String   @id @default(cuid())
-  tenantId    String?
-  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
-  name        String
-  baseRole    String // one of ROLES
-  permissions String[]
-  system      Boolean  @default(false)
-  users       User[]
+  id           String   @id @default(cuid())
+  tenantId     String?
+  tenant       Tenant?  @relation(fields: [tenantId], references: [id])
+  name         String
+  baseRole     String // one of ROLES
+  permissions  String[]
+  /// Which PERMISSIONS_ADDED versions this role has been given (see the shared permissions file).
+  permsVersion Int      @default(0)
+  system       Boolean  @default(false)
+  users        User[]
 
   @@unique([tenantId, name])
 }
@@ -449,7 +451,7 @@ model AgentFloat {
 }
 
 model Handover {
-  id           String    @id @default(cuid())
+  id           String   @id @default(cuid())
   tenantId     String
   branchId     String
   agentId      String
@@ -459,7 +461,7 @@ model Handover {
   difference   Int
   note         String?
   verifiedById String
-  verifiedAt   DateTime  @default(now())
+  verifiedAt   DateTime @default(now())
 
   @@unique([agentId, date])
   @@index([tenantId, date])
@@ -483,21 +485,21 @@ model Investor {
 }
 
 model Investment {
-  id                    String      @id @default(cuid())
+  id                    String        @id @default(cuid())
   tenantId              String
   investorId            String
-  investor              Investor    @relation(fields: [investorId], references: [id])
+  investor              Investor      @relation(fields: [investorId], references: [id])
   branchId              String
   fundId                String
   amount                Int
   date                  String
   returnType            String
   returnRate            Float
-  payoutFrequencyMonths Int         @default(1)
+  payoutFrequencyMonths Int           @default(1)
   maturityDate          String?
-  principalWithdrawn    Int         @default(0)
-  status                String      @default("ACTIVE")
-  createdAt             DateTime    @default(now())
+  principalWithdrawn    Int           @default(0)
+  status                String        @default("ACTIVE")
+  createdAt             DateTime      @default(now())
   txns                  InvestorTxn[]
 }
 
@@ -551,6 +553,32 @@ model DaybookEntry {
   createdAt      DateTime @default(now())
 
   @@index([tenantId, branchId, date])
+}
+
+/// A day book line entered by someone without day book approval. It reaches the day book only when a branch
+/// manager approves it. A rejected request names the person who must answer for the amount.
+model DaybookRequest {
+  id            String    @id @default(cuid())
+  tenantId      String
+  branchId      String
+  date          String
+  direction     String // IN | OUT
+  categoryId    String
+  amount        Int
+  mode          String
+  particulars   String
+  billUrl       String?
+  status        String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  requestedById String
+  decidedById   String?
+  decidedAt     DateTime?
+  reason        String?
+  responsibleId String?
+  entryId       String?
+  createdAt     DateTime  @default(now())
+
+  @@index([tenantId, branchId, status])
+  @@index([tenantId, requestedById])
 }
 
 model DayClose {

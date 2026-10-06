@@ -229,7 +229,9 @@
     "daybook.view": "View day book",
     "report.view": "View reports",
     "pl.view": "View profit and loss",
-    "audit.view": "View audit log"
+    "audit.view": "View audit log",
+    "daybook.request": "Enter day book items for approval",
+    "daybook.approve": "Approve day book entries"
   },
   "customerMod": {
     "title": "Customers",
@@ -659,7 +661,32 @@
     "allBranches": "Showing all branches together. Choose a branch to close a day.",
     "auto": "auto",
     "contraWithdraw": "Bank to cash (withdrawal)",
-    "contraDeposit": "Cash to bank (deposit)"
+    "contraDeposit": "Cash to bank (deposit)",
+    "sentForApproval": "Sent to the branch manager for approval",
+    "needsApproval": "Your entries go to the branch manager. They reach the day book once approved.",
+    "requests": "Entries for approval",
+    "myEntries": "My day book entries",
+    "waiting": "Waiting for approval",
+    "statuses": {
+      "PENDING": "Waiting",
+      "APPROVED": "Approved",
+      "REJECTED": "Rejected"
+    },
+    "approve": "Approve",
+    "reject": "Reject",
+    "rejectTitle": "Reject this entry",
+    "reason": "Reason",
+    "responsible": "Responsible person",
+    "responsibleHelp": "Who must answer for this amount. Usually the person who entered it.",
+    "enteredBy": "Entered by",
+    "decidedBy": "Decided by",
+    "approvedBy": "approved by {{name}}",
+    "rejectedTotals": "Rejected amounts by responsible person",
+    "entries": "Entries",
+    "nothingWaiting": "No entries are waiting for approval.",
+    "ownEntry": "Your entry",
+    "confirmApprove": "Approve {{amount}} for {{name}}? It will be added to the day book.",
+    "send": "Send for approval"
   },
   "handover": {
     "title": "Cash handover",
@@ -804,7 +831,8 @@
       "server": "Wait a minute and try again. If it keeps happening, tell your administrator.",
       "fundInsufficient": "Add money to the fund, or choose another fund.",
       "sessionExpired": "Your work on this screen was not saved."
-    }
+    },
+    "daybookApprovalsPending": "Some day book entries for this day are still waiting for approval. Approve or reject them first."
   },
   "reportCols": {
     "date": "Date",
@@ -1133,7 +1161,8 @@
     "flaggedCollections": "Collections far from the customer",
     "missedPromises": "Promises to pay not kept",
     "oldest": "Oldest: {{date}}",
-    "goTo": "Go to {{page}}"
+    "goTo": "Go to {{page}}",
+    "dayBookApprovals": "Day book entries to approve"
   },
   "empty": {
     "branches": "No branches yet. Every customer, loan and fund belongs to a branch.",

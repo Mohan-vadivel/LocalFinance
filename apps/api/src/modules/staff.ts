@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Injectable, Param, Post, Put, Query } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
-import { roleSchema, staffSchema } from '@localfinance/shared';
+import { ROLE_PERMS_VERSION, roleSchema, staffSchema } from '@localfinance/shared';
 import { z } from 'zod';
 import { AuditService } from '../common/audit.service';
 import { CurrentCtx, Perm, type Ctx } from '../common/context';
@@ -163,7 +163,7 @@ export class StaffService {
   async createRole(ctx: Ctx, input: z.infer<typeof roleSchema>) {
     if (input.baseRole === 'SUPER_ADMIN') throw forbidden();
     if (await this.prisma.role.findFirst({ where: { tenantId: ctx.tenantId, name: input.name } })) throw conflict('A role with this name exists');
-    const r = await this.prisma.role.create({ data: { ...input, tenantId: ctx.tenantId, permissions: input.permissions.filter((p) => p !== 'tenant.manage') } });
+    const r = await this.prisma.role.create({ data: { ...input, tenantId: ctx.tenantId, permissions: input.permissions.filter((p) => p !== 'tenant.manage'), permsVersion: ROLE_PERMS_VERSION } });
     await this.audit.log(ctx, 'CREATE', 'Role', r.id, undefined, input);
     return r;
   }
@@ -186,7 +186,7 @@ export class StaffService {
 export class StaffController {
   constructor(private readonly svc: StaffService) {}
 
-  @Get('staff') @Perm('staff.manage', 'route.manage', 'report.view', 'handover.verify') list(@CurrentCtx() ctx: Ctx, @Query('branchId') branchId?: string, @Query('role') role?: string) {
+  @Get('staff') @Perm('staff.manage', 'route.manage', 'report.view', 'handover.verify', 'daybook.approve') list(@CurrentCtx() ctx: Ctx, @Query('branchId') branchId?: string, @Query('role') role?: string) {
     return this.svc.list(ctx, { branchId, role });
   }
   @Get('staff/:id') @Perm('staff.manage') get(@CurrentCtx() ctx: Ctx, @Param('id') id: string) {

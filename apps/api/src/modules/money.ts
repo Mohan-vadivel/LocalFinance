@@ -3,6 +3,8 @@ import {
   addMonthsClamped,
   dayCloseSchema,
   daybookEntrySchema,
+  daybookRejectSchema,
+  DAYBOOK_REQUEST_STATUSES,
   diffDays,
   expenseCategorySchema,
   fundDepositSchema,
@@ -397,6 +399,8 @@ export class DaybookService {
       this.prisma.user.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, name: true } }),
       this.prisma.dayClose.findMany({ where: { tenantId: ctx.tenantId, branchId: { in: branches.map((b) => b.id) }, date: { gte: q.from, lte: to } } }),
     ]);
+    const reqIds = entries.filter((e) => e.refType === 'DaybookRequest' && e.refId).map((e) => e.refId!);
+    const approvals = reqIds.length ? await this.prisma.daybookRequest.findMany({ where: { tenantId: ctx.tenantId, id: { in: reqIds } }, select: { id: true, decidedById: true } }) : [];
     const closing = { ...opening };
     let receipts = 0;
     let payments = 0;
@@ -418,16 +422,40 @@ export class DaybookService {
         ...e,
         categoryName: e.categoryId ? categories.find((c) => c.id === e.categoryId)?.name : null,
         createdByName: users.find((u) => u.id === e.createdById)?.name,
+        approvedByName: users.find((u) => u.id === approvals.find((a) => a.id === e.refId)?.decidedById)?.name,
       })),
     };
   }
 
+  /**
+   * Adds a day book line. Someone with day book approval (the branch manager, the owner) posts it straight away;
+   * anyone else sends it to the branch manager, and it reaches the day book only once approved.
+   */
   async addEntry(ctx: Ctx, input: z.infer<typeof daybookEntrySchema>) {
     assertBranch(ctx, input.branchId);
     await assertOwned(this.prisma.branch, ctx, input.branchId, 'Branch');
     const cat = await this.prisma.expenseCategory.findFirst({ where: { id: input.categoryId, tenantId: ctx.tenantId } });
     if (!cat) throw notFound('Category');
     if (input.date > todayIST()) throw bad('Entries cannot be in the future');
+    if (!ctx.permissions.has('daybook.approve')) {
+      if (await this.prisma.dayClose.findUnique({ where: { branchId_date: { branchId: input.branchId, date: input.date } } })) throw bad('That day is already closed', 'errors.dayClosed');
+      const r = await this.prisma.daybookRequest.create({
+        data: {
+          tenantId: ctx.tenantId,
+          branchId: input.branchId,
+          date: input.date,
+          direction: input.direction,
+          categoryId: cat.id,
+          amount: input.amount,
+          mode: input.mode,
+          particulars: input.particulars,
+          billUrl: input.billUrl ?? null,
+          requestedById: ctx.userId,
+        },
+      });
+      await this.audit.log(ctx, 'CREATE', 'DaybookRequest', r.id, undefined, input);
+      return { pending: true, request: r };
+    }
     const e = await this.prisma.tx((tx) =>
       this.books.daybook(tx, {
         tenantId: ctx.tenantId,
@@ -447,6 +475,90 @@ export class DaybookService {
     return e;
   }
 
+  /**
+   * Day book entries waiting for, or past, a branch manager's decision. Approvers and day book viewers see their
+   * branches; everyone else sees only what they entered or were made responsible for.
+   */
+  async requests(ctx: Ctx, q: z.infer<typeof requestsQuery>) {
+    const all = ctx.permissions.has('daybook.approve') || ctx.permissions.has('daybook.view');
+    const rows = await this.prisma.daybookRequest.findMany({
+      where: {
+        ...branchScope(ctx, q.branchId),
+        ...(q.status ? { status: q.status } : {}),
+        ...(q.from || q.to ? { date: { ...(q.from ? { gte: q.from } : {}), ...(q.to ? { lte: q.to } : {}) } } : {}),
+        ...(all ? {} : { OR: [{ requestedById: ctx.userId }, { responsibleId: ctx.userId }] }),
+      },
+      orderBy: [{ status: 'desc' }, { date: 'desc' }, { createdAt: 'desc' }],
+      take: 500,
+    });
+    const [users, categories, branches] = await Promise.all([
+      this.prisma.user.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, name: true } }),
+      this.prisma.expenseCategory.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, name: true } }),
+      this.prisma.branch.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, name: true } }),
+    ]);
+    const name = (id: string | null) => (id ? users.find((u) => u.id === id)?.name : undefined);
+    return rows.map((r) => ({
+      ...r,
+      branchName: branches.find((b) => b.id === r.branchId)?.name,
+      categoryName: categories.find((c) => c.id === r.categoryId)?.name,
+      requestedByName: name(r.requestedById),
+      decidedByName: name(r.decidedById),
+      responsibleName: name(r.responsibleId),
+    }));
+  }
+
+  private async pendingRequest(ctx: Ctx, id: string) {
+    const r = await this.prisma.daybookRequest.findFirst({ where: { id, tenantId: ctx.tenantId } });
+    if (!r) throw notFound('Day book entry');
+    assertBranch(ctx, r.branchId);
+    if (r.status !== 'PENDING') throw bad('This entry has already been decided');
+    if (r.requestedById === ctx.userId) throw forbidden('You cannot approve or reject your own entry');
+    return r;
+  }
+
+  /** Posts the entry to the day book on the day it was entered for, in the name of the person who entered it. */
+  async approve(ctx: Ctx, id: string) {
+    const r = await this.pendingRequest(ctx, id);
+    const e = await this.prisma.tx(async (tx) => {
+      // Claims the request first, so two managers approving at once cannot post it twice.
+      const claimed = await tx.daybookRequest.updateMany({ where: { id, status: 'PENDING' }, data: { status: 'APPROVED', decidedById: ctx.userId, decidedAt: new Date() } });
+      if (!claimed.count) throw bad('This entry has already been decided');
+      const entry = await this.books.daybook(tx, {
+        tenantId: r.tenantId,
+        branchId: r.branchId,
+        date: r.date,
+        direction: r.direction as 'IN' | 'OUT',
+        amount: r.amount,
+        mode: r.mode,
+        particulars: r.particulars,
+        categoryId: r.categoryId,
+        source: 'MANUAL',
+        refType: 'DaybookRequest',
+        refId: r.id,
+        userId: r.requestedById,
+        billUrl: r.billUrl,
+      });
+      await tx.daybookRequest.update({ where: { id }, data: { entryId: entry?.id } });
+      return entry;
+    });
+    await this.audit.log(ctx, 'APPROVE', 'DaybookRequest', id, r, { entryId: e?.id });
+    return e;
+  }
+
+  /** Keeps the entry out of the day book and records why, and who must answer for the amount. */
+  async reject(ctx: Ctx, id: string, input: z.infer<typeof daybookRejectSchema>) {
+    const r = await this.pendingRequest(ctx, id);
+    const responsibleId = input.responsibleId ?? r.requestedById;
+    await assertOwned(this.prisma.user, ctx, responsibleId, 'Staff');
+    const claimed = await this.prisma.daybookRequest.updateMany({
+      where: { id, status: 'PENDING' },
+      data: { status: 'REJECTED', decidedById: ctx.userId, decidedAt: new Date(), reason: input.reason, responsibleId },
+    });
+    if (!claimed.count) throw bad('This entry has already been decided');
+    await this.audit.log(ctx, 'REJECT', 'DaybookRequest', id, r, { ...input, responsibleId });
+    return this.prisma.daybookRequest.findUnique({ where: { id } });
+  }
+
   /** Locks a day. Blocked until every agent who collected cash that day has handed over. */
   async close(ctx: Ctx, input: z.infer<typeof dayCloseSchema>) {
     assertBranch(ctx, input.branchId);
@@ -462,6 +574,8 @@ export class DaybookService {
       const names = await this.prisma.user.findMany({ where: { id: { in: pending } }, select: { name: true } });
       throw bad(`Waiting for cash handover from ${names.map((n) => n.name).join(', ')}`);
     }
+    const waiting = await this.prisma.daybookRequest.count({ where: { tenantId: ctx.tenantId, branchId: input.branchId, date: input.date, status: 'PENDING' } });
+    if (waiting) throw bad(`Waiting for the branch manager to approve or reject ${waiting} day book ${waiting === 1 ? 'entry' : 'entries'}`, 'errors.daybookApprovalsPending');
     const day = await this.view(ctx, { branchId: input.branchId, from: input.date });
     const c = await this.prisma.dayClose.create({
       data: {
@@ -492,6 +606,7 @@ export class DaybookService {
 }
 
 const daybookQuery = z.object({ branchId: z.string().optional(), from: z.string(), to: z.string().optional() });
+const requestsQuery = z.object({ branchId: z.string().optional(), status: z.enum(DAYBOOK_REQUEST_STATUSES).optional(), from: z.string().optional(), to: z.string().optional() });
 
 @Controller('daybook')
 export class DaybookController {
@@ -499,14 +614,23 @@ export class DaybookController {
   @Get() @Perm('daybook.view', 'daybook.manage') view(@CurrentCtx() ctx: Ctx, @Query(V(daybookQuery)) q: z.infer<typeof daybookQuery>) {
     return this.svc.view(ctx, q);
   }
-  @Get('categories') @Perm('daybook.view', 'daybook.manage') categories(@CurrentCtx() ctx: Ctx) {
+  @Get('categories') @Perm('daybook.view', 'daybook.manage', 'daybook.request') categories(@CurrentCtx() ctx: Ctx) {
     return this.svc.categories(ctx);
   }
   @Post('categories') @Perm('daybook.manage') createCategory(@CurrentCtx() ctx: Ctx, @Body(V(expenseCategorySchema)) b: z.infer<typeof expenseCategorySchema>) {
     return this.svc.createCategory(ctx, b);
   }
-  @Post('entries') @Perm('daybook.manage') add(@CurrentCtx() ctx: Ctx, @Body(V(daybookEntrySchema)) b: z.infer<typeof daybookEntrySchema>) {
+  @Post('entries') @Perm('daybook.manage', 'daybook.request', 'daybook.approve') add(@CurrentCtx() ctx: Ctx, @Body(V(daybookEntrySchema)) b: z.infer<typeof daybookEntrySchema>) {
     return this.svc.addEntry(ctx, b);
+  }
+  @Get('requests') @Perm('daybook.view', 'daybook.manage', 'daybook.request', 'daybook.approve') requests(@CurrentCtx() ctx: Ctx, @Query(V(requestsQuery)) q: z.infer<typeof requestsQuery>) {
+    return this.svc.requests(ctx, q);
+  }
+  @Post('requests/:id/approve') @Perm('daybook.approve') approve(@CurrentCtx() ctx: Ctx, @Param('id') id: string) {
+    return this.svc.approve(ctx, id);
+  }
+  @Post('requests/:id/reject') @Perm('daybook.approve') reject(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body(V(daybookRejectSchema)) b: z.infer<typeof daybookRejectSchema>) {
+    return this.svc.reject(ctx, id, b);
   }
   @Post('close') @Perm('daybook.manage') close(@CurrentCtx() ctx: Ctx, @Body(V(dayCloseSchema)) b: z.infer<typeof dayCloseSchema>) {
     return this.svc.close(ctx, b);

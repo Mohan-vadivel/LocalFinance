@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { loadLanguage } from './i18n';
 import Customer from './screens/Customer';
+import Daybook from './screens/Daybook';
 import { AddCustomer, LoanRequest, MyRequests, Search } from './screens/Forms';
 import Home from './screens/Home';
 import { MenuProvider } from './Menu';
@@ -29,6 +30,8 @@ function Screens({ route }: { route: Route }) {
       return <LoanRequest customerId={p.customerId as string} customerName={p.customerName as string} />;
     case 'MyRequests':
       return <MyRequests />;
+    case 'Daybook':
+      return <Daybook />;
     case 'Summary':
       return <Summary />;
     case 'CollectionReport':

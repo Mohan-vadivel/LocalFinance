@@ -952,7 +952,7 @@ export class DashboardService {
     const since = addDays(today, -ACTION_DAYS);
     const scope = branchScope(ctx, branchId);
     const has = (p: Permission) => ctx.permissions.has(p);
-    const [pendingApprovals, toDisburse, handovers, dayBooks, flaggedCollections, missedPromises] = await Promise.all([
+    const [pendingApprovals, toDisburse, handovers, dayBooks, flaggedCollections, missedPromises, dayBookApprovals] = await Promise.all([
       // Same queue as GET /loans?queue=approvals: managers act on the branch stage, the Tenant Admin on everything.
       has('loan.approve') ? this.prisma.loan.count({ where: { ...scope, status: 'REQUESTED', ...(ctx.role === 'TENANT_ADMIN' ? {} : { stage: 'BRANCH' }) } }) : null,
       has('loan.disburse') ? this.prisma.loan.count({ where: { ...scope, status: 'APPROVED' } }) : null,
@@ -961,8 +961,10 @@ export class DashboardService {
       has('report.view') ? this.prisma.collection.count({ where: { ...scope, flagged: true, reversedAt: null, date: { gte: since, lte: today } } }) : null,
       // Supervisors see every agent's promises; an agent sees only the ones they took.
       has('report.view') || has('collection.record') ? this.missedPromises(ctx, scope, since, today, !has('report.view')) : null,
+      // Day book entries from staff waiting for this manager; their own entries are not theirs to decide.
+      has('daybook.approve') ? this.prisma.daybookRequest.count({ where: { ...scope, status: 'PENDING', requestedById: { not: ctx.userId } } }) : null,
     ]);
-    return { date: today, since, pendingApprovals, toDisburse, handovers, dayBooks, flaggedCollections, missedPromises };
+    return { date: today, since, pendingApprovals, toDisburse, handovers, dayBooks, flaggedCollections, missedPromises, dayBookApprovals };
   }
 
   /** Agent-days with cash collected or a float given but no handover yet (the same rule that blocks a day close). */
@@ -1060,7 +1062,7 @@ export class ReportsController {
   @Get('dashboard') @Perm('report.view') dash(@CurrentCtx() ctx: Ctx, @Query('branchId') branchId?: string) {
     return this.dashboard.get(ctx, branchId);
   }
-  @Get('dashboard/actions') @Perm('report.view', 'loan.approve', 'loan.disburse', 'handover.verify', 'daybook.manage', 'collection.record') actions(@CurrentCtx() ctx: Ctx, @Query('branchId') branchId?: string) {
+  @Get('dashboard/actions') @Perm('report.view', 'loan.approve', 'loan.disburse', 'handover.verify', 'daybook.manage', 'daybook.approve', 'collection.record') actions(@CurrentCtx() ctx: Ctx, @Query('branchId') branchId?: string) {
     return this.dashboard.actions(ctx, branchId);
   }
   @Get('dashboard/setup') @Perm('settings.manage') setup(@CurrentCtx() ctx: Ctx) {

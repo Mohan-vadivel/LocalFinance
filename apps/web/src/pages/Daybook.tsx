@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CheckCheck } from 'lucide-react';
+import { Check, CheckCheck, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { BranchPicker, ModeSelect } from '../components/pickers';
-import { Badge, DataTable, ErrorBox, Field, FormModal, Modal, Stat, useToast, RowActions } from '../components/ui';
+import { BranchPicker, ModeSelect, StaffPicker } from '../components/pickers';
+import { Badge, DataTable, ErrorBox, Field, FormModal, Modal, Stat, Tabs, useToast, RowActions } from '../components/ui';
 import { get, openFile, post, upload } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateIN, dateTime, money, toPaise, today } from '../lib/format';
 import { useLoad } from '../lib/hooks';
 
 interface Category { id: string; name: string; kind: string; active: boolean }
-interface Entry { id: string; date: string; voucherNo: string; direction: string; categoryName: string | null; systemCategory: string | null; amount: number; mode: string; particulars: string; billUrl: string | null; source: string; createdByName?: string; createdAt: string }
+interface Entry { id: string; date: string; voucherNo: string; direction: string; categoryName: string | null; systemCategory: string | null; amount: number; mode: string; particulars: string; billUrl: string | null; source: string; createdByName?: string; approvedByName?: string; createdAt: string }
 interface Day {
   from: string;
   to: string;
@@ -32,7 +32,16 @@ export default function Daybook() {
   const [branchId, setBranchId] = useState(params.get('branchId') ?? (profile?.branches.length === 1 ? profile.branches[0].id : ''));
   const [from, setFrom] = useState(params.get('date') ?? today());
   const [to, setTo] = useState(params.get('date') ?? today());
-  const { data, error, reload } = useLoad(() => get<Day>('/daybook', { branchId, from, to }), [branchId, from, to]);
+  // Staff who can only send entries for approval do not see the whole day book, just their own entries.
+  const full = can('daybook.view', 'daybook.manage');
+  const approver = can('daybook.approve');
+  const canEnter = can('daybook.manage', 'daybook.request', 'daybook.approve');
+  const { data, error, reload } = useLoad(() => (full ? get<Day>('/daybook', { branchId, from, to }) : Promise.resolve(null)), [branchId, from, to, full]);
+  const [version, setVersion] = useState(0);
+  const changed = () => {
+    setVersion((v) => v + 1);
+    void reload();
+  };
   const cats = useLoad(() => get<Category[]>('/daybook/categories'), []);
   const [adding, setAdding] = useState(false);
   const [catsOpen, setCatsOpen] = useState(false);
@@ -61,10 +70,11 @@ export default function Daybook() {
           <label className="field inline">{t('common.from')}<input type="date" value={from} onChange={(e) => { setFrom(e.target.value); if (e.target.value > to) setTo(e.target.value); }} /></label>
           <label className="field inline">{t('common.to')}<input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></label>
           {can('daybook.manage') && <button className="btn" onClick={() => setCatsOpen(true)}>{t('daybook.categories')}</button>}
-          {can('daybook.manage') && <button className="btn primary" onClick={() => setAdding(true)}>{t('daybook.newEntry')}</button>}
+          {canEnter && <button className="btn primary" onClick={() => setAdding(true)}>{t('daybook.newEntry')}</button>}
         </div>
       </div>
       <ErrorBox error={error ?? actionError} />
+      <Requests branchId={branchId} from={from} to={to} approver={approver} mine={!full && !approver} version={version} onChanged={changed} />
       {data && (
         <>
           <div className="grid k4" style={{ marginBottom: 16 }}>
@@ -108,7 +118,7 @@ export default function Daybook() {
                 { key: 'mode', label: t('common.mode'), value: (e) => t(`common.modes.${e.mode}`) },
                 { key: 'in', label: t('daybook.in'), money: true, total: true, value: (e) => (e.direction === 'IN' ? e.amount : null) },
                 { key: 'out', label: t('daybook.out'), money: true, total: true, value: (e) => (e.direction === 'OUT' ? e.amount : null) },
-                { key: 'createdByName', label: t('audit.actor'), value: (e) => `${e.createdByName ?? ''}${e.source === 'AUTO' ? ` (${t('daybook.auto')})` : ''}` },
+                { key: 'createdByName', label: t('audit.actor'), value: (e) => `${e.createdByName ?? ''}${e.source === 'AUTO' ? ` (${t('daybook.auto')})` : ''}${e.approvedByName ? ` (${t('daybook.approvedBy', { name: e.approvedByName })})` : ''}` },
                 { key: 'bill', label: t('daybook.bill'), value: (e) => (e.billUrl ? '✓' : ''), render: (e) => e.billUrl && <a href="#" onClick={(ev) => { ev.preventDefault(); void openFile(e.billUrl!); }}>{t('common.view')}</a> },
               ]}
             />
@@ -116,13 +126,13 @@ export default function Daybook() {
           </div>
         </>
       )}
-      {adding && <EntryForm branchId={branchId} categories={(cats.data ?? []).filter((c) => c.active)} onClose={() => setAdding(false)} onSaved={() => { toast(t('common.saved')); void reload(); }} />}
+      {adding && <EntryForm branchId={branchId} approver={approver} categories={(cats.data ?? []).filter((c) => c.active)} onClose={() => setAdding(false)} onSaved={(pending) => { toast(t(pending ? 'daybook.sentForApproval' : 'common.saved')); changed(); }} />}
       {catsOpen && <Categories categories={cats.data ?? []} onClose={() => setCatsOpen(false)} onSaved={() => void cats.reload()} />}
     </div>
   );
 }
 
-function EntryForm({ branchId, categories, onClose, onSaved }: { branchId: string; categories: Category[]; onClose: () => void; onSaved: () => void }) {
+function EntryForm({ branchId, approver, categories, onClose, onSaved }: { branchId: string; approver: boolean; categories: Category[]; onClose: () => void; onSaved: (pending: boolean) => void }) {
   const { t } = useTranslation();
   const [f, setF] = useState({ branchId, date: today(), direction: 'OUT', categoryId: '', amount: '', mode: 'CASH', particulars: '' });
   const [bill, setBill] = useState<File | null>(null);
@@ -140,20 +150,23 @@ function EntryForm({ branchId, categories, onClose, onSaved }: { branchId: strin
           const fromBank = f.direction === 'WITHDRAW';
           await post('/daybook/entries', { ...base, direction: 'OUT', mode: fromBank ? 'BANK' : 'CASH' });
           await post('/daybook/entries', { ...base, direction: 'IN', mode: fromBank ? 'CASH' : 'BANK' });
+          onSaved(false);
         } else {
-          await post('/daybook/entries', { ...base, direction: f.direction, mode: f.mode });
+          const r = await post<{ pending?: boolean }>('/daybook/entries', { ...base, direction: f.direction, mode: f.mode });
+          onSaved(!!r?.pending);
         }
-        onSaved();
       }}
     >
+      {!approver && <p className="muted full" style={{ margin: 0 }}>{t('daybook.needsApproval')}</p>}
       <Field label={t('common.branch')}><BranchPicker value={f.branchId} onChange={(v) => setF({ ...f, branchId: v })} /></Field>
       <Field label={t('common.date')}><input type="date" max={today()} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} /></Field>
       <Field label={t('daybook.direction')}>
         <select value={f.direction} onChange={(e) => setF({ ...f, direction: e.target.value, categoryId: '' })}>
           <option value="OUT">{t('daybook.out')}</option>
           <option value="IN">{t('daybook.in')}</option>
-          <option value="WITHDRAW">{t('daybook.contraWithdraw')}</option>
-          <option value="DEPOSIT">{t('daybook.contraDeposit')}</option>
+          {/* Moving money between bank and cash is office work for someone who posts straight to the day book. */}
+          {approver && <option value="WITHDRAW">{t('daybook.contraWithdraw')}</option>}
+          {approver && <option value="DEPOSIT">{t('daybook.contraDeposit')}</option>}
         </select>
       </Field>
       <Field label={t('daybook.category')}>
@@ -166,6 +179,159 @@ function EntryForm({ branchId, categories, onClose, onSaved }: { branchId: strin
       {!contra && <Field label={t('common.mode')}><ModeSelect value={f.mode} onChange={(v) => setF({ ...f, mode: v })} /></Field>}
       <Field label={t('daybook.particulars')} full><input value={f.particulars} onChange={(e) => setF({ ...f, particulars: e.target.value })} /></Field>
       <Field label={t('daybook.bill')} full><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setBill(e.target.files?.[0] ?? null)} /></Field>
+    </FormModal>
+  );
+}
+
+type ReqStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+interface Req {
+  id: string;
+  branchId: string;
+  branchName?: string;
+  date: string;
+  direction: string;
+  categoryName?: string;
+  amount: number;
+  mode: string;
+  particulars: string;
+  billUrl: string | null;
+  status: ReqStatus;
+  requestedById: string;
+  requestedByName?: string;
+  createdAt: string;
+  decidedByName?: string;
+  decidedAt: string | null;
+  reason: string | null;
+  responsibleId: string | null;
+  responsibleName?: string;
+}
+const REQ_TONE = { PENDING: 'warn', APPROVED: 'ok', REJECTED: 'danger' } as const;
+
+/**
+ * Day book entries sent by staff for a branch manager's approval. Waiting entries are listed whatever their date,
+ * so none are missed; approved and rejected ones follow the page's dates. Rejected ones are totalled per responsible person.
+ */
+function Requests({ branchId, from, to, approver, mine, version, onChanged }: { branchId: string; from: string; to: string; approver: boolean; mine: boolean; version: number; onChanged: () => void }) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const { profile } = useAuth();
+  const [tab, setTab] = useState<ReqStatus>('PENDING');
+  const { data, error, reload } = useLoad(() => get<Req[]>('/daybook/requests', { branchId, status: tab, ...(tab === 'PENDING' ? {} : { from, to }) }), [branchId, tab, from, to, version]);
+  const [rejecting, setRejecting] = useState<Req | null>(null);
+  const [actionError, setActionError] = useState<unknown>(null);
+  const approve = async (r: Req) => {
+    if (!window.confirm(t('daybook.confirmApprove', { amount: money(r.amount), name: r.requestedByName ?? '' }))) return;
+    setActionError(null);
+    try {
+      await post(`/daybook/requests/${r.id}/approve`, {});
+      toast(t('common.saved'));
+      onChanged();
+    } catch (e) {
+      setActionError(e);
+    }
+  };
+  const totals = new Map<string, { name: string; count: number; amount: number }>();
+  if (tab === 'REJECTED') {
+    for (const r of data ?? []) {
+      const k = r.responsibleId ?? '';
+      const row = totals.get(k) ?? { name: r.responsibleName ?? '', count: 0, amount: 0 };
+      row.count += 1;
+      row.amount += r.amount;
+      totals.set(k, row);
+    }
+  }
+  return (
+    <div className="card">
+      <div className="card-head row">
+        <h3 style={{ margin: 0 }}>{mine ? t('daybook.myEntries') : t('daybook.requests')}</h3>
+        <span className="spacer" />
+        <Tabs value={tab} onChange={setTab} items={(['PENDING', 'APPROVED', 'REJECTED'] as const).map((k) => ({ key: k, label: t(`daybook.statuses.${k}`) }))} />
+      </div>
+      <ErrorBox error={error ?? actionError} />
+      {tab === 'REJECTED' && totals.size > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <DataTable
+            title={t('daybook.rejectedTotals')}
+            rows={[...totals.values()]}
+            columns={[
+              { key: 'name', label: t('daybook.responsible') },
+              { key: 'count', label: t('daybook.entries'), num: true, total: true },
+              { key: 'amount', label: t('common.amount'), money: true, total: true },
+            ]}
+          />
+        </div>
+      )}
+      <DataTable
+        title={`${mine ? t('daybook.myEntries') : t('daybook.requests')} · ${t(`daybook.statuses.${tab}`)}`}
+        rows={data}
+        empty={tab === 'PENDING' ? t('daybook.nothingWaiting') : undefined}
+        columns={[
+          { key: 'date', label: t('common.date'), value: (r) => dateIN(r.date) },
+          ...(branchId ? [] : [{ key: 'branchName', label: t('common.branch') }]),
+          { key: 'categoryName', label: t('daybook.category') },
+          { key: 'particulars', label: t('daybook.particulars') },
+          { key: 'mode', label: t('common.mode'), value: (r: Req) => t(`common.modes.${r.mode}`) },
+          { key: 'in', label: t('daybook.in'), money: true, total: true, value: (r: Req) => (r.direction === 'IN' ? r.amount : null) },
+          { key: 'out', label: t('daybook.out'), money: true, total: true, value: (r: Req) => (r.direction === 'OUT' ? r.amount : null) },
+          { key: 'requestedByName', label: t('daybook.enteredBy'), value: (r: Req) => `${r.requestedByName ?? ''} · ${dateTime(r.createdAt)}` },
+          ...(tab === 'PENDING'
+            ? []
+            : [{ key: 'decidedByName', label: t('daybook.decidedBy'), value: (r: Req) => `${r.decidedByName ?? ''}${r.decidedAt ? ` · ${dateTime(r.decidedAt)}` : ''}` }]),
+          ...(tab === 'REJECTED'
+            ? [
+                { key: 'reason', label: t('daybook.reason') },
+                { key: 'responsibleName', label: t('daybook.responsible') },
+              ]
+            : []),
+          { key: 'bill', label: t('daybook.bill'), value: (r: Req) => (r.billUrl ? '✓' : ''), render: (r: Req) => r.billUrl && <a href="#" onClick={(ev) => { ev.preventDefault(); void openFile(r.billUrl!); }}>{t('common.view')}</a> },
+          {
+            key: 'status',
+            label: t('common.status'),
+            value: (r: Req) => t(`daybook.statuses.${r.status}`),
+            render: (r: Req) =>
+              r.status === 'PENDING' && approver ? (
+                r.requestedById === profile?.id ? (
+                  <span className="muted">{t('daybook.ownEntry')}</span>
+                ) : (
+                  <RowActions
+                    actions={[
+                      { icon: Check, label: t('daybook.approve'), tone: 'primary', onClick: () => void approve(r) },
+                      { icon: X, label: t('daybook.reject'), tone: 'danger', onClick: () => setRejecting(r) },
+                    ]}
+                  />
+                )
+              ) : (
+                <Badge tone={REQ_TONE[r.status]}>{t(`daybook.statuses.${r.status}`)}</Badge>
+              ),
+          },
+        ]}
+      />
+      {rejecting && <RejectForm req={rejecting} onClose={() => setRejecting(null)} onSaved={() => { toast(t('common.saved')); onChanged(); void reload(); }} />}
+    </div>
+  );
+}
+
+function RejectForm({ req, onClose, onSaved }: { req: Req; onClose: () => void; onSaved: () => void }) {
+  const { t } = useTranslation();
+  const [reason, setReason] = useState('');
+  const [responsibleId, setResponsibleId] = useState(req.requestedById);
+  return (
+    <FormModal
+      title={`${t('daybook.rejectTitle')}: ${money(req.amount)}`}
+      submitLabel={t('daybook.reject')}
+      onClose={onClose}
+      onSubmit={async () => {
+        if (reason.trim().length < 3) throw new Error(`${t('daybook.reason')}: ${t('common.required')}`);
+        await post(`/daybook/requests/${req.id}/reject`, { reason: reason.trim(), responsibleId: responsibleId || undefined });
+        onSaved();
+      }}
+    >
+      <Field label={t('daybook.enteredBy')}><input value={`${req.requestedByName ?? ''} · ${req.particulars}`} disabled /></Field>
+      <Field label={t('daybook.responsible')}>
+        <StaffPicker value={responsibleId} onChange={setResponsibleId} branchId={req.branchId} />
+      </Field>
+      <p className="muted full" style={{ margin: 0 }}>{t('daybook.responsibleHelp')}</p>
+      <Field label={t('daybook.reason')} full><input autoFocus value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
     </FormModal>
   );
 }

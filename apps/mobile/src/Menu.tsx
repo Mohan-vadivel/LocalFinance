@@ -76,6 +76,7 @@ function Drawer({ anim, close }: { anim: Animated.Value; close: () => void }) {
     { key: 'AddCustomer', icon: 'person-add-outline', label: t('mobile.addCustomer'), onPress: () => go('AddCustomer'), show: can('customer.create') },
     { key: 'LoanRequest', icon: 'cash-outline', label: t('mobile.requestLoan'), onPress: () => go('Search', { forLoan: true }), show: can('loan.request') },
     { key: 'MyRequests', icon: 'document-text-outline', label: t('mobile.myRequests'), onPress: () => go('MyRequests'), show: can('loan.request') },
+    { key: 'Daybook', icon: 'book-outline', label: t('nav.daybook'), onPress: () => go('Daybook'), show: can('daybook.request', 'daybook.approve') },
   ];
   const reports: Item[] = [
     { key: 'Summary', icon: 'today-outline', label: t('mobile.daySummary'), onPress: () => go('Summary') },

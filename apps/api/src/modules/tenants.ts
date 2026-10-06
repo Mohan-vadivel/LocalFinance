@@ -1,9 +1,11 @@
-import { Body, Controller, Get, Injectable, Param, Patch, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, Injectable, type OnModuleInit, Param, Patch, Post, Put } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import {
   createTenantSchema,
   DEFAULT_ROLE_PERMISSIONS,
+  PERMISSIONS_ADDED,
+  ROLE_PERMS_VERSION,
   ROLES,
   tenantSettingsSchema,
   updateTenantSchema,
@@ -43,18 +45,30 @@ export const DEFAULT_EXPENSE_CATEGORIES: { name: string; kind: string }[] = [
 export async function bootstrapTenant(tx: Tx, tenantId: string) {
   for (const code of ROLES.filter((r) => r !== 'SUPER_ADMIN')) {
     await tx.role.create({
-      data: { tenantId, name: ROLE_NAMES[code], baseRole: code, permissions: DEFAULT_ROLE_PERMISSIONS[code], system: true },
+      data: { tenantId, name: ROLE_NAMES[code], baseRole: code, permissions: DEFAULT_ROLE_PERMISSIONS[code], permsVersion: ROLE_PERMS_VERSION, system: true },
     });
   }
   await tx.expenseCategory.createMany({ data: DEFAULT_EXPENSE_CATEGORIES.map((c) => ({ ...c, tenantId })) });
 }
 
 @Injectable()
-export class TenantsService {
+export class TenantsService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
   ) {}
+
+  /** Gives built-in roles of existing businesses the permissions added since they were set up. */
+  async onModuleInit() {
+    const roles = await this.prisma.role.findMany({ where: { system: true, permsVersion: { lt: ROLE_PERMS_VERSION } } });
+    for (const r of roles) {
+      const defaults = DEFAULT_ROLE_PERMISSIONS[r.baseRole as RoleCode] ?? [];
+      const added = Object.entries(PERMISSIONS_ADDED)
+        .filter(([v]) => Number(v) > r.permsVersion)
+        .flatMap(([, perms]) => perms.filter((p) => defaults.includes(p)));
+      await this.prisma.role.update({ where: { id: r.id }, data: { permissions: [...new Set([...r.permissions, ...added])], permsVersion: ROLE_PERMS_VERSION } });
+    }
+  }
 
   async list() {
     const tenants = await this.prisma.tenant.findMany({ orderBy: { createdAt: 'desc' } });
