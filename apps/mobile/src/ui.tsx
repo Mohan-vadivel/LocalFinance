@@ -86,7 +86,7 @@ interface Nav {
 const NavCtx = createContext<Nav>(null as unknown as Nav);
 export const useNav = () => useContext(NavCtx);
 
-export function NavProvider({ initial, children }: { initial: string; children: (top: Route) => ReactNode }) {
+export function NavProvider({ initial, children }: { initial: string; children: (top: Route, depth: number) => ReactNode }) {
   const [stack, setStack] = useState<Route[]>([{ name: initial }]);
   const nav: Nav = {
     stack,
@@ -112,8 +112,13 @@ export function NavProvider({ initial, children }: { initial: string; children: 
     });
     return () => sub.remove();
   }, [stack.length, top.name, initial]);
-  return <NavCtx.Provider value={nav}>{children(stack[stack.length - 1])}</NavCtx.Provider>;
+  return <NavCtx.Provider value={nav}>{children(stack[stack.length - 1], stack.length)}</NavCtx.Provider>;
 }
+
+/** True while the bottom tab bar is showing; screens then leave the bottom safe area to the bar. */
+export const TabBarCtx = createContext(false);
+/** The bottom safe-area edge for a full screen: none while the tab bar sits below it. */
+export const useScreenEdges = (): ('bottom' | 'left' | 'right')[] => (useContext(TabBarCtx) ? ['left', 'right'] : ['bottom', 'left', 'right']);
 
 /** Opens the side menu; provided by `MenuProvider` in Menu.tsx. */
 export const MenuCtx = createContext<{ open: () => void }>({ open: () => undefined });
@@ -157,9 +162,10 @@ export function Header({ title, subtitle, right, back = true, eyebrow }: { title
 }
 
 export function Screen({ title, children, right, scroll = true, back = true, subtitle }: { title: string; children: ReactNode; right?: ReactNode; scroll?: boolean; back?: boolean; subtitle?: string }) {
+  const edges = useScreenEdges();
   const body = scroll ? <ScrollView contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">{children}</ScrollView> : <View style={{ flex: 1 }}>{children}</View>;
   return (
-    <SafeAreaView style={s.safe} edges={['bottom', 'left', 'right']}>
+    <SafeAreaView style={s.safe} edges={edges}>
       <Header title={title} subtitle={subtitle} right={right} back={back} />
       {body}
     </SafeAreaView>

@@ -4,7 +4,7 @@ import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from '../session';
 import { cachedRouteDay, getFailed, getLastSync, getQueue, myRoutes, subscribe, sync, type MyRoute } from '../store';
-import { AmountPair, Avatar, Badge, Btn, C, Card, Chevron, ErrorText, Icon, IconButton, MAX_W, MAX_W_WIDE, MenuCtx, Notice, Progress, R, SP, Section, dateIN, money, s, todayIST, useLayout, useNav, type IconName } from '../ui';
+import { AmountPair, Avatar, Badge, Btn, C, Card, Chevron, ErrorText, Icon, IconButton, MAX_W, MAX_W_WIDE, MenuCtx, Notice, Progress, R, SP, Section, dateIN, money, s, todayIST, useLayout, useNav, useScreenEdges, type IconName } from '../ui';
 
 /** Pending, failed and last-sync state, kept current as the queue changes. */
 export function useSyncState() {
@@ -67,6 +67,7 @@ export default function Home() {
   const { t } = useTranslation();
   const nav = useNav();
   const insets = useSafeAreaInsets();
+  const edges = useScreenEdges();
   const { width, tablet, wide } = useLayout();
   const { profile, can } = useSession();
   const menu = useContext(MenuCtx);
@@ -234,7 +235,7 @@ export default function Home() {
   );
 
   return (
-    <SafeAreaView style={s.safe} edges={['bottom', 'left', 'right']}>
+    <SafeAreaView style={s.safe} edges={edges}>
       <View style={[s.header, { paddingTop: insets.top + SP.sm, paddingHorizontal: SP.md, paddingBottom: SP.md }]}>
         <View style={[s.headerInner, { gap: SP.sm, maxWidth: maxW }]}>
           <IconButton icon="menu" label={t('mobile.openMenu')} onPress={menu.open} />

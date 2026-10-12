@@ -12,8 +12,10 @@ import { Manager, Settings, Summary } from './screens/More';
 import CollectionReport from './screens/Report';
 import RouteDay from './screens/RouteDay';
 import { SessionProvider, useSession } from './session';
+import { TabBar } from './Tabs';
 import type { DayCustomer, MyRoute } from './store';
-import { Loading, NavProvider, type Route } from './ui';
+import { Loading, NavProvider, TabBarCtx, type Route } from './ui';
+import { View } from 'react-native';
 
 function Screens({ route }: { route: Route }) {
   const p = (route.params ?? {}) as Record<string, unknown>;
@@ -52,9 +54,15 @@ function Root() {
   // Keyed by user so a new login starts on a fresh home screen.
   return (
     <NavProvider key={profile.id} initial="Home">
-      {(top) => (
+      {(top, depth) => (
         <MenuProvider>
-          <Screens key={JSON.stringify(top.params ?? {}) + top.name} route={top} />
+          {/* The bottom bar sits under top-level screens; detail screens opened from them have a back button instead. */}
+          <TabBarCtx.Provider value={depth === 1}>
+            <View style={{ flex: 1 }}>
+              <Screens key={JSON.stringify(top.params ?? {}) + top.name} route={top} />
+            </View>
+            {depth === 1 && <TabBar />}
+          </TabBarCtx.Provider>
         </MenuProvider>
       )}
     </NavProvider>

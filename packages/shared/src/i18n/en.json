@@ -539,7 +539,14 @@
     "cashToHandOver": "Cash to hand over",
     "readyHandover": "Ready for handover: give {{amount}} to the office.",
     "noteFrom": "Note from {{name}}",
-    "editResubmit": "Edit and resubmit"
+    "editResubmit": "Edit and resubmit",
+    "tabs": {
+      "collect": "Collect",
+      "customers": "Customers",
+      "daybook": "Day book",
+      "reports": "Reports",
+      "more": "More"
+    }
   },
   "fund": {
     "title": "Funds",
