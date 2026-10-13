@@ -46,7 +46,27 @@ const claude = createServer((req, res) => {
 });
 const env = { ...process.env, ANTHROPIC_API_KEY: 'test-key', ANTHROPIC_BASE_URL: `http://127.0.0.1:${CLAUDE_PORT}`, DATABASE_URL: DB, PORT: String(PORT), JWT_SECRET: 'test-secret-0123456789abcdef', SMS_PROVIDER: 'log', SUPER_ADMIN_PHONE: '9000000000', SUPER_ADMIN_PASSWORD: 'ChangeMe@123', UPLOAD_DIR: resolve(root, '.test-uploads') };
 const sqlOnServer = (sql) => execSync(`npx prisma db execute --url "${SERVER}/postgres" --stdin`, { cwd: root, input: sql, stdio: ['pipe', 'ignore', 'inherit'] });
+const sqlOnDb = (sql) => execSync(`npx prisma db execute --url "${DB}" --stdin`, { cwd: root, input: sql, stdio: ['pipe', 'ignore', 'inherit'] });
 let server;
+// Starts the built API on the test database and waits until it answers.
+async function startApi() {
+  server = spawn('node', ['dist/main.js'], { cwd: root, env, stdio: 'ignore' });
+  for (let i = 0; i < 60; i++) {
+    try {
+      if ((await fetch(BASE + '/health')).ok) return;
+    } catch {}
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  throw new Error('API did not start');
+}
+async function stopApi() {
+  if (!server) return;
+  await new Promise((r) => {
+    server.once('exit', r);
+    server.kill();
+  });
+  server = null;
+}
 
 const today = () => new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
 
@@ -77,17 +97,10 @@ before(async () => {
   sqlOnServer(`CREATE DATABASE ${DB_NAME};`);
   execSync('npx prisma db push --skip-generate', { cwd: root, env, stdio: 'ignore' });
   execSync('node dist/seed.js --demo', { cwd: root, env, stdio: 'ignore' });
-  server = spawn('node', ['dist/main.js'], { cwd: root, env, stdio: 'ignore' });
-  for (let i = 0; i < 60; i++) {
-    try {
-      if ((await fetch(BASE + '/health')).ok) return;
-    } catch {}
-    await new Promise((r) => setTimeout(r, 250));
-  }
-  throw new Error('API did not start');
+  await startApi();
 });
 after(async () => {
-  server?.kill();
+  await stopApi();
   claude.close();
   await new Promise((r) => setTimeout(r, 500));
   // Removes only the database this run created.
@@ -1113,5 +1126,112 @@ describe('AI features', () => {
     idCardReply = { ...idCardReply, name: demoNames[0] };
     const id = await ok(api('POST', '/ai/read-id', { token: third, body: { mediaType: 'image/jpeg', image: 'A'.repeat(200) } }));
     assert.deepEqual(id.duplicates, []);
+  });
+});
+
+describe('routes with several areas', () => {
+  let anna, kk, twoRoute, otherBranchArea, thirunagar, second, first;
+
+  test('a route takes several areas; the first one chosen is its main area', async () => {
+    const areas = await ok(api('GET', '/locations', { token: owner }));
+    anna = areas.find((a) => a.name === 'Anna Nagar');
+    kk = areas.find((a) => a.name === 'KK Nagar');
+    const r = await ok(api('POST', '/routes', { token: owner, body: { locationIds: [kk.id, anna.id, kk.id], name: 'Two Areas Route', collectionDays: [1, 3, 5] } }));
+    twoRoute = r.id;
+    assert.equal(r.locationId, kk.id);
+    const row = (await ok(api('GET', '/routes', { token: owner }))).find((x) => x.id === twoRoute);
+    assert.deepEqual(row.locations.map((l) => l.name), ['KK Nagar', 'Anna Nagar'], 'main area first, duplicates dropped');
+    assert.equal(row.location.name, 'KK Nagar');
+    const day = await ok(api('GET', `/routes/${twoRoute}/day`, { token: owner }));
+    assert.deepEqual(day.route.locations.map((l) => l.name), ['KK Nagar', 'Anna Nagar']);
+    assert.deepEqual((await ok(api('GET', '/routes', { token: owner }))).find((x) => x.name === 'Anna Nagar Daily 1').locations.map((l) => l.name), ['Anna Nagar']);
+  });
+
+  test('the area filter finds a route by any of its areas, not only the main one', async () => {
+    const byAnna = await ok(api('GET', `/routes?locationId=${anna.id}`, { token: owner }));
+    assert.ok(byAnna.some((r) => r.id === twoRoute), 'Anna Nagar is a second area of the route');
+    assert.ok(byAnna.some((r) => r.name === 'Anna Nagar Daily 1'));
+    const byKk = await ok(api('GET', `/routes?locationId=${kk.id}`, { token: owner }));
+    assert.ok(byKk.some((r) => r.id === twoRoute));
+    assert.ok(!byKk.some((r) => r.name === 'Anna Nagar Daily 1'));
+  });
+
+  test('areas must belong to the business and to the route\'s branch', async () => {
+    const trichy = await ok(api('POST', '/branches', { token: owner, body: { name: 'Trichy', code: 'TRY' } }));
+    otherBranchArea = await ok(api('POST', '/locations', { token: owner, body: { branchId: trichy.id, name: 'Srirangam' } }));
+    const mixed = await api('POST', '/routes', { token: owner, body: { locationIds: [anna.id, otherBranchArea.id], name: 'Mixed Branches' } });
+    assert.equal(mixed.status, 400);
+    assert.equal(mixed.data.message, 'All areas of a route must be in the same branch');
+    assert.equal((await api('POST', '/routes', { token: owner, body: { locationIds: [anna.id, 'no-such-area'], name: 'Ghost Area' } })).status, 404);
+    assert.equal((await api('POST', '/routes', { token: owner, body: { name: 'No Areas' } })).status, 400);
+    assert.equal((await api('POST', '/routes', { token: owner, body: { locationIds: [], name: 'No Areas' } })).status, 400);
+    assert.equal((await api('PUT', `/routes/${twoRoute}`, { token: owner, body: { locationIds: [kk.id, otherBranchArea.id], name: 'Two Areas Route', collectionDays: [1, 3, 5] } })).status, 400);
+    const row = (await ok(api('GET', '/routes', { token: owner }))).find((x) => x.id === twoRoute);
+    assert.deepEqual(row.locations.map((l) => l.name), ['KK Nagar', 'Anna Nagar'], 'a refused edit changes nothing');
+  });
+
+  test('the old single-area request still works', async () => {
+    const r = await ok(api('POST', '/routes', { token: owner, body: { locationId: kk.id, name: 'Old App Route', collectionDays: [1] } }));
+    const row = (await ok(api('GET', '/routes', { token: owner }))).find((x) => x.id === r.id);
+    assert.deepEqual(row.locations.map((l) => l.name), ['KK Nagar']);
+  });
+
+  test('a customer\'s area must be one of the route\'s areas; editing the route moves the rest to the main area', async () => {
+    thirunagar = await ok(api('POST', '/locations', { token: owner, body: { branchId: (await ok(api('GET', '/branches', { token: owner })))[0].id, name: 'Thirunagar' } }));
+    const body = (phone, locationId) => ({ name: 'Two Area Customer', phone, address: '7 Test Street', locationId, routeId: twoRoute });
+    first = await ok(api('POST', '/customers', { token: owner, body: body('9123456790', kk.id) }));
+    second = await ok(api('POST', '/customers', { token: owner, body: body('9123456791', anna.id) }));
+    assert.equal((await api('POST', '/customers', { token: owner, body: body('9123456792', thirunagar.id) })).status, 400);
+    await ok(api('PUT', `/routes/${twoRoute}`, { token: owner, body: { locationIds: [kk.id], name: 'Two Areas Route', collectionDays: [1, 3, 5] } }));
+    assert.equal((await ok(api('GET', `/customers/${second.id}`, { token: owner }))).locationId, kk.id, 'customer in a removed area moves to the main area');
+    assert.equal((await ok(api('GET', `/customers/${first.id}`, { token: owner }))).locationId, kk.id);
+    await ok(api('PUT', `/routes/${twoRoute}`, { token: owner, body: { locationIds: [kk.id, anna.id], name: 'Two Areas Route', collectionDays: [1, 3, 5] } }));
+  });
+
+  test('moving an area to another branch takes it off the routes of the old branch', async () => {
+    const demoBranch = (await ok(api('GET', '/branches', { token: owner }))).find((b) => b.code === 'MDU');
+    const trichy = (await ok(api('GET', '/branches', { token: owner }))).find((b) => b.code === 'TRY');
+    const ponmalai = await ok(api('POST', '/locations', { token: owner, body: { branchId: demoBranch.id, name: 'Ponmalai' } }));
+    await ok(api('PUT', `/routes/${twoRoute}`, { token: owner, body: { locationIds: [kk.id, anna.id, ponmalai.id], name: 'Two Areas Route', collectionDays: [1, 3, 5] } }));
+    const moved = await api('PUT', `/locations/${ponmalai.id}`, { token: owner, body: { branchId: trichy.id, name: 'Ponmalai' } });
+    assert.equal(moved.status, 200);
+    const row = (await ok(api('GET', '/routes', { token: owner }))).find((x) => x.id === twoRoute);
+    assert.deepEqual(row.locations.map((l) => l.name), ['KK Nagar', 'Anna Nagar']);
+    assert.equal(row.branchId, demoBranch.id);
+  });
+
+  test('another business cannot use, read or change these areas or routes', async () => {
+    // A business of its own (the other one was suspended by an earlier test).
+    await ok(api('POST', '/platform/tenants', { token: superAdmin, body: { name: 'Fresh Finance', ownerName: 'Fresh Owner', ownerPhone: '9112222222', ownerPassword: 'Fresh@1234' } }));
+    const outsider = await login('9112222222', 'Fresh@1234');
+    const ob = await ok(api('POST', '/branches', { token: outsider, body: { name: 'Other Second', code: 'OS' } }));
+    const oa = await ok(api('POST', '/locations', { token: outsider, body: { branchId: ob.id, name: 'Other Area' } }));
+    const before = (await ok(api('GET', '/routes', { token: owner }))).length;
+    // Its own area plus a demo area, and an edit of a demo route to the outsider's area, are both refused as not found.
+    const mixed = await api('POST', '/routes', { token: outsider, body: { locationIds: [oa.id, anna.id], name: 'Stolen Area' } });
+    assert.equal(mixed.status, 404);
+    assert.equal((await api('PUT', `/routes/${twoRoute}`, { token: outsider, body: { locationIds: [oa.id], name: 'Two Areas Route', collectionDays: [1] } })).status, 404);
+    assert.equal((await api('PUT', `/routes/${twoRoute}`, { token: outsider, body: { locationIds: [anna.id], name: 'Two Areas Route', collectionDays: [1] } })).status, 404);
+    assert.equal((await api('POST', '/customers', { token: outsider, body: { name: 'Stolen Customer', phone: '9123456793', address: '8 Test Street', locationId: oa.id, routeId: twoRoute } })).status, 404);
+    assert.equal((await ok(api('GET', `/routes?locationId=${anna.id}`, { token: outsider }))).length, 0);
+    assert.equal((await ok(api('GET', '/routes', { token: owner }))).length, before, 'the demo business keeps its routes');
+    assert.deepEqual((await ok(api('GET', '/routes', { token: owner }))).find((x) => x.id === twoRoute).locations.map((l) => l.name), ['KK Nagar', 'Anna Nagar']);
+  });
+
+  test('routes made before areas were listed get their area rows when the API starts, once', async () => {
+    const legacy = await ok(api('POST', '/routes', { token: owner, body: { locationIds: [anna.id], name: 'Legacy Route', collectionDays: [1] } }));
+    // Simulates a route saved before the join table existed.
+    sqlOnDb(`DELETE FROM "RouteLocation" WHERE "routeId" = '${legacy.id}';`);
+    const gone = (await ok(api('GET', '/routes', { token: owner }))).find((x) => x.id === legacy.id);
+    assert.deepEqual(gone.locations, []);
+    await stopApi();
+    await startApi();
+    const back = (await ok(api('GET', '/routes', { token: owner }))).find((x) => x.id === legacy.id);
+    assert.deepEqual(back.locations.map((l) => l.name), ['Anna Nagar']);
+    assert.ok(!(await ok(api('GET', `/routes?locationId=${kk.id}`, { token: owner }))).some((x) => x.id === legacy.id));
+    await stopApi();
+    await startApi();
+    const again = (await ok(api('GET', '/routes', { token: owner }))).find((x) => x.id === legacy.id);
+    assert.deepEqual(again.locations.map((l) => l.name), ['Anna Nagar'], 'a second start adds nothing');
   });
 });

@@ -59,8 +59,8 @@ async function main() {
   const branch = await structure.createBranch(A, { name: 'Madurai', code: 'MDU', address: 'Main Road, Madurai', lat: 9.9252, lng: 78.1198 });
   const anna = await structure.createLocation(A, { branchId: branch.id, name: 'Anna Nagar', lat: 9.9196, lng: 78.1428 });
   const kk = await structure.createLocation(A, { branchId: branch.id, name: 'KK Nagar', lat: 9.9312, lng: 78.1531 });
-  const r1 = await structure.createRoute(A, { locationId: anna.id, name: 'Anna Nagar Daily 1', collectionDays: [1, 2, 3, 4, 5, 6] });
-  const r2 = await structure.createRoute(A, { locationId: kk.id, name: 'KK Nagar Weekly', collectionDays: [1, 3, 5] });
+  const r1 = await structure.createRoute(A, { locationIds: [anna.id], name: 'Anna Nagar Daily 1', collectionDays: [1, 2, 3, 4, 5, 6] });
+  const r2 = await structure.createRoute(A, { locationIds: [kk.id], name: 'KK Nagar Weekly', collectionDays: [1, 3, 5] });
 
   const roles = await prisma.role.findMany({ where: { tenantId: tenant.id } });
   const roleId = (code: RoleCode) => roles.find((r) => r.baseRole === code)!.id;

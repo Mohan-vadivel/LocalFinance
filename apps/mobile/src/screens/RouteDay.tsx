@@ -4,7 +4,7 @@ import { Linking, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { MapPins } from '../MapPins';
 import { getPosition, useSession } from '../session';
 import { getVisitOrder, lastKnownHere, onVisitOrder, orderDay, setVisitOrder, type VisitOrder } from '../smart';
-import { routeDay, subscribe, type DayCustomer, type PinStatus, type RouteDay as Day } from '../store';
+import { areaText, routeDay, subscribe, type DayCustomer, type PinStatus, type RouteDay as Day } from '../store';
 import { AmountPair, Badge, Btn, C, Card, Chevron, Chips, Icon, IconButton, Notice, PIN_COLORS, Progress, R, SP, Screen, SearchBar, dateIN, money, s, useLayout, useNav } from '../ui';
 import { EmptyState, FailureState, LoadingState, NoSearchResults, useSlowLoad } from '../states';
 import { SyncBar } from './Home';
@@ -77,7 +77,7 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
   return (
     <Screen
       title={name}
-      subtitle={day.route.location ? `${day.route.location} · ${dateIN(day.date)}` : dateIN(day.date)}
+      subtitle={areaText(day.route) ? `${areaText(day.route)} · ${dateIN(day.date)}` : dateIN(day.date)}
       scroll={false}
       right={
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.xs }}>

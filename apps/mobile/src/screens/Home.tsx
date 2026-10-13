@@ -5,7 +5,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Appbar, Text } from 'react-native-paper';
 import { get } from '../api';
 import { useSession } from '../session';
-import { cachedRouteDay, getFailed, getLastSync, getQueue, myRoutes, subscribe, sync, type MyRoute } from '../store';
+import { areaText, cachedRouteDay, getFailed, getLastSync, getQueue, myRoutes, subscribe, sync, type MyRoute } from '../store';
 import { AmountPair, Avatar, Badge, Btn, C, Card, Chevron, Icon, MAX_W, MAX_W_WIDE, MenuCtx, Notice, Progress, R, SP, SearchBar, Section, dateIN, money, s, todayIST, useLayout, useNav, useScreenEdges, type IconName } from '../ui';
 import { EmptyState, FailureState, SkeletonList } from '../states';
 
@@ -216,7 +216,7 @@ export default function Home() {
               <Avatar name={r.name} label={r.name.trim().slice(0, 1).toUpperCase()} color={r.collectsToday ? C.brand : C.grey} size={48} />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={{ fontSize: 18, fontWeight: '800', color: C.ink }}>{r.name}</Text>
-                <Text style={[s.muted, { marginTop: 2 }]}>{r.location} · {r.customerCount} {t('nav.customers')}</Text>
+                <Text style={[s.muted, { marginTop: 2 }]}>{areaText(r)} · {r.customerCount} {t('nav.customers')}</Text>
               </View>
               <Chevron />
             </View>

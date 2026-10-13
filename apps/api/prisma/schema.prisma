@@ -121,17 +121,18 @@ model Branch {
 }
 
 model Location {
-  id        String   @id @default(cuid())
-  tenantId  String
-  branchId  String
-  branch    Branch   @relation(fields: [branchId], references: [id])
-  name      String
-  lat       Float?
-  lng       Float?
-  notes     String?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  routes    Route[]
+  id         String          @id @default(cuid())
+  tenantId   String
+  branchId   String
+  branch     Branch          @relation(fields: [branchId], references: [id])
+  name       String
+  lat        Float?
+  lng        Float?
+  notes      String?
+  active     Boolean         @default(true)
+  createdAt  DateTime        @default(now())
+  routes     Route[]
+  routeAreas RouteLocation[]
 
   @@index([tenantId, branchId])
 }
@@ -147,8 +148,24 @@ model Route {
   active         Boolean           @default(true)
   createdAt      DateTime          @default(now())
   assignments    RouteAssignment[]
+  /// Every area the route covers. locationId above is the main (first chosen) area and is always one of these.
+  areas          RouteLocation[]
 
   @@index([tenantId, branchId])
+}
+
+/// One area (Location) covered by a route. A route can cover several areas.
+model RouteLocation {
+  id         String   @id @default(cuid())
+  tenantId   String
+  routeId    String
+  route      Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  locationId String
+  location   Location @relation(fields: [locationId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@unique([routeId, locationId])
+  @@index([tenantId, locationId])
 }
 
 model RouteAssignment {
