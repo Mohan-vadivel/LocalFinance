@@ -6,7 +6,7 @@ import { LANGUAGES } from '@localfinance/shared';
 import { ApiError, get, newRef, post, put } from '../api';
 import { getPosition } from '../session';
 import { cachedRouteDay, cachedRoutes, myRoutes, type DayCustomer, type MyRoute } from '../store';
-import { Amount, Avatar, Badge, Btn, C, Card, Chevron, Chips, ErrorText, Field, Icon, Loading, Notice, R, Row, SP, Screen, dateIN, money, s, toPaise, useNav } from '../ui';
+import { Amount, Avatar, Badge, Btn, C, Card, Chevron, Chips, EmptyState, ErrorText, Field, Icon, Loading, Notice, R, Row, SP, Screen, SearchBar, dateIN, money, s, toPaise, useLayout, useNav } from '../ui';
 
 // =====================================================================
 // Add customer (with GPS pin)
@@ -235,6 +235,7 @@ interface Found { id: string; name: string; code: string; phone: string; status:
 export function Search({ forLoan }: { forLoan?: boolean }) {
   const { t } = useTranslation();
   const nav = useNav();
+  const { compact } = useLayout();
   const [q, setQ] = useState('');
   // Customers on the agent's route copies on the phone: searched as you type, with or without a connection.
   const [onPhone, setOnPhone] = useState<Found[]>([]);
@@ -294,14 +295,14 @@ export function Search({ forLoan }: { forLoan?: boolean }) {
     else nav.push('Customer', { customerId: r.id });
   };
   return (
-    <Screen title={forLoan ? t('mobile.requestLoan') : t('mobile.searchCustomer')}>
-      <Card>
-        <Field label={t('customerMod.searchHint')} value={q} onChangeText={setQ} onSubmitEditing={() => void run()} returnKeyType="search" autoFocus />
-        <Btn title={t('common.search')} onPress={() => void run()} busy={busy} style={{ marginBottom: 0 }} />
-      </Card>
+    <Screen title={forLoan ? t('mobile.requestLoan') : t('mobile.search')}>
+      {/* Customers on this phone show as you type; the button also asks the office. */}
+      <SearchBar value={q} onChangeText={setQ} onSubmit={() => void run()} placeholder={compact ? t('common.search') : t('customerMod.searchHint')} label={t('customerMod.searchHint')} autoFocus />
+      <Btn icon="search" title={t('common.search')} onPress={() => void run()} busy={busy} disabled={term.length < 2} style={{ marginBottom: SP.md }} />
       <ErrorText error={error} />
       {offline && searched && <Notice tone="warn" text={t('mobile.searchOffline')} />}
-      {term.length >= 2 && rows.length === 0 && !busy && <Notice tone="warn" text={searched ? t('mobile.noMatch') : t('mobile.noMatchOnPhone')} />}
+      {term.length < 2 && <EmptyState icon="people-outline" title={forLoan ? t('mobile.requestLoan') : t('mobile.search')} text={t('mobile.searchStart')} />}
+      {term.length >= 2 && rows.length === 0 && !busy && <EmptyState icon="search" title={t('mobile.noMatch')} text={searched ? undefined : t('mobile.noMatchOnPhone')} />}
       {rows.map((r) => (
         <Card key={r.id} onPress={() => open(r)} accessibilityLabel={r.name} style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md }}>
           <Avatar name={r.name} size={44} color={r.status !== 'ACTIVE' ? C.danger : C.brand} />

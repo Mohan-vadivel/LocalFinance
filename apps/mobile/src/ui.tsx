@@ -54,7 +54,8 @@ export function useLayout() {
 const shadow = '0px 1px 2px rgba(16, 40, 36, 0.06), 0px 2px 8px rgba(16, 40, 36, 0.05)';
 
 export const PIN_COLORS: Record<PinStatus, string> = { PAID: '#067647', PARTIAL: '#d97706', MISSED: '#b42318', NOTHING_DUE: '#8a96a3', PENDING: '#0f766e' };
-export const money = (p: number | null | undefined) => (p == null ? '-' : formatINR(p));
+/** Rupees for the screen. Whole amounts drop the ".00" so figures are shorter and easier to read outdoors. */
+export const money = (p: number | null | undefined) => (p == null ? '-' : formatINR(p, { decimals: p % 100 !== 0 }));
 export const toPaise = (rupees: string) => Math.round(Number(rupees.replace(/,/g, '') || 0) * 100);
 export const todayIST = () => new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
 export const dateIN = (d?: string | null) => (d ? `${d.slice(8, 10)}-${d.slice(5, 7)}-${d.slice(0, 4)}` : '-');
@@ -189,12 +190,13 @@ export function Card({ children, style, onPress, tone, accessibilityLabel }: { c
   );
 }
 
-type BtnKind = 'primary' | 'plain' | 'danger' | 'tonal' | 'outline' | 'ghost';
+type BtnKind = 'primary' | 'plain' | 'danger' | 'tonal' | 'outline' | 'ghost' | 'light';
 /**
  * Buttons. `primary` is filled brand (the main action on a screen), `plain`/`tonal` is a soft brand fill for
- * secondary actions, `outline` a bordered neutral button, `danger` a filled red one. At least 48dp tall.
+ * secondary actions, `outline` a bordered neutral button, `danger` a filled red one, `light` a white button for use
+ * on a brand-coloured card. At least 48dp tall.
  */
-export function Btn({ title, onPress, kind = 'primary', disabled, busy, small, style, big, textStyle, accessibilityLabel }: { title: string; onPress: () => void; kind?: BtnKind; disabled?: boolean; busy?: boolean; small?: boolean; style?: StyleProp<ViewStyle>; big?: boolean; textStyle?: StyleProp<TextStyle>; accessibilityLabel?: string }) {
+export function Btn({ title, onPress, kind = 'primary', disabled, busy, small, style, big, textStyle, accessibilityLabel, icon }: { title: string; onPress: () => void; kind?: BtnKind; disabled?: boolean; busy?: boolean; small?: boolean; style?: StyleProp<ViewStyle>; big?: boolean; textStyle?: StyleProp<TextStyle>; accessibilityLabel?: string; icon?: IconName }) {
   const palette: Record<BtnKind, { bg: string; fg: string; border: string; pressed: string }> = {
     primary: { bg: C.brand, fg: C.onBrand, border: C.brand, pressed: C.brandDark },
     danger: { bg: C.danger, fg: '#fff', border: C.danger, pressed: '#8f1c13' },
@@ -202,6 +204,7 @@ export function Btn({ title, onPress, kind = 'primary', disabled, busy, small, s
     tonal: { bg: C.brandSoft, fg: C.brandInk, border: C.brandSoft, pressed: '#c9e8e1' },
     outline: { bg: C.panel, fg: C.ink, border: C.lineStrong, pressed: C.surface },
     ghost: { bg: 'transparent', fg: C.brand, border: 'transparent', pressed: C.brandSoft },
+    light: { bg: '#ffffff', fg: C.brandInk, border: '#ffffff', pressed: C.brandSoft },
   };
   const p = palette[kind];
   const off = disabled || busy;
@@ -223,7 +226,16 @@ export function Btn({ title, onPress, kind = 'primary', disabled, busy, small, s
         style,
       ]}
     >
-      {busy ? <ActivityIndicator color={p.fg} /> : <Text style={[s.btnText, small && s.btnTextSmall, big && s.btnTextBig, { color: p.fg }, textStyle]}>{title}</Text>}
+      {busy ? (
+        <ActivityIndicator color={p.fg} />
+      ) : icon ? (
+        <View style={s.btnRow}>
+          <Icon name={icon} size={big ? 24 : small ? 19 : 21} color={p.fg} />
+          <Text style={[s.btnText, small && s.btnTextSmall, big && s.btnTextBig, { color: p.fg, flexShrink: 1 }, textStyle]}>{title}</Text>
+        </View>
+      ) : (
+        <Text style={[s.btnText, small && s.btnTextSmall, big && s.btnTextBig, { color: p.fg }, textStyle]}>{title}</Text>
+      )}
     </Pressable>
   );
 }
@@ -251,6 +263,62 @@ export function Field({ label, prefix, large, hint, ...props }: TextInputProps &
         />
       </View>
       {hint ? <Text style={[s.muted, { marginTop: SP.xs, fontSize: 13 }]}>{hint}</Text> : null}
+    </View>
+  );
+}
+
+/**
+ * A rounded search box with a magnifier and a clear button. With `onPress` (and no `onChangeText`) it is a button
+ * that looks like a search box, for opening the search screen from the home screen. A placeholder cannot wrap, so
+ * give a short one on small phones and the full wording as `label` (read out by TalkBack).
+ */
+export function SearchBar({ value = '', onChangeText, onPress, placeholder, label, onSubmit, autoFocus, style }: { value?: string; onChangeText?: (v: string) => void; onPress?: () => void; placeholder: string; label?: string; onSubmit?: () => void; autoFocus?: boolean; style?: StyleProp<ViewStyle> }) {
+  const { t } = useTranslation();
+  const [focus, setFocus] = useState(false);
+  if (onPress && !onChangeText) {
+    return (
+      <Pressable onPress={onPress} accessibilityRole="search" accessibilityLabel={placeholder} style={({ pressed }) => [s.search, pressed && { backgroundColor: C.surface }, style]}>
+        <Icon name="search" size={22} color={C.brand} />
+        <Text style={[s.searchText, { color: C.muted }]} numberOfLines={2}>{placeholder}</Text>
+      </Pressable>
+    );
+  }
+  return (
+    <View style={[s.search, focus && s.inputFocus, style]}>
+      <Icon name="search" size={22} color={C.brand} />
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="#7a8786"
+        accessibilityLabel={label ?? placeholder}
+        returnKeyType="search"
+        onSubmitEditing={onSubmit}
+        autoFocus={autoFocus}
+        autoCorrect={false}
+        onFocus={() => setFocus(true)}
+        onBlur={() => setFocus(false)}
+        style={[s.searchText, s.searchInput]}
+      />
+      {value ? (
+        <Pressable onPress={() => onChangeText?.('')} hitSlop={8} accessibilityRole="button" accessibilityLabel={t('mobile.clearSearch')} style={({ pressed }) => [s.searchClear, pressed && { backgroundColor: C.surface }]}>
+          <Icon name="close-circle" size={22} color={C.muted} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+/** A friendly empty or "nothing found" state: a soft round icon, a line of text and an optional action. */
+export function EmptyState({ icon, title, text, action }: { icon: IconName; title: string; text?: string; action?: ReactNode }) {
+  return (
+    <View style={s.empty}>
+      <View style={s.emptyIcon}>
+        <Icon name={icon} size={30} color={C.brand} />
+      </View>
+      <Text style={s.emptyTitle}>{title}</Text>
+      {text ? <Text style={s.emptyText}>{text}</Text> : null}
+      {action}
     </View>
   );
 }
@@ -425,6 +493,15 @@ export const s = StyleSheet.create({
   btnSmall: { minHeight: 48, paddingVertical: 8, paddingHorizontal: 14, marginBottom: 0, borderRadius: R.md },
   btnBig: { minHeight: 60, borderRadius: R.lg },
   btnText: { fontSize: 16, fontWeight: '700', textAlign: 'center' },
+  btnRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SP.sm, maxWidth: '100%' },
+  search: { flexDirection: 'row', alignItems: 'center', gap: SP.sm, minHeight: 54, borderRadius: R.pill, borderWidth: 1.5, borderColor: C.lineStrong, backgroundColor: C.panel, paddingLeft: SP.lg, paddingRight: SP.sm, marginBottom: SP.md },
+  searchText: { flex: 1, minWidth: 0, fontSize: 16, color: C.ink },
+  searchInput: { minHeight: 50, paddingVertical: 8 },
+  searchClear: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  empty: { alignItems: 'center', paddingVertical: SP.xl, paddingHorizontal: SP.lg, gap: SP.sm },
+  emptyIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: C.brandSoft, alignItems: 'center', justifyContent: 'center', marginBottom: SP.xs },
+  emptyTitle: { fontSize: 17, fontWeight: '800', color: C.ink, textAlign: 'center' },
+  emptyText: { fontSize: 15, color: C.muted, textAlign: 'center', lineHeight: 21 },
   btnTextSmall: { fontSize: 14 },
   btnTextBig: { fontSize: 18, fontWeight: '800' },
   label: { fontSize: 14, color: C.ink2, fontWeight: '600', marginBottom: 6 },
@@ -434,11 +511,11 @@ export const s = StyleSheet.create({
   inputLargeText: { fontSize: 28, fontWeight: '800', color: C.ink },
   prefix: { fontSize: 17, color: C.muted, fontWeight: '700', marginRight: 6 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, marginBottom: SP.lg },
-  chip: { minHeight: 44, justifyContent: 'center', borderWidth: 1.5, borderColor: C.lineStrong, borderRadius: R.pill, paddingVertical: 8, paddingHorizontal: SP.lg, backgroundColor: C.panel },
+  chip: { minHeight: 48, justifyContent: 'center', borderWidth: 1.5, borderColor: C.lineStrong, borderRadius: R.pill, paddingVertical: 8, paddingHorizontal: SP.lg, backgroundColor: C.panel, maxWidth: '100%' },
   chipOn: { backgroundColor: C.brand, borderColor: C.brand },
-  chipText: { fontSize: 15, color: C.ink, fontWeight: '600' },
+  chipText: { fontSize: 15, color: C.ink, fontWeight: '600', flexShrink: 1 },
   segment: { flexDirection: 'row', backgroundColor: C.surface, borderRadius: R.md, padding: SP.xs, gap: SP.xs, marginBottom: SP.lg },
-  segmentItem: { flex: 1, minHeight: 44, borderRadius: R.sm, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SP.sm, paddingVertical: 6 },
+  segmentItem: { flex: 1, minHeight: 46, borderRadius: R.sm, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SP.sm, paddingVertical: 6 },
   segmentOn: { backgroundColor: C.panel, boxShadow: '0px 1px 3px rgba(16, 40, 36, 0.14)' },
   segmentText: { fontSize: 15, fontWeight: '700', color: C.muted, textAlign: 'center' },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 7, gap: SP.md },

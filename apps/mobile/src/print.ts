@@ -2,7 +2,11 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import type { TFunction } from 'i18next';
 import type { DayCustomer, RouteDay } from './store';
-import { dateIN, money } from './ui';
+import { formatINR } from '@localfinance/shared';
+import { dateIN } from './ui';
+
+/** Printed receipts and sheets keep the full rupees-and-paise figure. */
+const money = (p: number | null | undefined) => (p == null ? '-' : formatINR(p));
 
 /** Escapes text for the HTML handed to the print module. */
 export const esc = (v: unknown) =>

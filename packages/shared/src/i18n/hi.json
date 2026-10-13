@@ -621,7 +621,13 @@
         "collected": "वसूली",
         "seq": "रूट नं."
       }
-    }
+    },
+    "startRoute": "वसूली शुरू करें",
+    "collectNow": "{{amount}} वसूलें",
+    "addNote": "नोट जोड़ें",
+    "searchStart": "नाम के कम से कम 2 अक्षर, या फ़ोन या लोन नंबर लिखें।",
+    "clearSearch": "खोज साफ़ करें",
+    "branchToday": "आज शाखा"
   },
   "fund": {
     "title": "फंड",
