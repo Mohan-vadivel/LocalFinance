@@ -77,6 +77,9 @@ export default function Customer({ customer: initial, customerId, routeId, amoun
   return (
     <Screen title={c.name} subtitle={`${c.code}${c.routeSeq ? ` · #${c.routeSeq}` : ''}`}>
       <ErrorText error={error} />
+      {/* While collecting or noting a visit, the form comes first so Save is in reach without scrolling. */}
+      {mode === 'collect' && <CollectForm customer={c} routeId={routeId} initialAmount={given ?? undefined} onDone={() => setMode('none')} />}
+      {mode === 'visit' && <VisitForm customer={c} routeId={routeId} onDone={() => setMode('none')} />}
       <Card>
         <View style={{ flexDirection: 'row', gap: SP.md, alignItems: 'flex-start' }}>
           <Avatar name={c.name} color={PIN_COLORS[c.pin]} size={52} />
@@ -87,9 +90,9 @@ export default function Customer({ customer: initial, customerId, routeId, amoun
           </View>
         </View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, marginTop: SP.lg }}>
-          <Btn small kind="tonal" title={c.phone} onPress={() => void Linking.openURL(`tel:${c.phone}`)} style={{ flexGrow: 1, flexBasis: 120 }} />
-          {c.lat != null && c.lng != null && <Btn small kind="tonal" title={t('mobile.navigate')} onPress={() => navigateTo(c.lat!, c.lng!)} style={{ flexGrow: 1, flexBasis: 120 }} />}
-          {can('collection.record', 'report.view', 'customer.view') && mode !== 'reminder' && <Btn small kind="tonal" title={t('ai.reminder.button')} onPress={() => setMode('reminder')} style={{ flexGrow: 1, flexBasis: 120 }} />}
+          <Btn small kind="tonal" icon="call" title={c.phone} onPress={() => void Linking.openURL(`tel:${c.phone}`)} style={{ flexGrow: 1, flexBasis: 120 }} />
+          {c.lat != null && c.lng != null && <Btn small kind="tonal" icon="navigate" title={t('mobile.navigate')} onPress={() => navigateTo(c.lat!, c.lng!)} style={{ flexGrow: 1, flexBasis: 120 }} />}
+          {can('collection.record', 'report.view', 'customer.view') && mode !== 'reminder' && <Btn small kind="tonal" icon="chatbubble-ellipses-outline" title={t('ai.reminder.button')} onPress={() => setMode('reminder')} style={{ flexGrow: 1, flexBasis: 120 }} />}
         </View>
       </Card>
       {c.status !== 'ACTIVE' && <Notice tone="danger" text={t(`customerMod.statuses.${c.status}`)} />}
@@ -98,16 +101,15 @@ export default function Customer({ customer: initial, customerId, routeId, amoun
         {(c.paidToday > 0 || c.lastVisit) && <View style={{ height: SP.sm }} />}
         {c.paidToday > 0 && <Row label={t('mobile.paidToday')} value={money(c.paidToday)} tone={C.ok} strong divider />}
         {c.lastVisit && <Row label={t('mobile.lastVisit')} value={`${t(`collection.outcomes.${c.lastVisit.outcome}`)}${c.lastVisit.promiseDate ? ` ${dateIN(c.lastVisit.promiseDate)}` : ''}`} divider={!(c.paidToday > 0)} />}
+        {/* The two things done at the door, right under the amount: collect, or record why not. */}
+        {actions && (
+          <View style={{ marginTop: SP.lg }}>
+            <Btn big icon="cash-outline" title={c.dueNow > 0 ? t('mobile.collectNow', { amount: money(c.dueNow) }) : t('collection.record')} accessibilityLabel={t('collection.record')} onPress={() => setMode('collect')} />
+            <Btn kind="outline" icon="close-circle-outline" title={t('collection.noPayment')} onPress={() => setMode('visit')} style={{ marginBottom: 0 }} />
+          </View>
+        )}
       </Card>
-      {actions && (
-        <View style={{ marginBottom: SP.sm }}>
-          <Btn big title={t('collection.record')} onPress={() => setMode('collect')} />
-          <Btn kind="outline" title={t('collection.noPayment')} onPress={() => setMode('visit')} />
-        </View>
-      )}
       {mode === 'reminder' && <Reminder customer={c} onDone={() => setMode('none')} />}
-      {mode === 'collect' && <CollectForm customer={c} routeId={routeId} initialAmount={given ?? undefined} onDone={() => setMode('none')} />}
-      {mode === 'visit' && <VisitForm customer={c} routeId={routeId} onDone={() => setMode('none')} />}
       {c.loans.map((l) => (
         <Card key={l.id}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SP.sm, marginBottom: SP.sm, flexWrap: 'wrap' }}>
@@ -211,6 +213,7 @@ function CollectForm({ customer, routeId, initialAmount, onDone }: { customer: D
   const [payMode, setPayMode] = useState<'CASH' | 'UPI'>('CASH');
   const [upiRef, setUpiRef] = useState('');
   const [note, setNote] = useState('');
+  const [noteOpen, setNoteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [saved, setSaved] = useState<Saved | null>(null);
@@ -341,7 +344,10 @@ function CollectForm({ customer, routeId, initialAmount, onDone }: { customer: D
     const left = Math.max(0, Math.ceil((Date.parse(saved.at) + UNDO_MS - now) / 1000));
     return (
       <Card style={{ borderColor: C.ok, borderWidth: 1.5 }}>
-        <Text style={[s.h2, { color: C.ok }]}>{receiptNo ? t('collection.saved') : saved.message}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.sm, marginBottom: SP.md }}>
+          <Icon name="checkmark-circle" size={28} color={C.ok} />
+          <Text style={[s.h2, { color: C.ok, marginBottom: 0, flex: 1, minWidth: 0 }]}>{receiptNo ? t('collection.saved') : saved.message}</Text>
+        </View>
         <Text style={[s.big, { fontSize: 34, marginBottom: SP.xs }]} numberOfLines={1} adjustsFontSizeToFit>{money(saved.amount)}</Text>
         <Text style={[s.muted, { marginBottom: SP.lg }]}>{saved.loanNumber} · {t(`common.modes.${saved.mode}`)} · {t('collection.receiptNo')}: {receiptNo ?? t('mobile.receiptPending')}</Text>
         {error && <Notice tone="danger" text={error} />}
@@ -378,7 +384,7 @@ function CollectForm({ customer, routeId, initialAmount, onDone }: { customer: D
         <Row label={t('common.mode')} value={`${t(`common.modes.${payMode}`)}${payMode === 'UPI' && upiRef ? ` · ${upiRef}` : ''}`} />
         {paise > loan.dueNow && <Notice tone="warn" text={t('mobile.moreThanDue', { due: money(loan.dueNow) })} />}
         <View style={{ height: SP.md }} />
-        <Btn big title={`${t('common.confirm')} ${money(paise)}`} onPress={() => void save()} busy={busy} />
+        <Btn big icon="checkmark-done" title={`${t('common.confirm')} ${money(paise)}`} onPress={() => void save()} busy={busy} />
         <Btn kind="outline" title={t('common.edit')} onPress={() => setConfirming(false)} disabled={busy} style={{ marginBottom: 0 }} />
       </Card>
     );
@@ -400,9 +406,10 @@ function CollectForm({ customer, routeId, initialAmount, onDone }: { customer: D
           <Text style={[s.muted, { marginTop: -SP.sm, marginBottom: SP.lg }]}>{t('collection.upiNote')}</Text>
         </>
       )}
-      <Field label={t('common.notes')} value={note} onChangeText={setNote} />
+      {/* A note is rarely needed at the door: one tap shows the box. */}
+      {noteOpen || note ? <Field label={t('common.notes')} value={note} onChangeText={setNote} autoFocus={noteOpen && !note} /> : <Btn small kind="ghost" icon="create-outline" title={t('mobile.addNote')} onPress={() => setNoteOpen(true)} style={{ alignSelf: 'flex-start', marginBottom: SP.md, paddingHorizontal: SP.sm }} />}
       {error && <Notice tone="danger" text={error} />}
-      <Btn big title={`${t('common.save')} ${money(paise)}`} onPress={review} />
+      <Btn big icon="checkmark-circle" title={`${t('common.save')} ${money(paise)}`} onPress={review} />
       <Btn kind="ghost" title={t('common.cancel')} onPress={onDone} style={{ marginBottom: 0 }} />
     </Card>
   );
