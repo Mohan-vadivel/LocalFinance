@@ -95,7 +95,7 @@ export default function Settings() {
 
       <Group title={t('common.language')}>
         <View style={{ paddingHorizontal: SP.lg, paddingTop: SP.md }}>
-          <Chips segmented value={i18n.language} onChange={(c) => void changeLang(c)} items={LANGUAGES.map((l) => ({ key: l.code, label: l.nativeName }))} />
+          <Chips value={i18n.language} onChange={(c) => void changeLang(c)} items={LANGUAGES.map((l) => ({ key: l.code, label: l.nativeName }))} />
         </View>
       </Group>
 
