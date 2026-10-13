@@ -107,7 +107,9 @@
     "salaries": "Salaries",
     "support": "Help and support",
     "plan": "Plan and renewal",
-    "platformSettings": "Platform settings"
+    "platformSettings": "Platform settings",
+    "setup": "Setup",
+    "areas": "Area tracking"
   },
   "roles": {
     "SUPER_ADMIN": "Super Admin",
@@ -179,7 +181,11 @@
     "optimise": "Suggest shortest order",
     "saveOrder": "Save order",
     "customersOnRoute": "Customers on route",
-    "map": "Map"
+    "map": "Map",
+    "areas": "Areas",
+    "mainArea": "Main area",
+    "areasHint": "Tick every area this route covers. The first one you tick is the main area.",
+    "chooseBranch": "Choose a branch first to see its areas."
   },
   "weekdays": {
     "0": "Sun",
@@ -627,7 +633,9 @@
     "addNote": "Add a note",
     "searchStart": "Type at least 2 letters of a name, or a phone or loan number.",
     "clearSearch": "Clear search",
-    "branchToday": "Branch today"
+    "branchToday": "Branch today",
+    "chooseArea": "Choose an area",
+    "noRouteInArea": "No route in this area yet. Ask your manager to add one."
   },
   "fund": {
     "title": "Funds",
@@ -1640,6 +1648,112 @@
     "last": "Last page",
     "search": "Search in this table",
     "sort": "Sort by this column",
-    "noMatch": "Nothing matches \"{{q}}\""
+    "noMatch": "Nothing matches \"{{q}}\"",
+    "noFilterMatch": "Nothing matches the filters"
+  },
+  "states": {
+    "actions": {
+      "tryAgain": "Try again",
+      "goBack": "Go back",
+      "clearSearch": "Clear search",
+      "backToRoute": "Back to route",
+      "keepWaiting": "Keep waiting",
+      "openCustomer": "Open customer"
+    },
+    "empty": {
+      "help": "There is nothing to show here yet.",
+      "routesHelp": "Your office has not given you a route for today. Pull down to check again.",
+      "entriesHelp": "Entries you add will show here.",
+      "requestsHelp": "Loan requests you send will show here."
+    },
+    "loading": {
+      "skeleton": "Loading list"
+    },
+    "error": {
+      "title": "Something went wrong",
+      "generic": "We could not complete this. Please try again."
+    },
+    "offline": {
+      "title": "No internet connection",
+      "safe": "Your data is safe on this phone. Saved collections will sync when the connection comes back.",
+      "pending": "Entries waiting to sync: {{count}}",
+      "nonePending": "Nothing is waiting to sync."
+    },
+    "slow": {
+      "title": "This is taking longer than usual",
+      "help": "The network may be weak. You can keep waiting or cancel."
+    },
+    "noResults": {
+      "title": "No customer matches \"{{query}}\"",
+      "tip": "Check the spelling, or search by phone number."
+    },
+    "denied": {
+      "advice": "Ask your administrator to give your role this right."
+    },
+    "session": {
+      "notice": "Your session has ended. Sign in again to continue.",
+      "unsent": "{{count}} entries saved on this phone are not sent yet. They stay on the phone and will sync after you sign in."
+    },
+    "form": {
+      "required": "{{field}} is required",
+      "tooShort": "{{field}} needs at least {{min}} letters"
+    },
+    "success": {
+      "customerTitle": "Customer added",
+      "customerHelp": "{{name}} is saved and can be visited on your route."
+    },
+    "gallery": {
+      "open": "States preview",
+      "title": "Screen states",
+      "subtitle": "Preview only, in development builds",
+      "names": {
+        "empty": "Empty",
+        "loading": "Loading",
+        "error": "Error",
+        "offline": "No internet",
+        "slow": "Slow network",
+        "noResults": "No search results",
+        "denied": "Permission denied",
+        "session": "Session expired",
+        "form": "Form validation",
+        "success": "Success"
+      }
+    }
+  },
+  "structure": {
+    "title": "Setup",
+    "intro": "Branches, areas and routes in one place. Add or edit each level from here.",
+    "addArea": "Add area",
+    "addRoute": "Add route",
+    "counts": "{{areas}} areas · {{routes}} routes · {{customers}} customers",
+    "noRoute": "No route covers this area yet",
+    "noCustomers": "No customers on this route yet",
+    "warnings": "{{areas}} active areas have no route. {{routes}} active routes have no customers.",
+    "noWarnings": "Nothing needs attention.",
+    "inactive": "Inactive",
+    "inactiveHint": "Inactive areas are hidden when adding customers and routes. Their history stays.",
+    "noAreas": "No areas in this branch yet.",
+    "areaInactive": "This area is inactive. Choose an active area.",
+    "tracking": "Area tracking"
+  },
+  "areas": {
+    "title": "Area tracking",
+    "intro": "Each area with its routes, customers and today's money. Tap an area to see its routes and customers.",
+    "area": "Area",
+    "routes": "Routes",
+    "customers": "Customers",
+    "activeLoans": "Active loans",
+    "collectedToday": "Collected today",
+    "dueToday": "Due today",
+    "overdue": "Overdue",
+    "total": "Total",
+    "none": "No areas yet.",
+    "routesIn": "Routes in {{name}}",
+    "customersIn": "Customers in {{name}}",
+    "noRoutes": "No route covers this area yet.",
+    "noCustomers": "No customers in this area yet.",
+    "openAll": "Open all customers",
+    "showing": "Showing {{count}} of {{total}}",
+    "menu": "Areas"
   }
 }

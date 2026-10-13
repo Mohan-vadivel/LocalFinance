@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { get } from '../lib/api';
 import { useLoad } from '../lib/hooks';
 
-type Opt = { id: string; name: string };
+type Opt = { id: string; name: string; active?: boolean };
 const cache = new Map<string, Promise<unknown>>();
 /** Small cached lookups for drop-downs; cleared after saves via clearLookups(). */
 function cached<T>(key: string, fn: () => Promise<T>): Promise<T> {
@@ -41,10 +41,11 @@ export function BranchPicker(p: PickerProps) {
 export function LocationPicker(p: PickerProps & { branchId?: string }) {
   const { t } = useTranslation();
   const { data } = useLoad(() => cached(`locations:${p.branchId ?? ''}`, () => get<Opt[]>('/locations', { branchId: p.branchId })), [p.branchId]);
-  return <Picker {...p} options={data} placeholder={t('common.location')} />;
+  // An inactive area is hidden from the choice, except the one already chosen, so an old customer still shows theirs.
+  return <Picker {...p} options={data?.filter((o) => o.active !== false || o.id === p.value) ?? null} placeholder={t('common.location')} />;
 }
 
-export interface RouteOpt extends Opt { locationId: string; location: { name: string; branchId: string } }
+export interface RouteOpt extends Opt { locationId: string; location: { name: string; branchId: string }; locations: Opt[] }
 /** Routes, optionally narrowed to a branch or location. `onPickRoute` also gets the chosen route's location and branch. */
 export function RoutePicker(p: PickerProps & { branchId?: string; locationId?: string; onPickRoute?: (r: RouteOpt | null) => void }) {
   const { t } = useTranslation();

@@ -1,17 +1,25 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LANGUAGES } from '@localfinance/shared';
 import { BASE } from '../api';
 import { setLanguage } from '../i18n';
-import { useSession } from '../session';
+import { takeSessionEnded, useSession } from '../session';
+import { getQueue } from '../store';
+import { SessionEndedNotice } from '../states';
 import { Btn, C, Card, Chips, ErrorText, Field, SP, s, useLayout } from '../ui';
 
 export default function Login() {
   const { t, i18n } = useTranslation();
   const { login } = useSession();
   const { compact } = useLayout();
+  // Read once: true when the server ended the last session, so say why this screen is showing.
+  const [ended] = useState(() => takeSessionEnded());
+  const [unsent, setUnsent] = useState(0);
+  useEffect(() => {
+    if (ended) void getQueue().then((q) => setUnsent(q.length));
+  }, [ended]);
   const [id, setId] = useState('');
   const [pw, setPw] = useState('');
   const [busy, setBusy] = useState(false);
@@ -46,6 +54,7 @@ export default function Login() {
             <Chips value={i18n.language} onChange={(v) => void setLanguage(v)} items={LANGUAGES.map((l) => ({ key: l.code, label: l.nativeName }))} />
           </View>
           <Card style={{ padding: compact ? SP.lg : SP.xl }}>
+            {ended && <SessionEndedNotice unsent={unsent} />}
             <ErrorText error={error} />
             {(error as { code?: string } | null)?.code === 'errors.network' && <Text style={[s.muted, { marginBottom: SP.md }]}>{`${t('mobile.serverAddress')}: ${BASE}`}</Text>}
             {tenants ? (

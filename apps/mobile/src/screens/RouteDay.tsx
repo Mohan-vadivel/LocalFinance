@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Linking, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Linking, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { MapPins } from '../MapPins';
 import { getPosition, useSession } from '../session';
 import { getVisitOrder, lastKnownHere, onVisitOrder, orderDay, setVisitOrder, type VisitOrder } from '../smart';
-import { routeDay, subscribe, type DayCustomer, type RouteDay as Day } from '../store';
-import { AmountPair, Badge, Btn, C, Card, Chevron, Chips, EmptyState, ErrorText, Icon, IconButton, Loading, Notice, PIN_COLORS, Progress, R, SP, Screen, SearchBar, dateIN, money, s, useLayout, useNav } from '../ui';
+import { areaText, routeDay, subscribe, type DayCustomer, type PinStatus, type RouteDay as Day } from '../store';
+import { AmountPair, Badge, Btn, C, Card, Chevron, Chips, Icon, IconButton, Notice, PIN_COLORS, Progress, R, SP, Screen, SearchBar, dateIN, money, s, useLayout, useNav } from '../ui';
+import { EmptyState, FailureState, LoadingState, NoSearchResults, useSlowLoad } from '../states';
 import { SyncBar } from './Home';
 import { VoiceSheet } from './Voice';
 
@@ -27,7 +28,7 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
   const [view, setView] = useState<'map' | 'list'>('list');
   const [refreshing, setRefreshing] = useState(false);
   const [me, setMe] = useState<{ lat: number; lng: number } | null>(null);
-  const [show, setShow] = useState<'all' | 'pending'>('all');
+  const [show, setShow] = useState<'all' | PinStatus>('all');
   const [q, setQ] = useState('');
   const { can } = useSession();
   // Route order or smart order (remembered on the phone); smart order needs no connection and never waits for GPS.
@@ -54,8 +55,10 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
     // Re-read after each saved collection or sync.
     return subscribe(() => void routeDay(routeId).then((r) => r.data && setDay(r.data)));
   }, [load, routeId]);
+  // Waiting for the day's list: after 8 seconds the screen says it is taking longer than usual.
+  const slow = useSlowLoad(!day && !error && !offline);
 
-  if (!day) return <Screen title={name}>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;
+  if (!day) return <Screen title={name}>{error || offline ? <FailureState error={error} offline={offline} onRetry={() => void load()} onBack={() => nav.pop()} /> : <LoadingState slow={slow.slow} onKeepWaiting={slow.keepWaiting} onCancel={() => nav.pop()} />}</Screen>;
   const list = day.customers;
   const ordered = orderDay(day, order, here);
   const next = ordered.list.find((c) => c.pin === 'PENDING') ?? null;
@@ -68,13 +71,13 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
   const needle = q.trim().toLowerCase();
   const digits = needle.replace(/\D/g, '');
   const shown = ordered.list.filter(
-    (c) => (show === 'all' || c.pin === 'PENDING') && (!needle || c.name.toLowerCase().includes(needle) || (digits.length >= 3 && c.phone.replace(/\D/g, '').includes(digits))),
+    (c) => (show === 'all' || c.pin === show) && (!needle || c.name.toLowerCase().includes(needle) || (digits.length >= 3 && c.phone.replace(/\D/g, '').includes(digits))),
   );
 
   return (
     <Screen
       title={name}
-      subtitle={day.route.location ? `${day.route.location} · ${dateIN(day.date)}` : dateIN(day.date)}
+      subtitle={areaText(day.route) ? `${areaText(day.route)} · ${dateIN(day.date)}` : dateIN(day.date)}
       scroll={false}
       right={
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.xs }}>
@@ -85,15 +88,7 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
             </View>
           )}
           {can('collection.record') && !compact && (
-            <Pressable
-              onPress={() => setSpeaking(true)}
-              accessibilityRole="button"
-              accessibilityLabel={t('ai.voice.button')}
-              style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 14, borderRadius: R.pill, backgroundColor: pressed ? '#c9e8e1' : C.brandSoft }]}
-            >
-              <Icon name="mic" size={20} color={C.brandInk} />
-              <Text style={{ color: C.brandInk, fontWeight: '800', fontSize: 15 }}>{t('ai.voice.button')}</Text>
-            </Pressable>
+            <Btn small kind="tonal" icon="mic" title={t('ai.voice.button')} onPress={() => setSpeaking(true)} style={{ marginBottom: 0 }} />
           )}
         </View>
       }
@@ -101,7 +96,7 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
       <VoiceSheet visible={speaking} customers={list} onClose={() => setSpeaking(false)} onCollect={(c, amount) => { setSpeaking(false); nav.push('Customer', { customer: c, routeId, amount }); }} />
       <ScrollView contentContainerStyle={s.body} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} colors={[C.brand]} />}>
         {offline && <Notice tone="warn" text={t('mobile.offlineCopy')} />}
-        <ErrorText error={error} />
+        {error ? <FailureState error={error} onRetry={() => void load()} onBack={() => nav.pop()} /> : null}
         <Card tone="brand" style={{ padding: SP.lg }}>
           <AmountPair onBrand main={{ label: t('report.collected'), value: money(collected) }} side={{ label: t('report.due'), value: money(due) }} />
           <View style={{ marginTop: SP.md }}>
@@ -122,7 +117,14 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
         <SyncBar />
         {/* Find first: the search box and the "not visited" filter sit above the list, where the thumb is. */}
         <SearchBar value={q} onChangeText={setQ} placeholder={compact ? t('common.search') : t('mobile.filterRoute')} label={t('mobile.filterRoute')} />
-        <Chips value={show} onChange={setShow} items={[{ key: 'all', label: `${t('common.all')} (${list.length})` }, { key: 'pending', label: `${t('mobile.pendingOnly')} (${list.filter((c) => c.pin === 'PENDING').length})` }]} />
+        {/* Status filter: one tap to see only the customers still to visit, or only the missed ones. */}
+        <Chips value={show} onChange={setShow} items={[
+          { key: 'all', label: `${t('common.all')} (${list.length})` },
+          { key: 'PENDING', label: `${t('mobile.pins.PENDING')} (${list.filter((c) => c.pin === 'PENDING').length})` },
+          { key: 'PARTIAL', label: `${t('mobile.pins.PARTIAL')} (${list.filter((c) => c.pin === 'PARTIAL').length})` },
+          { key: 'MISSED', label: `${t('mobile.pins.MISSED')} (${list.filter((c) => c.pin === 'MISSED').length})` },
+          { key: 'PAID', label: `${t('mobile.pins.PAID')} (${list.filter((c) => c.pin === 'PAID').length})` },
+        ]} />
         {/* List or map, and route or smart order, side by side (stacked on a narrow phone with long labels). */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: SP.sm }}>
           <View style={{ flexGrow: 1, flexBasis: 136 }}>
@@ -149,7 +151,14 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
             ))}
           </View>
         )}
-        {shown.length === 0 && <EmptyState icon={show === 'pending' && !needle ? 'checkmark-done' : 'search'} title={show === 'pending' && !needle ? t('mobile.routeDone') : t('mobile.noMatch')} />}
+        {shown.length === 0 &&
+          (needle ? (
+            <NoSearchResults query={q.trim()} onClear={() => setQ('')} />
+          ) : show === 'PENDING' ? (
+            <EmptyState icon="checkmark-done" title={t('mobile.routeDone')} />
+          ) : (
+            <EmptyState icon="people-outline" title={t('common.noData')} help={t('states.empty.help')} />
+          ))}
         {view === 'map' ? (
           <MapPins
             me={me}

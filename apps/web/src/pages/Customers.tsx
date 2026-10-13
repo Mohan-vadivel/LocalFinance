@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Eye, HandCoins, MessageCircle, Phone, Printer } from 'lucide-react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { LANGUAGES } from '@localfinance/shared';
 import { ReadIdCard, ReminderButton, RiskBadge, RiskReasons, type RiskReason } from '../components/ai';
 import { MapView } from '../components/MapView';
@@ -191,9 +191,10 @@ export function CustomerForm({ customer, onClose, onSaved }: { customer: Partial
           value={f.routeId}
           onChange={(v) => setF((x) => ({ ...x, routeId: v }))}
           onPickRoute={(r) => {
-            // Choosing a route fills in its area and branch, so the two can never disagree.
+            // Choosing a route fills in its area and branch, so the two can never disagree. A route can cover
+            // several areas: the area already chosen stays when the route covers it, otherwise the route's main area is used.
             if (!r) return;
-            setF((x) => ({ ...x, routeId: r.id, locationId: r.locationId }));
+            setF((x) => ({ ...x, routeId: r.id, locationId: r.locations.some((a) => a.id === x.locationId) ? x.locationId : r.locationId }));
             setBranchId(r.location.branchId);
           }}
         />
@@ -224,7 +225,9 @@ export default function Customers() {
   // Searches as you type, once typing pauses.
   const search = useDebounced(q.trim());
   const [branchId, setBranchId] = useState('');
-  const [locationId, setLocationId] = useState('');
+  // Opened from Area tracking with ?locationId=, the list starts on that area.
+  const [params] = useSearchParams();
+  const [locationId, setLocationId] = useState(params.get('locationId') ?? '');
   const [routeId, setRouteId] = useState('');
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);

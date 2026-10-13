@@ -1,29 +1,102 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as ImagePicker from 'expo-image-picker';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { LANGUAGES } from '@localfinance/shared';
 import { ApiError, get, newRef, post, put } from '../api';
-import { getPosition } from '../session';
+import { getPosition, useSession } from '../session';
 import { cachedRouteDay, cachedRoutes, myRoutes, type DayCustomer, type MyRoute } from '../store';
-import { Amount, Avatar, Badge, Btn, C, Card, Chevron, Chips, EmptyState, ErrorText, Field, Icon, Loading, Notice, R, Row, SP, Screen, SearchBar, dateIN, money, s, toPaise, useLayout, useNav } from '../ui';
+import { Amount, Avatar, Badge, Btn, C, Card, Chevron, Chips, ErrorText, Field, Icon, Notice, Row, SP, Screen, SearchBar, dateIN, money, s, toPaise, useLayout, useNav } from '../ui';
+import { ActionError, EmptyState, FailureState, FormProblems, LoadingState, NoSearchResults, SkeletonList, SuccessState, fieldError, useRequired, useSlowLoad, type Problem } from '../states';
 
 // =====================================================================
 // Add customer (with GPS pin)
 // =====================================================================
+/** An area the agent can put a customer in, and a route that covers it (the route's own areas are listed too). */
+interface PickArea { id: string; name: string; active?: boolean }
+interface PickRoute { id: string; name: string; active?: boolean; locations?: { id: string; name: string }[] }
+/** The areas the given routes cover, for when the server cannot be reached. */
+const areasOf = (rs: MyRoute[]): PickArea[] => {
+  const seen = new Map<string, PickArea>();
+  for (const r of rs) for (const l of r.locations?.length ? r.locations : [{ id: r.locationId, name: r.location }]) seen.set(l.id, { id: l.id, name: l.name, active: true });
+  return [...seen.values()];
+};
+
+/**
+ * Branch, then area, then route. The area starts as the agent's own route's area and the route list is only the
+ * chosen area's routes. Opened with the routes already on screen, those are used first; the lists come from the
+ * server and, offline, from the routes the phone kept.
+ */
 export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
   const { t } = useTranslation();
   const nav = useNav();
-  // Opened from the side menu there is no route list passed in, so read this agent's routes (cached offline).
-  const [routes, setRoutes] = useState<MyRoute[]>(given);
+  const { profile } = useSession();
+  const [branchId, setBranchId] = useState(given[0]?.branchId ?? profile?.branches[0]?.id ?? '');
+  const [areaId, setAreaId] = useState(given[0]?.locationId ?? '');
   const [routeId, setRouteId] = useState(given[0]?.id ?? '');
+  const [areas, setAreas] = useState<PickArea[]>([]);
+  const [routes, setRoutes] = useState<PickRoute[]>(given);
+  // Opened from the side menu there is no route list passed in: the agent's own route gives the default branch and area.
   useEffect(() => {
     if (given.length) return;
     void myRoutes().then((r) => {
-      setRoutes(r.data ?? []);
-      setRouteId((cur) => cur || (r.data?.[0]?.id ?? ''));
+      const first = r.data?.[0];
+      if (!first) return;
+      setBranchId((cur) => cur || first.branchId);
+      setAreaId((cur) => cur || first.locationId);
+      setRouteId((cur) => cur || first.id);
     });
   }, [given.length]);
+  // Areas of the chosen branch. Offline, the areas the phone's own routes cover.
+  useEffect(() => {
+    if (!branchId) return;
+    let live = true;
+    get<PickArea[]>('/locations', { branchId })
+      .then((list) => {
+        if (live) setAreas(list.filter((a) => a.active !== false));
+      })
+      .catch(() =>
+        myRoutes().then((r) => {
+          if (live) setAreas(areasOf(r.data ?? []));
+        }),
+      );
+    return () => {
+      live = false;
+    };
+  }, [branchId]);
+  // Once the branch's areas are known, the chosen area must be one of them; otherwise the first one is used.
+  useEffect(() => {
+    if (areas.length && !areas.some((a) => a.id === areaId)) setAreaId(areas[0].id);
+  }, [areas, areaId]);
+  // Routes of the chosen area only. Offline, the phone's own routes that cover it.
+  useEffect(() => {
+    if (!areaId) return;
+    let live = true;
+    const apply = (list: PickRoute[]) => {
+      if (!live) return;
+      setRoutes(list);
+      setRouteId((cur) => (list.some((r) => r.id === cur) ? cur : (list[0]?.id ?? '')));
+    };
+    get<PickRoute[]>('/routes', { branchId, locationId: areaId })
+      .then((list) => apply(list.filter((r) => r.active !== false)))
+      .catch(() =>
+        myRoutes().then((r) => apply((r.data ?? []).filter((x) => x.locations?.some((l) => l.id === areaId) || x.locationId === areaId))),
+      );
+    return () => {
+      live = false;
+    };
+  }, [areaId, branchId]);
+  const chooseBranch = (id: string) => {
+    setBranchId(id);
+    setAreaId('');
+    setRouteId('');
+    setRoutes([]);
+  };
+  const chooseArea = (id: string) => {
+    setAreaId(id);
+    setRouteId('');
+  };
+  const areaName = areas.find((a) => a.id === areaId)?.name;
   const [f, setF] = useState({ name: '', phone: '', altPhone: '', address: '', landmark: '', idType: 'AADHAAR', idNumber: '', occupation: '', monthlyIncome: '', language: 'ta', guarantorName: '', guarantorPhone: '' });
   const [gps, setGps] = useState<{ lat: number; lng: number; accuracy: number | null } | null>(null);
   const [locating, setLocating] = useState(false);
@@ -31,8 +104,21 @@ export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
   const [error, setError] = useState<unknown>(null);
   const [duplicate, setDuplicate] = useState(false);
   const [ref] = useState(newRef);
+  // The customer just added, shown on the full-screen success state.
+  const [added, setAdded] = useState<{ id: string; name: string } | null>(null);
+  // Problems are listed once Save has been tried, then update as the boxes change.
+  const [tried, setTried] = useState(false);
+  const req = useRequired();
   const set = (k: keyof typeof f) => (v: string) => setF({ ...f, [k]: v });
   const route = routes.find((r) => r.id === routeId);
+  const problems: Problem[] = [];
+  if (!areaId) problems.push({ text: t('mobile.chooseArea') });
+  if (!route) problems.push({ text: t('mobile.chooseRoute') });
+  if (!f.name) problems.push({ field: 'name', text: req(t('common.name')) });
+  if (!f.phone) problems.push({ field: 'phone', text: req(t('common.phone')) });
+  if (!f.address) problems.push({ field: 'address', text: req(t('common.address')) });
+  if (!gps) problems.push({ text: t('mobile.locationNeeded') });
+  const shownProblems = tried ? problems : [];
 
   const capture = async () => {
     setLocating(true);
@@ -45,8 +131,8 @@ export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
 
   const save = async () => {
     setError(null);
-    if (!route) return setError(new Error(t('mobile.chooseRoute')));
-    if (!gps) return setError(new Error(t('mobile.locationNeeded')));
+    setTried(true);
+    if (problems.length || !route || !gps) return;
     setBusy(true);
     try {
       const c = await post<{ id: string; name: string }>(`/customers${duplicate ? '?allowDuplicate=true' : ''}`, {
@@ -62,13 +148,14 @@ export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
         occupation: f.occupation || null,
         monthlyIncome: f.monthlyIncome ? toPaise(f.monthlyIncome) : null,
         language: f.language,
-        locationId: route.locationId,
+        // The area the agent picked; it is one of the route's areas (the server checks).
+        locationId: areaId,
         routeId: route.id,
         guarantorName: f.guarantorName || null,
         guarantorPhone: f.guarantorPhone || null,
         clientRef: ref,
       });
-      nav.replace('Customer', { customerId: c.id });
+      setAdded({ id: c.id, name: c.name });
     } catch (e) {
       if (e instanceof ApiError && e.code === 'customerMod.duplicate') setDuplicate(true);
       setError(e);
@@ -77,17 +164,37 @@ export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
     }
   };
 
+  if (added) {
+    return (
+      <Screen title={t('mobile.addCustomer')} scroll={false}>
+        <SuccessState title={t('states.success.customerTitle')} text={<Text style={[s.muted, { textAlign: 'center', fontSize: 16 }]}>{t('states.success.customerHelp', { name: added.name })}</Text>}>
+          <Btn big title={t('states.actions.openCustomer')} onPress={() => nav.replace('Customer', { customerId: added.id })} />
+          <Btn kind="outline" title={t('states.actions.backToRoute')} onPress={() => nav.pop()} style={{ marginBottom: 0 }} />
+        </SuccessState>
+      </Screen>
+    );
+  }
+
   return (
     <Screen title={t('mobile.addCustomer')}>
+      <FormProblems problems={shownProblems} />
       <ReadIdCard onRead={(x) => setF((cur) => ({ ...cur, name: x.name || cur.name, idType: x.idType && ID_TYPES.includes(x.idType) ? x.idType : cur.idType, idNumber: x.idNumber || cur.idNumber, address: x.address || cur.address }))} />
       <Card>
+        {(profile?.branches.length ?? 0) > 1 && (
+          <>
+            <Text style={s.h2}>{t('common.branch')}</Text>
+            <Chips value={branchId} onChange={chooseBranch} items={(profile?.branches ?? []).map((b) => ({ key: b.id, label: b.name }))} />
+          </>
+        )}
+        <Text style={s.h2}>{t('areas.area')}</Text>
+        {areas.length ? <Chips value={areaId} onChange={chooseArea} items={areas.map((a) => ({ key: a.id, label: a.name }))} /> : <Notice tone="warn" text={t('areas.none')} />}
         <Text style={s.h2}>{t('common.route')}</Text>
-        <Chips value={routeId} onChange={setRouteId} items={routes.map((r) => ({ key: r.id, label: r.name }))} />
+        {routes.length ? <Chips value={routeId} onChange={setRouteId} items={routes.map((r) => ({ key: r.id, label: r.name }))} /> : <Notice tone="warn" text={t('mobile.noRouteInArea')} />}
         <View style={{ height: 1, backgroundColor: C.line, marginBottom: SP.lg }} />
-        <Field label={t('common.name')} value={f.name} onChangeText={set('name')} />
-        <Field label={t('common.phone')} value={f.phone} onChangeText={set('phone')} keyboardType="phone-pad" />
+        <Field label={t('common.name')} value={f.name} onChangeText={set('name')} error={fieldError(shownProblems, 'name')} />
+        <Field label={t('common.phone')} value={f.phone} onChangeText={set('phone')} keyboardType="phone-pad" error={fieldError(shownProblems, 'phone')} />
         <Field label={t('customerMod.altPhone')} value={f.altPhone} onChangeText={set('altPhone')} keyboardType="phone-pad" />
-        <Field label={t('common.address')} value={f.address} onChangeText={set('address')} multiline />
+        <Field label={t('common.address')} value={f.address} onChangeText={set('address')} multiline error={fieldError(shownProblems, 'address')} />
         <Field label={t('customerMod.landmark')} value={f.landmark} onChangeText={set('landmark')} />
         <Text style={s.label}>{t('customerMod.idType')}</Text>
         <Chips value={f.idType} onChange={set('idType')} items={ID_TYPES.map((x) => ({ key: x, label: t(`customerMod.idTypes.${x}`) }))} />
@@ -109,8 +216,8 @@ export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
         <Btn kind="tonal" title={t('customerMod.captureLocation')} onPress={() => void capture()} busy={locating} />
         <Text style={s.muted}>{t('mobile.gpsHelp')}</Text>
       </Card>
-      <ErrorText error={error} />
-      <Btn big title={duplicate ? t('customerMod.saveAnyway') : t('common.save')} onPress={() => void save()} busy={busy} disabled={!f.name || !f.phone || !f.address} />
+      <ActionError error={error} />
+      <Btn big title={duplicate ? t('customerMod.saveAnyway') : t('common.save')} onPress={() => void save()} busy={busy} />
     </Screen>
   );
 }
@@ -197,13 +304,12 @@ function ReadIdCard({ onRead }: { onRead: (f: IdRead['fields']) => void }) {
         <View style={{ marginBottom: SP.md }}>
           <Text style={[s.label, { color: C.danger }]}>{t('ai.readId.duplicates')}</Text>
           {res.duplicates.map((d) => (
-            <Pressable
+            <Card
               key={d.id}
-              disabled={d.otherBranch}
-              onPress={() => nav.push('Customer', { customerId: d.id })}
-              accessibilityRole="button"
+              onPress={d.otherBranch ? undefined : () => nav.push('Customer', { customerId: d.id })}
               accessibilityLabel={d.name}
-              style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: SP.md, padding: SP.md, borderRadius: R.md, borderWidth: 1, borderColor: C.line, backgroundColor: pressed ? C.bg : C.dangerSoft, marginBottom: SP.sm }]}
+              tone="soft"
+              style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md, padding: SP.md, marginBottom: SP.sm, backgroundColor: C.dangerSoft, borderColor: C.line }}
             >
               <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
                 <Text style={{ fontWeight: '800', fontSize: 16, color: C.ink }}>{d.name}</Text>
@@ -215,7 +321,7 @@ function ReadIdCard({ onRead }: { onRead: (f: IdRead['fields']) => void }) {
                 </View>
               </View>
               {!d.otherBranch && <Chevron />}
-            </Pressable>
+            </Card>
           ))}
         </View>
       )}
@@ -299,10 +405,11 @@ export function Search({ forLoan }: { forLoan?: boolean }) {
       {/* Customers on this phone show as you type; the button also asks the office. */}
       <SearchBar value={q} onChangeText={setQ} onSubmit={() => void run()} placeholder={compact ? t('common.search') : t('customerMod.searchHint')} label={t('customerMod.searchHint')} autoFocus />
       <Btn icon="search" title={t('common.search')} onPress={() => void run()} busy={busy} disabled={term.length < 2} style={{ marginBottom: SP.md }} />
-      <ErrorText error={error} />
+      {error ? <FailureState error={error} onRetry={() => void run()} /> : null}
       {offline && searched && <Notice tone="warn" text={t('mobile.searchOffline')} />}
-      {term.length < 2 && <EmptyState icon="people-outline" title={forLoan ? t('mobile.requestLoan') : t('mobile.search')} text={t('mobile.searchStart')} />}
-      {term.length >= 2 && rows.length === 0 && !busy && <EmptyState icon="search" title={t('mobile.noMatch')} text={searched ? undefined : t('mobile.noMatchOnPhone')} />}
+      {term.length < 2 && <EmptyState icon="people-outline" title={forLoan ? t('mobile.requestLoan') : t('mobile.search')} help={t('mobile.searchStart')} />}
+      {term.length >= 2 && rows.length === 0 && !busy &&
+        (searched && !offline ? <NoSearchResults query={q.trim()} onClear={() => { setQ(''); setServer(null); }} /> : <Notice tone="warn" text={t('mobile.noMatchOnPhone')} />)}
       {rows.map((r) => (
         <Card key={r.id} onPress={() => open(r)} accessibilityLabel={r.name} style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md }}>
           <Avatar name={r.name} size={44} color={r.status !== 'ACTIVE' ? C.danger : C.brand} />
@@ -342,11 +449,16 @@ export function LoanRequest({ customerId, customerName }: { customerId: string; 
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [ref] = useState(newRef);
-  useEffect(() => {
+  const slow = useSlowLoad(!products && !error);
+  const loadProducts = () => {
+    setError(null);
     get<Product[]>('/products').then((p) => {
       setProducts(p);
       if (p[0]) setProductId(p[0].id);
     }).catch(setError);
+  };
+  useEffect(() => {
+    loadProducts();
   }, [customerId]);
   // Risk score from the customer's own history; with the amount typed, it also compares it with past loans.
   const asked = toPaise(amount);
@@ -377,7 +489,7 @@ export function LoanRequest({ customerId, customerName }: { customerId: string; 
       setBusy(false);
     }
   };
-  if (!products) return <Screen title={t('mobile.requestLoan')}>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;
+  if (!products) return <Screen title={t('mobile.requestLoan')}>{error ? <FailureState error={error} onRetry={loadProducts} onBack={() => nav.pop()} /> : <LoadingState slow={slow.slow} onKeepWaiting={slow.keepWaiting} onCancel={() => nav.pop()} />}</Screen>;
   return (
     <Screen title={t('mobile.requestLoan')}>
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md }}>
@@ -418,7 +530,7 @@ export function LoanRequest({ customerId, customerName }: { customerId: string; 
           <Row label={t('loanMod.lastDue')} value={dateIN(preview.schedule[preview.schedule.length - 1]?.dueDate)} />
         </Card>
       )}
-      <ErrorText error={error} />
+      <ActionError error={error} />
       <Btn big title={t('common.submit')} onPress={() => void submit()} busy={busy} disabled={!preview} />
     </Screen>
   );
@@ -440,6 +552,7 @@ export function MyRequests() {
   const load = useCallback(() => {
     get<{ rows: MyLoanRow[] }>('/loans', { queue: 'mine' })
       .then((r) => {
+        setError(null);
         setRows(r.rows);
         for (const l of r.rows.filter((x) => ['SENT_BACK', 'REJECTED', 'APPROVED'].includes(x.status) || (x.status === 'REQUESTED' && x.stage === 'ADMIN'))) {
           get<{ approvals: Approval[] }>(`/loans/${l.id}`)
@@ -458,9 +571,9 @@ export function MyRequests() {
   const tone: Record<string, string> = { REQUESTED: C.warn, SENT_BACK: C.warn, APPROVED: C.brand, ACTIVE: C.ok, REJECTED: C.danger };
   return (
     <Screen title={t('mobile.myRequests')}>
-      <ErrorText error={error} />
-      {!rows && !error && <Loading />}
-      {rows?.length === 0 && <Notice tone="warn" text={t('common.noData')} />}
+      {error ? <FailureState error={error} onRetry={load} /> : null}
+      {!rows && !error && <SkeletonList rows={3} />}
+      {rows?.length === 0 && <EmptyState icon="document-text-outline" title={t('common.noData')} help={t('states.empty.requestsHelp')} />}
       {(rows ?? []).map((l) => (
         <Card key={l.id}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: SP.sm }}>
@@ -517,7 +630,7 @@ function Resubmit({ loan, onCancel, onDone }: { loan: MyLoanRow; onCancel: () =>
     <View style={{ marginTop: SP.md, borderTopWidth: 1, borderColor: C.line, paddingTop: SP.md }}>
       <Field label={t('loanMod.principal')} value={principal} onChangeText={setPrincipal} keyboardType="numeric" prefix="₹" large />
       <Field label={t('loanMod.purpose')} value={purpose} onChangeText={setPurpose} />
-      <ErrorText error={error} />
+      <ActionError error={error} />
       <Btn title={t('loanMod.resubmit')} onPress={() => void submit()} busy={busy} disabled={toPaise(principal) <= 0} />
       <Btn kind="ghost" title={t('common.cancel')} onPress={onCancel} style={{ marginBottom: 0 }} />
     </View>

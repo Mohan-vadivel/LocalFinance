@@ -9,11 +9,14 @@ import {
   todayIST,
   weekday,
 } from '@localfinance/shared';
+import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { AuditService } from '../common/audit.service';
 import { CurrentCtx, Perm, type Ctx } from '../common/context';
 import { bad, conflict, notFound } from '../common/errors';
+import { dayFiguresOf } from '../common/books.service';
 import { PrismaService } from '../common/prisma.service';
+import { routeAreas, withAreas } from '../common/areas';
 import { assertBranch, assertOwned, branchScope } from '../common/scope';
 import { V } from '../common/zod.pipe';
 
@@ -23,6 +26,14 @@ export class StructureService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
   ) {}
+
+  /** Routes made before a route could have several areas cover their main area. Gives each of them its area row. Idempotent. */
+  async onModuleInit() {
+    const routes = await this.prisma.route.findMany({ where: { areas: { none: {} } }, select: { id: true, tenantId: true, locationId: true } });
+    if (routes.length) {
+      await this.prisma.routeLocation.createMany({ data: routes.map((r) => ({ tenantId: r.tenantId, routeId: r.id, locationId: r.locationId })), skipDuplicates: true });
+    }
+  }
 
   // ---------- Branches ----------
   async branches(ctx: Ctx) {
@@ -78,8 +89,12 @@ export class StructureService {
       const loc = await tx.location.update({ where: { id }, data: input });
       if (input.branchId !== l.branchId) {
         // Moving a location moves its routes and customers to the new branch; history goes with them.
+        const mainRoutes = (await tx.route.findMany({ where: { locationId: id }, select: { id: true } })).map((r) => r.id);
         await tx.route.updateMany({ where: { locationId: id }, data: { branchId: input.branchId } });
         await tx.customer.updateMany({ where: { locationId: id }, data: { branchId: input.branchId } });
+        // Routes of the old branch lose this area; routes that moved with it lose their areas of the old branch.
+        await tx.routeLocation.deleteMany({ where: { locationId: id, route: { branchId: { not: input.branchId } } } });
+        await tx.routeLocation.deleteMany({ where: { routeId: { in: mainRoutes }, location: { branchId: { not: input.branchId } } } });
       }
       return loc;
     });
@@ -87,18 +102,131 @@ export class StructureService {
     return u;
   }
 
+  // ---------- Setup view and area tracking ----------
+  /**
+   * The setup view: every branch the caller can see, its areas, and the routes in each area, with counts. A route
+   * that covers several areas is listed under each of them. Warnings flag an active area with no route and an
+   * active route with no customers.
+   */
+  async tree(ctx: Ctx, branchId?: string) {
+    const scope = branchScope(ctx, branchId);
+    const [branches, areas, routes, areaCounts, routeCounts] = await Promise.all([
+      this.prisma.branch.findMany({ where: branchWhere(ctx, branchId), orderBy: { name: 'asc' }, select: { id: true, name: true, code: true, address: true, lat: true, lng: true, active: true } }),
+      this.prisma.location.findMany({ where: scope, orderBy: { name: 'asc' }, select: { id: true, name: true, notes: true, lat: true, lng: true, active: true, branchId: true } }),
+      this.prisma.route.findMany({ where: scope, orderBy: { name: 'asc' }, select: { id: true, name: true, active: true, collectionDays: true, areas: { select: { locationId: true } } } }),
+      this.prisma.customer.groupBy({ by: ['locationId'], where: { ...scope, status: 'ACTIVE' }, _count: true }),
+      this.prisma.customer.groupBy({ by: ['routeId'], where: { ...scope, status: 'ACTIVE', routeId: { not: null } }, _count: true }),
+    ]);
+    const customersOfArea = (id: string) => areaCounts.find((c) => c.locationId === id)?._count ?? 0;
+    const customersOfRoute = (id: string) => routeCounts.find((c) => c.routeId === id)?._count ?? 0;
+    const coveredBy = (areaId: string) => routes.filter((r) => r.areas.some((x) => x.locationId === areaId));
+    return {
+      branches: branches.map((b) => ({
+        ...b,
+        areas: areas
+          .filter((a) => a.branchId === b.id)
+          .map((a) => {
+            const covering = coveredBy(a.id);
+            return {
+              id: a.id,
+              name: a.name,
+              notes: a.notes,
+              lat: a.lat,
+              lng: a.lng,
+              branchId: a.branchId,
+              active: a.active,
+              routeCount: covering.length,
+              customerCount: customersOfArea(a.id),
+              noRoute: a.active && covering.length === 0,
+              routes: covering.map((r) => ({
+                id: r.id,
+                name: r.name,
+                active: r.active,
+                collectionDays: r.collectionDays,
+                customerCount: customersOfRoute(r.id),
+                noCustomers: r.active && customersOfRoute(r.id) === 0,
+              })),
+            };
+          }),
+      })),
+      warnings: {
+        areasWithoutRoute: areas.filter((a) => a.active && coveredBy(a.id).length === 0).length,
+        routesWithoutCustomers: routes.filter((r) => r.active && customersOfRoute(r.id) === 0).length,
+      },
+    };
+  }
+
+  /**
+   * Area tracking, for the caller's branches. Money uses the dashboard's own rules (dayFiguresOf, and the same
+   * collection filter), so the areas add up to the dashboard's figures for the same branches. Inactive areas are
+   * listed too, so their history stays visible.
+   */
+  async areasSummary(ctx: Ctx, branchId?: string) {
+    const today = todayIST();
+    const scope = branchScope(ctx, branchId);
+    const [areas, coverage, customerCounts, loans, collected] = await Promise.all([
+      this.prisma.location.findMany({ where: scope, orderBy: { name: 'asc' }, include: { branch: { select: { name: true } } } }),
+      this.prisma.routeLocation.findMany({ where: { tenantId: ctx.tenantId, location: scope }, select: { locationId: true, routeId: true } }),
+      this.prisma.customer.groupBy({ by: ['locationId'], where: { ...scope, status: 'ACTIVE' }, _count: true }),
+      this.prisma.loan.findMany({ where: { ...scope, status: 'ACTIVE' }, include: { instalments: true, customer: { select: { locationId: true } } } }),
+      this.prisma.collection.groupBy({ by: ['customerId'], where: { ...scope, date: today, reversedAt: null }, _sum: { amount: true } }),
+    ]);
+    // Collections do not store their area, so each customer's area is looked up once.
+    const collectors = await this.prisma.customer.findMany({ where: { id: { in: collected.map((c) => c.customerId) } }, select: { id: true, locationId: true } });
+    const areaOfCustomer = new Map(collectors.map((c) => [c.id, c.locationId]));
+    const collectedBy = new Map<string, number>();
+    for (const c of collected) {
+      const areaId = areaOfCustomer.get(c.customerId);
+      if (areaId) collectedBy.set(areaId, (collectedBy.get(areaId) ?? 0) + (c._sum.amount ?? 0));
+    }
+    const rows = areas.map((a) => {
+      const own = loans.filter((l) => l.customer.locationId === a.id).map((l) => dayFiguresOf(l, today));
+      return {
+        id: a.id,
+        name: a.name,
+        active: a.active,
+        branchId: a.branchId,
+        branchName: a.branch.name,
+        routeCount: new Set(coverage.filter((c) => c.locationId === a.id).map((c) => c.routeId)).size,
+        customerCount: customerCounts.find((c) => c.locationId === a.id)?._count ?? 0,
+        activeLoans: own.length,
+        collectedToday: collectedBy.get(a.id) ?? 0,
+        dueToday: own.reduce((s, x) => s + x.dueToday, 0),
+        overdue: own.reduce((s, x) => s + x.overdue, 0),
+      };
+    });
+    const sum = (k: 'routeCount' | 'customerCount' | 'activeLoans' | 'collectedToday' | 'dueToday' | 'overdue') => rows.reduce((s, r) => s + r[k], 0);
+    return {
+      date: today,
+      areas: rows,
+      totals: {
+        routeCount: new Set(coverage.map((c) => c.routeId)).size,
+        customerCount: sum('customerCount'),
+        activeLoans: sum('activeLoans'),
+        collectedToday: sum('collectedToday'),
+        dueToday: sum('dueToday'),
+        overdue: sum('overdue'),
+      },
+    };
+  }
+
   // ---------- Routes ----------
   async routes(ctx: Ctx, q: { branchId?: string; locationId?: string }) {
     const rows = await this.prisma.route.findMany({
-      where: { ...branchScope(ctx, q.branchId), ...(q.locationId ? { locationId: q.locationId } : {}) },
+      // A route matches an area when the area is its main one or one of its other areas.
+      where: {
+        ...branchScope(ctx, q.branchId),
+        ...(q.locationId ? { OR: [{ locationId: q.locationId }, { areas: { some: { locationId: q.locationId } } }] } : {}),
+      },
       orderBy: { name: 'asc' },
-      include: { location: { select: { name: true, branchId: true } }, assignments: true },
+      include: { location: { select: { name: true, branchId: true } }, assignments: true, ...withAreas },
     });
     const counts = await this.prisma.customer.groupBy({ by: ['routeId'], where: { tenantId: ctx.tenantId, status: 'ACTIVE' }, _count: true });
     const users = await this.prisma.user.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, name: true } });
     const today = todayIST();
-    return rows.map((r) => ({
+    return rows.map(({ areas, ...r }) => ({
       ...r,
+      locations: routeAreas({ locationId: r.locationId, areas }),
       customerCount: counts.find((c) => c.routeId === r.id)?._count ?? 0,
       assignments: r.assignments.map((a) => ({
         ...a,
@@ -108,23 +236,46 @@ export class StructureService {
     }));
   }
 
+  /**
+   * The areas a route is made of, checked against the business and the branch. The first one is the main area.
+   * Every area must be in the same branch, which becomes the route's branch.
+   */
+  private async routeAreaRows(ctx: Ctx, ids: string[], alreadyOn: string[] = []) {
+    const rows = await this.prisma.location.findMany({ where: { id: { in: ids }, tenantId: ctx.tenantId } });
+    if (rows.length !== ids.length) throw notFound('Location');
+    const areas = ids.map((id) => rows.find((l) => l.id === id)!);
+    for (const a of areas) assertBranch(ctx, a.branchId);
+    // An inactive area takes no new routes; a route keeps the ones it already has.
+    if (areas.some((a) => !a.active && !alreadyOn.includes(a.id))) throw bad('This area is inactive. Choose an active area.', 'structure.areaInactive');
+    if (areas.some((a) => a.branchId !== areas[0].branchId)) throw bad('All areas of a route must be in the same branch');
+    return areas;
+  }
+
   async createRoute(ctx: Ctx, input: z.infer<typeof routeSchema>) {
-    const loc = await this.prisma.location.findFirst({ where: { id: input.locationId, tenantId: ctx.tenantId } });
-    if (!loc) throw notFound('Location');
-    assertBranch(ctx, loc.branchId);
-    const r = await this.prisma.route.create({ data: { ...input, branchId: loc.branchId, tenantId: ctx.tenantId } });
+    const [main] = await this.routeAreaRows(ctx, input.locationIds);
+    const r = await this.prisma.$transaction(async (tx) => {
+      const route = await tx.route.create({
+        data: { name: input.name, collectionDays: input.collectionDays, active: input.active, locationId: main.id, branchId: main.branchId, tenantId: ctx.tenantId },
+      });
+      await tx.routeLocation.createMany({ data: input.locationIds.map((locationId) => ({ tenantId: ctx.tenantId, routeId: route.id, locationId })) });
+      return route;
+    });
     await this.audit.log(ctx, 'CREATE', 'Route', r.id, undefined, input);
     return r;
   }
 
   async updateRoute(ctx: Ctx, id: string, input: z.infer<typeof routeSchema>) {
     const r = await this.route(ctx, id);
-    const loc = await this.prisma.location.findFirst({ where: { id: input.locationId, tenantId: ctx.tenantId } });
-    if (!loc) throw notFound('Location');
-    assertBranch(ctx, loc.branchId);
+    const [main] = await this.routeAreaRows(ctx, input.locationIds, r.locations.map((l) => l.id));
     const u = await this.prisma.$transaction(async (tx) => {
-      const route = await tx.route.update({ where: { id }, data: { ...input, branchId: loc.branchId } });
-      await tx.customer.updateMany({ where: { routeId: id }, data: { locationId: loc.id, branchId: loc.branchId } });
+      const route = await tx.route.update({
+        where: { id },
+        data: { name: input.name, collectionDays: input.collectionDays, active: input.active, locationId: main.id, branchId: main.branchId },
+      });
+      await tx.routeLocation.deleteMany({ where: { routeId: id, locationId: { notIn: input.locationIds } } });
+      await tx.routeLocation.createMany({ data: input.locationIds.map((locationId) => ({ tenantId: ctx.tenantId, routeId: id, locationId })), skipDuplicates: true });
+      // A customer keeps their own area while it is still on the route; the others move to the main area.
+      await tx.customer.updateMany({ where: { routeId: id, locationId: { notIn: input.locationIds } }, data: { locationId: main.id, branchId: main.branchId } });
       return route;
     });
     await this.audit.log(ctx, 'UPDATE', 'Route', id, r, input);
@@ -132,10 +283,10 @@ export class StructureService {
   }
 
   async route(ctx: Ctx, id: string) {
-    const r = await this.prisma.route.findFirst({ where: { id, tenantId: ctx.tenantId }, include: { location: true } });
+    const r = await this.prisma.route.findFirst({ where: { id, tenantId: ctx.tenantId }, include: { location: true, ...withAreas } });
     if (!r) throw notFound('Route');
     assertBranch(ctx, r.branchId);
-    return r;
+    return { ...r, locations: routeAreas(r) };
   }
 
   /** Customers on a route in visiting order, with pin data. */
@@ -192,7 +343,7 @@ export class StructureService {
   async myRoutes(ctx: Ctx, date = todayIST()) {
     const assignments = await this.prisma.routeAssignment.findMany({
       where: { tenantId: ctx.tenantId, userId: ctx.userId, fromDate: { lte: date }, OR: [{ toDate: null }, { toDate: { gte: date } }] },
-      include: { route: { include: { location: true } } },
+      include: { route: { include: { location: true, ...withAreas } } },
     });
     const wd = weekday(date);
     const routes = assignments.map((a) => a.route).filter((r, i, arr) => r.active && arr.findIndex((x) => x.id === r.id) === i);
@@ -201,6 +352,7 @@ export class StructureService {
       id: r.id,
       name: r.name,
       location: r.location.name,
+      locations: routeAreas(r),
       branchId: r.branchId,
       locationId: r.locationId,
       collectsToday: r.collectionDays.includes(wd),
@@ -214,6 +366,12 @@ export class StructureService {
     assertBranch(ctx, branchId);
     return b;
   }
+}
+
+/** Branches the caller can see, narrowed to one when asked. */
+function branchWhere(ctx: Ctx, branchId?: string): Prisma.BranchWhereInput {
+  const s = branchScope(ctx, branchId);
+  return s.branchId ? { tenantId: s.tenantId, id: s.branchId } : { tenantId: s.tenantId };
 }
 
 const startSchema = z.object({ lat: z.number(), lng: z.number() }).partial();
@@ -240,6 +398,13 @@ export class StructureController {
   }
   @Put('locations/:id') @Perm('branch.manage', 'route.manage') updateLocation(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body(V(locationSchema)) b: z.infer<typeof locationSchema>) {
     return this.svc.updateLocation(ctx, id, b);
+  }
+
+  @Get('structure/tree') @Perm('branch.manage', 'route.manage') tree(@CurrentCtx() ctx: Ctx, @Query('branchId') branchId?: string) {
+    return this.svc.tree(ctx, branchId);
+  }
+  @Get('structure/areas-summary') @Perm('report.view') areasSummary(@CurrentCtx() ctx: Ctx, @Query('branchId') branchId?: string) {
+    return this.svc.areasSummary(ctx, branchId);
   }
 
   @Get('routes') routes(@CurrentCtx() ctx: Ctx, @Query('branchId') branchId?: string, @Query('locationId') locationId?: string) {

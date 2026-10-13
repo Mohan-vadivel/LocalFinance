@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { LANGUAGES, type Permission } from '@localfinance/shared';
 import {
   Keyboard,
+  Layers,
   Sheet,
   FileUp,
   TableProperties,
@@ -82,6 +83,8 @@ const groups: { title: string; items: Item[] }[] = [
   {
     title: 'nav.routes',
     items: [
+      { to: '/setup', key: 'nav.setup', perms: ['branch.manage', 'route.manage'], icon: Layers },
+      { to: '/areas', key: 'nav.areas', perms: ['report.view'], icon: ChartColumn },
       { to: '/branches', key: 'nav.branches', perms: ['branch.manage', 'route.manage'], icon: Store },
       { to: '/routes', key: 'nav.routes', perms: ['route.manage'], icon: Route },
       { to: '/staff', key: 'nav.staff', perms: ['staff.manage'], icon: UserCog },

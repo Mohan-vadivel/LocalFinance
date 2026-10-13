@@ -1,9 +1,13 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { PaperProvider } from 'react-native-paper';
 import { loadLanguage } from './i18n';
+import { PaperIcon, paperTheme } from './theme';
 import Customer from './screens/Customer';
 import Daybook from './screens/Daybook';
+import { AreaDetail, Areas } from './screens/Areas';
 import { AddCustomer, LoanRequest, MyRequests, Search } from './screens/Forms';
 import Home from './screens/Home';
 import { MenuProvider } from './Menu';
@@ -19,11 +23,34 @@ import Support from './screens/Support';
 import { SessionProvider, useSession } from './session';
 import { TabBar } from './Tabs';
 import type { DayCustomer, MyRoute } from './store';
-import { Loading, NavProvider, TabBarCtx, type Route } from './ui';
+import { PermissionDenied } from './states';
+import { Loading, NavProvider, Screen, TabBarCtx, type Route } from './ui';
 import { View } from 'react-native';
+import StatesGallery from './screens/StatesGallery';
+
+/** Screens that need a permission: the same test the side menu and home actions use to show them. */
+const NEEDS: Record<string, string[]> = {
+  AddCustomer: ['customer.create'],
+  LoanRequest: ['loan.request'],
+  MyRequests: ['loan.request'],
+  Daybook: ['daybook.request', 'daybook.approve'],
+  Areas: ['report.view'],
+  AreaDetail: ['report.view'],
+};
 
 function Screens({ route }: { route: Route }) {
+  const { t } = useTranslation();
+  const { can } = useSession();
   const p = (route.params ?? {}) as Record<string, unknown>;
+  // A role that cannot open the feature sees the permission state instead of the screen.
+  const need = NEEDS[route.name];
+  if (need && !can(...need)) {
+    return (
+      <Screen title={t('errors.forbidden')}>
+        <PermissionDenied />
+      </Screen>
+    );
+  }
   switch (route.name) {
     case 'RouteDay':
       return <RouteDay routeId={p.routeId as string} name={p.name as string} />;
@@ -43,6 +70,10 @@ function Screens({ route }: { route: Route }) {
       return <Summary />;
     case 'CollectionReport':
       return <CollectionReport />;
+    case 'Areas':
+      return <Areas />;
+    case 'AreaDetail':
+      return <AreaDetail areaId={p.areaId as string} name={p.name as string} />;
     case 'Manager':
       return <Manager />;
     case 'Settings':
@@ -58,6 +89,9 @@ function Screens({ route }: { route: Route }) {
       return <Support />;
     case 'Plan':
       return <Plan />;
+    // Development builds only: a preview of the standard screen states (not in the menu).
+    case 'StatesGallery':
+      return __DEV__ ? <StatesGallery /> : <Home />;
     default:
       return <Home />;
   }
@@ -94,14 +128,16 @@ export default function App() {
   }, []);
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" />
-      {langReady ? (
-        <SessionProvider>
-          <Root />
-        </SessionProvider>
-      ) : (
-        <Loading />
-      )}
+      <PaperProvider theme={paperTheme} settings={{ icon: PaperIcon }}>
+        <StatusBar style="dark" />
+        {langReady ? (
+          <SessionProvider>
+            <Root />
+          </SessionProvider>
+        ) : (
+          <Loading />
+        )}
+      </PaperProvider>
     </SafeAreaProvider>
   );
 }

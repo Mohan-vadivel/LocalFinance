@@ -6,6 +6,7 @@ import { Layout } from './components/Layout';
 import { Loading, ToastProvider } from './components/ui';
 import { AuthProvider, useAuth } from './lib/auth';
 import Ask from './pages/Ask';
+import Areas from './pages/Areas';
 import Branches from './pages/Branches';
 import CollectionSummary from './pages/CollectionSummary';
 import DeskEntry from './pages/DeskEntry';
@@ -28,6 +29,7 @@ import Reports from './pages/Reports';
 import Routes, { RouteDetail } from './pages/Routes';
 import Salaries from './pages/Salaries';
 import Settings, { Audit } from './pages/Settings';
+import Setup from './pages/Setup';
 import Staff, { Roles } from './pages/Staff';
 import Support, { PlatformSettingsPage } from './pages/Support';
 import Tenants from './pages/Tenants';
@@ -79,6 +81,8 @@ function Guarded() {
         {/* The plan and its price are for the owner only; agents and other staff never see it. */}
         <Route path="plan" element={<Need roles={['TENANT_ADMIN']}><Plan /></Need>} />
         <Route path="branches" element={<Need perms={['branch.manage', 'route.manage']}><Branches /></Need>} />
+        <Route path="setup" element={<Need perms={['branch.manage', 'route.manage']}><Setup /></Need>} />
+        <Route path="areas" element={<Need perms={['report.view']}><Areas /></Need>} />
         <Route path="routes" element={<Need perms={['route.manage', 'report.view']}><Routes /></Need>} />
         <Route path="routes/:id" element={<Need perms={['route.manage', 'report.view']}><RouteDetail /></Need>} />
         <Route path="staff" element={<Need perms={['staff.manage']}><Staff /></Need>} />

@@ -1,7 +1,8 @@
 import { useContext, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Platform, Pressable, Text, View } from 'react-native';
+import { Keyboard, Platform, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Surface, Text } from 'react-native-paper';
 import { useSession } from './session';
 import { C, Icon, MenuCtx, SP, useLayout, useNav, type IconName } from './ui';
 
@@ -32,9 +33,10 @@ export function TabBar() {
     { key: 'More', icon: 'grid-outline', iconOn: 'grid', label: t('mobile.tabs.more'), onPress: menu.open, show: true, active: false },
   ];
   return (
-    <View
+    <Surface
       accessibilityRole="tablist"
-      style={{ flexDirection: 'row', backgroundColor: C.panel, borderTopWidth: 1, borderTopColor: C.line, paddingBottom: Math.max(insets.bottom, SP.xs), paddingTop: SP.xs, boxShadow: '0px -1px 4px rgba(16, 40, 36, 0.06)' }}
+      elevation={1}
+      style={{ flexDirection: 'row', backgroundColor: C.panel, borderTopWidth: 1, borderTopColor: C.line, paddingBottom: Math.max(insets.bottom, SP.xs), paddingTop: SP.xs }}
     >
       {tabs.filter((x) => x.show).map((x) => (
         <Pressable
@@ -51,10 +53,10 @@ export function TabBar() {
             <Icon name={x.active ? x.iconOn : x.icon} size={22} color={x.active ? C.brand : C.ink2} />
           </View>
           {/* Up to two short lines, so "Customers" and long Tamil labels are never cut on a 320dp phone. */}
-          <Text numberOfLines={2} style={{ fontSize: narrow ? 11 : 12, lineHeight: narrow ? 14 : 15, textAlign: 'center', fontWeight: x.active ? '800' : '600', color: x.active ? C.brandInk : C.ink2, paddingHorizontal: 2 }}>{x.label}</Text>
+          <Text variant="labelMedium" numberOfLines={2} style={{ fontSize: narrow ? 11 : 12, lineHeight: narrow ? 14 : 15, textAlign: 'center', fontWeight: x.active ? '800' : '600', color: x.active ? C.brandInk : C.ink2, paddingHorizontal: 2 }}>{x.label}</Text>
         </Pressable>
       ))}
-    </View>
+    </Surface>
   );
 }
 

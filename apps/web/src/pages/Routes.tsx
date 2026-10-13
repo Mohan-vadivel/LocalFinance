@@ -9,16 +9,49 @@ import { del, get, post, put } from '../lib/api';
 import { dateIN, today } from '../lib/format';
 import { useLoad } from '../lib/hooks';
 
+interface Area { id: string; name: string; active?: boolean }
+
 interface Route {
   id: string;
   name: string;
   branchId: string;
+  /** The main area. */
   locationId: string;
   collectionDays: number[];
   active: boolean;
   customerCount: number;
   location: { name: string; branchId: string };
+  /** Every area the route covers, the main one first. */
+  locations: Area[];
   assignments: { id: string; userId: string; userName?: string; fromDate: string; toDate: string | null; current: boolean }[];
+}
+
+/** The route's areas as one line: "Anna Nagar · KK Nagar". */
+const areaNames = (r: { location: { name: string }; locations?: Area[] }) => (r.locations?.length ? r.locations : [{ id: '', name: r.location.name }]).map((a) => a.name).join(' · ');
+
+/** Areas of one branch as ticked boxes. The first one ticked is the main area. */
+function AreasPicker({ branchId, value, onChange }: { branchId: string; value: string[]; onChange: (v: string[]) => void }) {
+  const { t } = useTranslation();
+  const areas = useLoad(() => get<Area[]>('/locations', { branchId }), [branchId]);
+  if (!branchId) return <span className="muted">{t('routeMod.chooseBranch')}</span>;
+  return (
+    <div>
+      <div className="row">
+        {/* Inactive areas take no new routes; an area the route already covers stays ticked. */}
+        {(areas.data ?? []).filter((a) => a.active !== false || value.includes(a.id)).map((a) => {
+          const i = value.indexOf(a.id);
+          return (
+            <label key={a.id} className="field inline">
+              <input type="checkbox" checked={i >= 0} onChange={(e) => onChange(e.target.checked ? [...value, a.id] : value.filter((x) => x !== a.id))} />
+              {a.name}
+              {i === 0 && <span className="badge ok">{t('routeMod.mainArea')}</span>}
+            </label>
+          );
+        })}
+      </div>
+      <div className="muted">{t('routeMod.areasHint')}</div>
+    </div>
+  );
 }
 
 function DaysPicker({ value, onChange }: { value: number[]; onChange: (v: number[]) => void }) {
@@ -37,21 +70,27 @@ function DaysPicker({ value, onChange }: { value: number[]; onChange: (v: number
 
 export function RouteForm({ route, onClose, onSaved }: { route: Partial<Route>; onClose: () => void; onSaved: () => void }) {
   const { t } = useTranslation();
-  const [f, setF] = useState({ branchId: route.location?.branchId ?? route.branchId ?? '', locationId: route.locationId ?? '', name: route.name ?? '', collectionDays: route.collectionDays ?? [1, 2, 3, 4, 5, 6], active: route.active ?? true });
+  const [f, setF] = useState({
+    branchId: route.location?.branchId ?? route.branchId ?? '',
+    areas: route.locations?.map((a) => a.id) ?? (route.locationId ? [route.locationId] : []),
+    name: route.name ?? '',
+    collectionDays: route.collectionDays ?? [1, 2, 3, 4, 5, 6],
+    active: route.active ?? true,
+  });
   return (
     <FormModal
       title={route.id ? `${t('common.edit')}: ${route.name}` : t('routeMod.new')}
       onClose={onClose}
       onSubmit={async () => {
-        const body = { locationId: f.locationId, name: f.name, collectionDays: f.collectionDays, active: f.active };
+        const body = { locationIds: f.areas, name: f.name, collectionDays: f.collectionDays, active: f.active };
         if (route.id) await put(`/routes/${route.id}`, body);
         else await post('/routes', body);
         clearLookups();
         onSaved();
       }}
     >
-      <Field label={t('common.branch')}><BranchPicker value={f.branchId} onChange={(v) => setF({ ...f, branchId: v, locationId: '' })} /></Field>
-      <Field label={t('common.location')}><LocationPicker branchId={f.branchId || undefined} value={f.locationId} onChange={(v) => setF({ ...f, locationId: v })} /></Field>
+      <Field label={t('common.branch')}><BranchPicker value={f.branchId} onChange={(v) => setF({ ...f, branchId: v, areas: [] })} /></Field>
+      <Field label={t('routeMod.areas')} full><AreasPicker branchId={f.branchId} value={f.areas} onChange={(v) => setF({ ...f, areas: v })} /></Field>
       <Field label={t('common.name')} full><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
       <Field label={t('routeMod.collectionDays')} full><DaysPicker value={f.collectionDays} onChange={(v) => setF({ ...f, collectionDays: v })} /></Field>
       <Field label={t('common.status')}>
@@ -91,7 +130,7 @@ export default function Routes() {
           actions={(r) => [{ icon: Eye, label: t('common.view'), onClick: () => nav(`/routes/${r.id}`) }]}
           columns={[
             { key: 'name', label: t('common.name') },
-            { key: 'location', label: t('common.location'), value: (r) => r.location.name },
+            { key: 'location', label: t('routeMod.areas'), value: (r) => areaNames(r) },
             { key: 'days', label: t('routeMod.collectionDays'), value: (r) => r.collectionDays.map((d) => t(`weekdays.${d}`)).join(' ') },
             { key: 'customerCount', label: t('nav.customers'), num: true, total: true },
             { key: 'agents', label: t('routeMod.assignments'), value: (r) => r.assignments.filter((a) => a.current).map((a) => a.userName).join(', ') },
@@ -161,7 +200,7 @@ export function RouteDetail() {
       <div className="page-head">
         <h1>{route.name}</h1>
         <div className="row">
-          <span className="muted">{route.location.name} · {route.collectionDays.map((d) => t(`weekdays.${d}`)).join(' ')}</span>
+          <span className="muted">{areaNames(route)} · {route.collectionDays.map((d) => t(`weekdays.${d}`)).join(' ')}</span>
           <button className="btn" onClick={() => setEditing(true)}>{t('common.edit')}</button>
           <button className="btn primary" onClick={() => setAssigning(true)}>{t('routeMod.assign')}</button>
         </div>

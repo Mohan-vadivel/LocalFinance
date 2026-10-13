@@ -16,6 +16,7 @@ import {
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { AuditService } from '../common/audit.service';
+import { routeAreas, withAreas } from '../common/areas';
 import { BooksService, penaltyRule, positionOf, toState } from '../common/books.service';
 import { CurrentCtx, Perm, type Ctx } from '../common/context';
 import { bad, forbidden, notFound, rule } from '../common/errors';
@@ -326,7 +327,7 @@ export class CollectionsService {
    * arrears, last payments and today's status for the map pin.
    */
   async routeDay(ctx: Ctx, routeId: string, date = todayIST()) {
-    const route = await this.prisma.route.findFirst({ where: { id: routeId, tenantId: ctx.tenantId }, include: { location: true } });
+    const route = await this.prisma.route.findFirst({ where: { id: routeId, tenantId: ctx.tenantId }, include: { location: true, ...withAreas } });
     if (!route) throw notFound('Route');
     assertBranch(ctx, route.branchId);
     const customers = await this.prisma.customer.findMany({
@@ -368,7 +369,7 @@ export class CollectionsService {
       return recent.some((r) => r.customerId === customerId && r.date >= p.promiseDate!) ? null : p.promiseDate;
     };
     return {
-      route: { id: route.id, name: route.name, location: route.location.name },
+      route: { id: route.id, name: route.name, location: route.location.name, locations: routeAreas(route) },
       date,
       customers: customers.map((c) => {
         const loans = c.loans.map(({ instalments, ...l }) => {

@@ -1,11 +1,13 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Appbar, Text } from 'react-native-paper';
 import { get } from '../api';
 import { useSession } from '../session';
-import { cachedRouteDay, getFailed, getLastSync, getQueue, myRoutes, subscribe, sync, type MyRoute } from '../store';
-import { AmountPair, Avatar, Badge, Btn, C, Card, Chevron, EmptyState, ErrorText, Icon, IconButton, MAX_W, MAX_W_WIDE, MenuCtx, Notice, Progress, R, SP, SearchBar, Section, dateIN, money, s, todayIST, useLayout, useNav, useScreenEdges, type IconName } from '../ui';
+import { areaText, cachedRouteDay, getFailed, getLastSync, getQueue, myRoutes, subscribe, sync, type MyRoute } from '../store';
+import { AmountPair, Avatar, Badge, Btn, C, Card, Chevron, Icon, MAX_W, MAX_W_WIDE, MenuCtx, Notice, Progress, R, SP, SearchBar, Section, dateIN, money, s, todayIST, useLayout, useNav, useScreenEdges, type IconName } from '../ui';
+import { EmptyState, FailureState, SkeletonList } from '../states';
 
 /** Pending, failed and last-sync state, kept current as the queue changes. */
 export function useSyncState() {
@@ -45,7 +47,7 @@ export function SyncBar() {
           {t('mobile.allSynced')}
           {st.lastSync || msg ? <Text style={{ color: C.ink2, fontWeight: '500' }}>{st.lastSync ? ` · ${t('mobile.lastSync')}: ${time}` : ''}{msg ? ` · ${msg}` : ''}</Text> : null}
         </Text>
-        <Pressable onPress={() => void run()} disabled={busy} accessibilityRole="button" accessibilityLabel={t('mobile.syncNow')} hitSlop={4} style={({ pressed }) => [{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }, (pressed || busy) && { backgroundColor: 'rgba(6,118,71,0.12)' }]}>
+        <Pressable onPress={() => void run()} disabled={busy} accessibilityRole="button" accessibilityLabel={t('mobile.syncNow')} hitSlop={4} style={({ pressed }) => [{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' }, (pressed || busy) && { backgroundColor: 'rgba(6,118,71,0.12)' }]}>
           <Icon name="sync" size={22} color={C.ok} />
         </Pressable>
       </View>
@@ -64,7 +66,7 @@ export function SyncBar() {
           {t('mobile.lastSync')}: {time} {msg ? `· ${msg}` : ''}
         </Text>
         {st.failed > 0 && (
-          <Pressable onPress={() => nav.push('Summary')} hitSlop={8} style={{ paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Pressable onPress={() => nav.push('Summary')} hitSlop={8} style={{ minHeight: 48, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <View style={{ minWidth: 22, height: 22, borderRadius: 11, backgroundColor: C.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>
               <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>{st.failed}</Text>
             </View>
@@ -214,7 +216,7 @@ export default function Home() {
               <Avatar name={r.name} label={r.name.trim().slice(0, 1).toUpperCase()} color={r.collectsToday ? C.brand : C.grey} size={48} />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={{ fontSize: 18, fontWeight: '800', color: C.ink }}>{r.name}</Text>
-                <Text style={[s.muted, { marginTop: 2 }]}>{r.location} · {r.customerCount} {t('nav.customers')}</Text>
+                <Text style={[s.muted, { marginTop: 2 }]}>{areaText(r)} · {r.customerCount} {t('nav.customers')}</Text>
               </View>
               <Chevron />
             </View>
@@ -240,21 +242,12 @@ export default function Home() {
       <Section title={t('mobile.quickActions')} />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.md, marginBottom: SP.md }}>
         {shownActions.map((a) => (
-          <Pressable
-            key={a.title}
-            onPress={a.onPress}
-            accessibilityRole="button"
-            android_ripple={{ color: C.surface }}
-            style={({ pressed }) => [
-              { width: tileW, minHeight: 92, backgroundColor: C.panel, borderRadius: R.lg, borderWidth: 1, borderColor: C.line, padding: 14, justifyContent: 'flex-start', gap: SP.sm, boxShadow: '0px 1px 2px rgba(16, 40, 36, 0.06), 0px 2px 8px rgba(16, 40, 36, 0.05)' },
-              pressed && { backgroundColor: '#f6f9f8', transform: [{ scale: 0.98 }] },
-            ]}
-          >
+          <Card key={a.title} onPress={a.onPress} accessibilityLabel={a.title} style={{ width: tileW, minHeight: 92, marginBottom: 0, padding: 14, justifyContent: 'flex-start', gap: SP.sm }}>
             <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: a.color + '1f', alignItems: 'center', justifyContent: 'center' }}>
               <Icon name={a.icon} size={22} color={a.color} />
             </View>
-            <Text style={{ fontSize: 15, fontWeight: '700', color: C.ink, lineHeight: 20 }} numberOfLines={3}>{a.title}</Text>
-          </Pressable>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: C.ink, lineHeight: 20 }}>{a.title}</Text>
+          </Card>
         ))}
       </View>
     </>
@@ -265,29 +258,32 @@ export default function Home() {
       {canSearch && <SearchBar placeholder={t('mobile.search')} onPress={() => nav.push('Search')} />}
       {todayCard}
       <SyncBar />
-      {offline && <Notice tone="warn" text={t('mobile.offlineCopy')} />}
-      <ErrorText error={error} />
+      {/* No connection and nothing downloaded yet, or a failed load: say so in place of the route list. */}
+      {error || (offline && !routes?.length) ? <FailureState error={error} offline={offline} onRetry={() => void load()} /> : null}
+      {offline && !!routes?.length && <Notice tone="warn" text={t('mobile.offlineCopy')} />}
       {/* A manager or owner without routes of their own sees no empty "My routes" section. */}
       {!(isManager && routes?.length === 0) && <Section title={t('mobile.myRoutes')} />}
-      {routes && routes.length === 0 && !isManager && <EmptyState icon="map-outline" title={t('mobile.noRoutes')} />}
+      {routes === null && !error ? <SkeletonList rows={2} /> : null}
+      {routes && routes.length === 0 && !isManager && !error && !offline && <EmptyState icon="map-outline" title={t('mobile.noRoutes')} help={t('states.empty.routesHelp')} />}
       {routeCards}
     </>
   );
 
   return (
     <SafeAreaView style={s.safe} edges={edges}>
-      <View style={[s.header, { paddingTop: insets.top + SP.sm, paddingHorizontal: SP.md, paddingBottom: SP.md }]}>
-        <View style={[s.headerInner, { gap: SP.sm, maxWidth: maxW }]}>
-          <IconButton icon="menu" label={t('mobile.openMenu')} onPress={menu.open} />
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={s.eyebrow} numberOfLines={1}>{profile?.tenant?.name ?? t('common.appName')}</Text>
-            <Text style={[s.title, { fontSize: 20, lineHeight: 26 }]} numberOfLines={2}>{t('mobile.hello', { name: profile?.name?.split(' (')[0] ?? '' })}</Text>
+      {/* Paper app bar: menu, the business and greeting, and the user's initial (also opens the menu). */}
+      <Appbar.Header mode="small" elevated={false} statusBarHeight={insets.top + SP.sm} style={s.header}>
+        <View style={[s.headerInner, { maxWidth: maxW }]}>
+          <Appbar.Action icon="menu" onPress={menu.open} color={C.ink} size={24} accessibilityLabel={t('mobile.openMenu')} style={s.appbarAction} />
+          <View style={s.titleBlock}>
+            <Text variant="labelMedium" style={s.eyebrow}>{profile?.tenant?.name ?? t('common.appName')}</Text>
+            <Text variant="titleLarge" style={[s.title, { fontSize: 20, lineHeight: 26 }]}>{t('mobile.hello', { name: profile?.name?.split(' (')[0] ?? '' })}</Text>
           </View>
           <Pressable onPress={menu.open} accessibilityRole="button" accessibilityLabel={t('mobile.openMenu')} hitSlop={6}>
             <Avatar name={profile?.name ?? '?'} size={44} />
           </Pressable>
         </View>
-      </View>
+      </Appbar.Header>
       <ScrollView contentContainerStyle={[s.body, { maxWidth: maxW + SP.lg * 2 }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} colors={[C.brand]} />}>
         {wide ? (
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: SP.lg }}>
@@ -300,6 +296,8 @@ export default function Home() {
             {actionList}
           </>
         )}
+        {/* Development builds only: a preview of the standard screen states (not in the menu or tabs). */}
+        {__DEV__ && <Btn kind="ghost" title={t('states.gallery.open')} onPress={() => nav.push('StatesGallery')} style={{ marginTop: SP.md }} />}
       </ScrollView>
     </SafeAreaView>
   );
