@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Animated, BackHandler, Easing, Pressable, ScrollView, Text, View } from 'react-native';
+import { Animated, BackHandler, Easing, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Divider, List, Text } from 'react-native-paper';
 import { LANGUAGES } from '@localfinance/shared';
 import { BASE, post } from './api';
 import { setLanguage } from './i18n';
@@ -144,14 +145,14 @@ function Drawer({ anim, close }: { anim: Animated.Value; close: () => void }) {
             {LANGUAGES.map((l) => {
               const on = i18n.language === l.code;
               return (
-                <Pressable key={l.code} onPress={() => void changeLang(l.code)} accessibilityRole="radio" accessibilityState={{ selected: on }} style={({ pressed }) => [{ flexBasis: '30%', flexGrow: 1, minHeight: 44, borderRadius: R.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: on ? C.brand : C.lineStrong, backgroundColor: on ? C.brandSoft : C.panel }, pressed && { opacity: 0.8 }]}>
+                <Pressable key={l.code} onPress={() => void changeLang(l.code)} accessibilityRole="radio" accessibilityState={{ selected: on }} style={({ pressed }) => [{ flexBasis: '30%', flexGrow: 1, minHeight: 48, borderRadius: R.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: on ? C.brand : C.lineStrong, backgroundColor: on ? C.brandSoft : C.panel }, pressed && { opacity: 0.8 }]}>
                   <Text style={{ fontWeight: '700', fontSize: 15, color: on ? C.brandInk : C.ink2 }}>{l.nativeName}</Text>
                 </Pressable>
               );
             })}
           </View>
 
-          <View style={{ height: 1, backgroundColor: C.line, marginHorizontal: SP.lg, marginVertical: SP.sm }} />
+          <Divider style={{ marginHorizontal: SP.lg, marginVertical: SP.sm }} />
           {st.pending > 0 && <Text style={{ color: C.danger, fontSize: 13, fontWeight: '600', paddingHorizontal: SP.lg, marginBottom: SP.xs }}>{t('mobile.logoutPending', { count: st.pending })}</Text>}
           <MenuRow
             item={{ key: 'logout', icon: 'log-out-outline', label: t('common.logout'), onPress: () => { close(); void logout(); } }}
@@ -167,40 +168,40 @@ function Drawer({ anim, close }: { anim: Animated.Value; close: () => void }) {
 
 const groupTitle = { color: C.muted, fontSize: 12, fontWeight: '800' as const, letterSpacing: 0.6, textTransform: 'uppercase' as const, paddingHorizontal: SP.lg, marginTop: SP.md, marginBottom: SP.xs };
 
+/** A group of menu rows on a Paper List.Section, titled in small capitals. */
 function Group({ title, items, isActive }: { title: string; items: Item[]; isActive: (i: Item) => boolean }) {
   const shown = items.filter((i) => i.show !== false);
   if (!shown.length) return null;
   return (
-    <View>
-      <Text style={groupTitle}>{title}</Text>
+    <List.Section title={title} titleStyle={groupTitle} style={{ marginVertical: 0 }}>
       {shown.map((i) => <MenuRow key={i.key + i.label} item={i} active={isActive(i)} />)}
-    </View>
+    </List.Section>
   );
 }
 
+/** One menu row: a Paper List.Item at 48dp or taller, with the highlight for the current screen. */
 function MenuRow({ item, active, danger, disabled }: { item: Item; active?: boolean; danger?: boolean; disabled?: boolean }) {
   const fg = danger ? C.danger : active ? C.brandInk : C.ink;
   return (
-    <Pressable
+    <List.Item
+      title={item.label}
+      titleNumberOfLines={3}
       onPress={item.onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityState={{ selected: !!active, disabled: !!disabled }}
-      android_ripple={{ color: C.surface }}
-      style={({ pressed }) => [
-        { flexDirection: 'row', alignItems: 'center', gap: SP.md, minHeight: 48, marginHorizontal: SP.sm, paddingHorizontal: SP.md, borderRadius: R.md },
-        active && { backgroundColor: C.brandSoft },
-        pressed && !active && { backgroundColor: C.bg },
-        disabled && { opacity: 0.45 },
-      ]}
-    >
-      <Icon name={item.icon} size={22} color={danger ? C.danger : active ? C.brand : C.ink2} />
-      <Text style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: active ? '800' : '600', color: fg }}>{item.label}</Text>
-      {item.badge ? (
-        <View style={{ minWidth: 22, height: 22, borderRadius: 11, backgroundColor: C.warn, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>
-          <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>{item.badge}</Text>
+      left={() => (
+        <View style={{ width: 24, alignItems: 'center', justifyContent: 'center', alignSelf: 'center' }}>
+          <Icon name={item.icon} size={22} color={danger ? C.danger : active ? C.brand : C.ink2} />
         </View>
-      ) : null}
-    </Pressable>
+      )}
+      right={item.badge ? () => (
+        <View style={{ alignSelf: 'center', minWidth: 22, height: 22, borderRadius: 11, backgroundColor: C.warn, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>
+          <Text variant="labelSmall" style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>{item.badge}</Text>
+        </View>
+      ) : undefined}
+      titleStyle={{ fontSize: 15, fontWeight: active ? '800' : '600', color: fg }}
+      style={[{ minHeight: 52, marginHorizontal: SP.sm, paddingHorizontal: SP.md, borderRadius: R.md }, active && { backgroundColor: C.brandSoft }, disabled && { opacity: 0.45 }]}
+    />
   );
 }

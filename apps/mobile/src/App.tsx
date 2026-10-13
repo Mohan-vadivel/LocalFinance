@@ -1,7 +1,9 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { PaperProvider } from 'react-native-paper';
 import { loadLanguage } from './i18n';
+import { PaperIcon, paperTheme } from './theme';
 import Customer from './screens/Customer';
 import Daybook from './screens/Daybook';
 import { AddCustomer, LoanRequest, MyRequests, Search } from './screens/Forms';
@@ -94,14 +96,16 @@ export default function App() {
   }, []);
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" />
-      {langReady ? (
-        <SessionProvider>
-          <Root />
-        </SessionProvider>
-      ) : (
-        <Loading />
-      )}
+      <PaperProvider theme={paperTheme} settings={{ icon: PaperIcon }}>
+        <StatusBar style="dark" />
+        {langReady ? (
+          <SessionProvider>
+            <Root />
+          </SessionProvider>
+        ) : (
+          <Loading />
+        )}
+      </PaperProvider>
     </SafeAreaProvider>
   );
 }

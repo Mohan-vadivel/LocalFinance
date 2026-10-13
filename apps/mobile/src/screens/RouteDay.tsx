@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Linking, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Linking, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { MapPins } from '../MapPins';
 import { getPosition, useSession } from '../session';
 import { getVisitOrder, lastKnownHere, onVisitOrder, orderDay, setVisitOrder, type VisitOrder } from '../smart';
@@ -85,15 +85,7 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
             </View>
           )}
           {can('collection.record') && !compact && (
-            <Pressable
-              onPress={() => setSpeaking(true)}
-              accessibilityRole="button"
-              accessibilityLabel={t('ai.voice.button')}
-              style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 14, borderRadius: R.pill, backgroundColor: pressed ? '#c9e8e1' : C.brandSoft }]}
-            >
-              <Icon name="mic" size={20} color={C.brandInk} />
-              <Text style={{ color: C.brandInk, fontWeight: '800', fontSize: 15 }}>{t('ai.voice.button')}</Text>
-            </Pressable>
+            <Btn small kind="tonal" icon="mic" title={t('ai.voice.button')} onPress={() => setSpeaking(true)} style={{ marginBottom: 0 }} />
           )}
         </View>
       }

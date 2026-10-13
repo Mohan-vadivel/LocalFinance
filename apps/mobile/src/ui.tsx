@@ -1,14 +1,15 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { createContext, useContext, useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, BackHandler, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
+import { BackHandler, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ActivityIndicator, Appbar, Button, Card as PaperCard, Chip, IconButton as PaperIconButton, SegmentedButtons, Searchbar, Surface, Text, TextInput as PaperTextInput, TouchableRipple } from 'react-native-paper';
 import { formatINR } from '@localfinance/shared';
 import { ApiError } from './api';
 import type { PinStatus } from './store';
 
 // ---------- Design tokens ----------
-/** Colours. Light neutral surfaces, a teal brand and strong ink for reading outdoors. */
+/** Colours. Light neutral surfaces, a teal brand and strong ink for reading outdoors. Also the Paper theme (theme.ts). */
 export const C = {
   bg: '#f3f6f5',
   panel: '#ffffff',
@@ -54,8 +55,7 @@ export function useLayout() {
 const shadow = '0px 1px 2px rgba(16, 40, 36, 0.06), 0px 2px 8px rgba(16, 40, 36, 0.05)';
 
 export const PIN_COLORS: Record<PinStatus, string> = { PAID: '#067647', PARTIAL: '#d97706', MISSED: '#b42318', NOTHING_DUE: '#8a96a3', PENDING: '#0f766e' };
-/** Rupees for the screen. Whole amounts drop the ".00" so figures are shorter and easier to read outdoors. */
-export const money = (p: number | null | undefined) => (p == null ? '-' : formatINR(p, { decimals: p % 100 !== 0 }));
+export const money = (p: number | null | undefined) => (p == null ? '-' : formatINR(p));
 export const toPaise = (rupees: string) => Math.round(Number(rupees.replace(/,/g, '') || 0) * 100);
 export const todayIST = () => new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
 export const dateIN = (d?: string | null) => (d ? `${d.slice(8, 10)}-${d.slice(5, 7)}-${d.slice(0, 4)}` : '-');
@@ -128,17 +128,25 @@ export type IconName = ComponentProps<typeof Ionicons>['name'];
 /** An outline icon from the Ionicons set bundled with Expo. */
 export const Icon = ({ name, size = 22, color = C.ink }: { name: IconName; size?: number; color?: string }) => <Ionicons name={name} size={size} color={color} />;
 
-/** A round icon-only button for headers. */
+/** A round icon-only button (Paper IconButton, 48dp target) for headers and rows. */
 export function IconButton({ icon, onPress, label, color = C.ink }: { icon: IconName; onPress: () => void; label: string; color?: string }) {
   return (
-    <Pressable onPress={onPress} hitSlop={6} style={({ pressed }) => [s.back, pressed && { backgroundColor: C.surface }]} accessibilityRole="button" accessibilityLabel={label} android_ripple={{ color: C.line, borderless: true }}>
-      <Icon name={icon} size={24} color={color} />
-    </Pressable>
+    <PaperIconButton
+      icon={({ size }) => <Icon name={icon} size={size} color={color} />}
+      size={24}
+      iconColor={color}
+      onPress={onPress}
+      accessibilityLabel={label}
+      style={{ margin: 0 }}
+    />
   );
 }
 
 // ---------- Layout ----------
-/** The top app bar: back button, a large title (wraps to two lines for long Tamil titles) and optional actions. */
+/**
+ * The top app bar (Paper Appbar): back arrow, or the menu button on a top-level screen, then the title. The title
+ * block wraps to as many lines as a long Tamil or Telugu title needs, which a fixed Appbar title would cut off.
+ */
 export function Header({ title, subtitle, right, back = true, eyebrow }: { title: string; subtitle?: string; right?: ReactNode; back?: boolean; eyebrow?: string }) {
   const { t } = useTranslation();
   const nav = useNav();
@@ -147,18 +155,20 @@ export function Header({ title, subtitle, right, back = true, eyebrow }: { title
   const canBack = back && !!nav && nav.stack.length > 1;
   // A screen at the bottom of the stack (home, or one opened from the menu) shows the menu button instead.
   const showMenu = !!nav && nav.stack.length === 1;
+  const leading = canBack || showMenu;
   return (
-    <View style={[s.header, { paddingTop: insets.top + SP.sm }]}>
+    <Appbar.Header mode="small" elevated={false} statusBarHeight={insets.top + SP.sm} style={s.header}>
       <View style={s.headerInner}>
-      {canBack ? <IconButton icon="arrow-back" label={t('common.back')} onPress={nav.pop} /> : showMenu ? <IconButton icon="menu" label={t('mobile.openMenu')} onPress={menu.open} /> : null}
-      <View style={{ flex: 1, minWidth: 0, paddingLeft: canBack || showMenu ? 0 : SP.xs }}>
-        {eyebrow ? <Text style={s.eyebrow} numberOfLines={1}>{eyebrow}</Text> : null}
-        <Text style={s.title} numberOfLines={2}>{title}</Text>
-        {subtitle ? <Text style={s.subtitle} numberOfLines={2}>{subtitle}</Text> : null}
+        {canBack ? <Appbar.BackAction onPress={nav.pop} color={C.ink} size={24} accessibilityLabel={t('common.back')} style={s.appbarAction} /> : null}
+        {showMenu ? <Appbar.Action icon="menu" onPress={menu.open} color={C.ink} size={24} accessibilityLabel={t('mobile.openMenu')} style={s.appbarAction} /> : null}
+        <View style={[s.titleBlock, !leading && { paddingLeft: SP.xs }]}>
+          {eyebrow ? <Text variant="labelMedium" style={s.eyebrow}>{eyebrow}</Text> : null}
+          <Text variant="titleLarge" style={s.title}>{title}</Text>
+          {subtitle ? <Text variant="bodyMedium" style={s.subtitle}>{subtitle}</Text> : null}
+        </View>
+        {right ? <View style={s.headerRight}>{right}</View> : null}
       </View>
-      {right}
-      </View>
-    </View>
+    </Appbar.Header>
   );
 }
 
@@ -173,139 +183,152 @@ export function Screen({ title, children, right, scroll = true, back = true, sub
   );
 }
 
-/** A rounded surface. With `onPress` it becomes a tappable list item with press feedback. */
+/**
+ * A rounded surface (Paper Card, elevation 1). With `onPress` it becomes a tappable list item with the Paper ripple.
+ */
 export function Card({ children, style, onPress, tone, accessibilityLabel }: { children: ReactNode; style?: StyleProp<ViewStyle>; onPress?: () => void; tone?: 'default' | 'brand' | 'soft'; accessibilityLabel?: string }) {
   const toneStyle = tone === 'brand' ? s.cardBrand : tone === 'soft' ? s.cardSoft : null;
-  if (!onPress) return <View style={[s.card, toneStyle, style]}>{children}</View>;
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      android_ripple={{ color: C.surface }}
-      style={({ pressed }) => [s.card, toneStyle, pressed && { backgroundColor: tone === 'brand' ? C.brandDark : '#f6f9f8', transform: [{ scale: 0.995 }] }, style]}
-    >
+    <PaperCard mode="elevated" elevation={1} onPress={onPress} accessibilityLabel={accessibilityLabel} style={[s.card, toneStyle, style]}>
       {children}
-    </Pressable>
+    </PaperCard>
   );
 }
 
 type BtnKind = 'primary' | 'plain' | 'danger' | 'tonal' | 'outline' | 'ghost' | 'light';
 /**
- * Buttons. `primary` is filled brand (the main action on a screen), `plain`/`tonal` is a soft brand fill for
- * secondary actions, `outline` a bordered neutral button, `danger` a filled red one, `light` a white button for use
- * on a brand-coloured card. At least 48dp tall.
+ * Buttons on Paper Button. `primary` is filled brand (the main action on a screen), `plain`/`tonal` a soft brand
+ * fill for secondary actions, `outline` a bordered neutral button, `danger` a filled red one, `ghost` a text button,
+ * `light` a white button for use on a brand-coloured card. At least 48dp tall.
+ *
+ * Paper's Button clamps its label to one line, so a long label (a Tamil or Telugu sentence, or a name) would be cut
+ * off. Labels longer than a word or two render with the same Paper surface, ripple and metrics, but wrap onto as many
+ * lines as they need.
  */
 export function Btn({ title, onPress, kind = 'primary', disabled, busy, small, style, big, textStyle, accessibilityLabel, icon }: { title: string; onPress: () => void; kind?: BtnKind; disabled?: boolean; busy?: boolean; small?: boolean; style?: StyleProp<ViewStyle>; big?: boolean; textStyle?: StyleProp<TextStyle>; accessibilityLabel?: string; icon?: IconName }) {
-  const palette: Record<BtnKind, { bg: string; fg: string; border: string; pressed: string }> = {
-    primary: { bg: C.brand, fg: C.onBrand, border: C.brand, pressed: C.brandDark },
-    danger: { bg: C.danger, fg: '#fff', border: C.danger, pressed: '#8f1c13' },
-    plain: { bg: C.brandSoft, fg: C.brandInk, border: C.brandSoft, pressed: '#c9e8e1' },
-    tonal: { bg: C.brandSoft, fg: C.brandInk, border: C.brandSoft, pressed: '#c9e8e1' },
-    outline: { bg: C.panel, fg: C.ink, border: C.lineStrong, pressed: C.surface },
-    ghost: { bg: 'transparent', fg: C.brand, border: 'transparent', pressed: C.brandSoft },
-    light: { bg: '#ffffff', fg: C.brandInk, border: '#ffffff', pressed: C.brandSoft },
-  };
-  const p = palette[kind];
+  const v = BTN[kind];
   const off = disabled || busy;
+  const minH = big ? 60 : small ? 48 : 52;
+  const fontSize = big ? 18 : small ? 14 : 16;
+  const weight: TextStyle['fontWeight'] = big ? '800' : '700';
+  const iconEl = icon ? ({ size, color }: { size: number; color: string }) => <Icon name={icon} size={size} color={color} /> : undefined;
+  const label: TextStyle = { fontSize, fontWeight: weight, color: v.fg, textAlign: 'center' };
+  const dim = off ? { opacity: disabled && !busy ? 0.45 : 0.7 } : null;
+
+  // Paper's one-line label only for very short words; characters in Indian scripts are wide, so longer ones wrap.
+  if (title.length <= 6) {
+    return (
+      <Button
+        mode={v.mode}
+        onPress={onPress}
+        disabled={off}
+        loading={!!busy}
+        icon={iconEl}
+        buttonColor={v.bg}
+        textColor={v.fg}
+        theme={{ colors: { surfaceDisabled: v.bg, onSurfaceDisabled: v.fg } }}
+        contentStyle={{ minHeight: minH, paddingHorizontal: 8 }}
+        labelStyle={[label, textStyle]}
+        accessibilityLabel={accessibilityLabel}
+        style={[s.btn, big && s.btnBig, small && s.btnSmall, v.mode === 'outlined' && { borderColor: v.border }, dim, style]}
+      >
+        {title}
+      </Button>
+    );
+  }
+  // Long label: the same surface and ripple as Paper's Button, with a wrapping label.
   return (
-    <Pressable
-      onPress={onPress}
-      disabled={off}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ disabled: !!off, busy: !!busy }}
-      android_ripple={{ color: 'rgba(0,0,0,0.08)' }}
-      style={({ pressed }) => [
-        s.btn,
-        small && s.btnSmall,
-        big && s.btnBig,
-        { backgroundColor: pressed ? p.pressed : p.bg, borderColor: p.border },
-        kind === 'primary' && !off && { boxShadow: '0px 2px 6px rgba(15, 118, 110, 0.28)' },
-        off && { opacity: disabled && !busy ? 0.45 : 0.7 },
-        style,
-      ]}
-    >
-      {busy ? (
-        <ActivityIndicator color={p.fg} />
-      ) : icon ? (
+    <Surface elevation={v.mode === 'contained' && !off ? 1 : 0} style={[s.btn, big && s.btnBig, small && s.btnSmall, { backgroundColor: v.bg, borderWidth: v.mode === 'outlined' ? 1 : 0, borderColor: v.border }, dim, style]}>
+      <TouchableRipple
+        onPress={onPress}
+        disabled={off}
+        borderless={false}
+        rippleColor={v.fg === '#ffffff' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.12)'}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        accessibilityState={{ disabled: !!off, busy: !!busy }}
+        style={{ flex: 1, minHeight: minH, justifyContent: 'center', paddingVertical: 12, paddingHorizontal: SP.lg, borderRadius: big ? R.lg : R.md }}
+      >
         <View style={s.btnRow}>
-          <Icon name={icon} size={big ? 24 : small ? 19 : 21} color={p.fg} />
-          <Text style={[s.btnText, small && s.btnTextSmall, big && s.btnTextBig, { color: p.fg, flexShrink: 1 }, textStyle]}>{title}</Text>
+          {busy ? <ActivityIndicator color={v.fg} /> : iconEl ? iconEl({ size: big ? 24 : small ? 19 : 21, color: v.fg }) : null}
+          <Text style={[label, { flexShrink: 1 }, textStyle]}>{title}</Text>
         </View>
-      ) : (
-        <Text style={[s.btnText, small && s.btnTextSmall, big && s.btnTextBig, { color: p.fg }, textStyle]}>{title}</Text>
-      )}
-    </Pressable>
+      </TouchableRipple>
+    </Surface>
   );
 }
+const BTN: Record<BtnKind, { mode: 'contained' | 'contained-tonal' | 'outlined' | 'text'; bg: string; fg: string; border: string }> = {
+  primary: { mode: 'contained', bg: C.brand, fg: C.onBrand, border: C.brand },
+  danger: { mode: 'contained', bg: C.danger, fg: '#fff', border: C.danger },
+  plain: { mode: 'contained-tonal', bg: C.brandSoft, fg: C.brandInk, border: C.brandSoft },
+  tonal: { mode: 'contained-tonal', bg: C.brandSoft, fg: C.brandInk, border: C.brandSoft },
+  outline: { mode: 'outlined', bg: C.panel, fg: C.ink, border: C.lineStrong },
+  ghost: { mode: 'text', bg: 'transparent', fg: C.brand, border: 'transparent' },
+  light: { mode: 'contained', bg: '#ffffff', fg: C.brandInk, border: '#ffffff' },
+};
 
-/** A labelled text box. `prefix` shows a fixed symbol (such as ₹) in front; `large` is for amounts. */
-export function Field({ label, prefix, large, hint, ...props }: TextInputProps & { label: string; prefix?: string; large?: boolean; hint?: string }) {
-  const [focus, setFocus] = useState(false);
+/**
+ * A labelled text box on Paper's outlined TextInput. The label stays above the box, so long Tamil and Telugu labels
+ * wrap instead of being cut as a floating label would. `prefix` shows a fixed symbol (such as ₹) inside the box;
+ * `large` is for amounts.
+ */
+export function Field({ label, prefix, large, hint, style, multiline, ...props }: TextInputProps & { label: string; prefix?: string; large?: boolean; hint?: string }) {
   return (
     <View style={{ marginBottom: SP.lg }}>
-      <Text style={s.label}>{label}</Text>
-      <View style={[s.inputWrap, focus && s.inputFocus, props.multiline && { alignItems: 'flex-start' }]}>
-        {prefix ? <Text style={[s.prefix, large && s.inputLargeText]}>{prefix}</Text> : null}
-        <TextInput
-          placeholderTextColor="#8b9796"
-          {...props}
-          onFocus={(e) => {
-            setFocus(true);
-            props.onFocus?.(e);
-          }}
-          onBlur={(e) => {
-            setFocus(false);
-            props.onBlur?.(e);
-          }}
-          style={[s.input, large && s.inputLargeText, props.multiline && { minHeight: 88, textAlignVertical: 'top', paddingTop: 14 }, props.style as StyleProp<TextStyle>]}
-        />
-      </View>
-      {hint ? <Text style={[s.muted, { marginTop: SP.xs, fontSize: 13 }]}>{hint}</Text> : null}
+      <Text variant="labelLarge" style={s.label}>{label}</Text>
+      <PaperTextInput
+        mode="outlined"
+        outlineColor={C.lineStrong}
+        activeOutlineColor={C.brand}
+        outlineStyle={{ borderRadius: R.md, borderWidth: 1.5 }}
+        textColor={C.ink}
+        placeholderTextColor="#8b9796"
+        left={prefix ? <PaperTextInput.Affix text={prefix} textStyle={[s.prefix, large && { fontSize: 28, fontWeight: '800' }]} /> : undefined}
+        multiline={multiline}
+        {...(props as ComponentProps<typeof PaperTextInput>)}
+        style={[s.input, large && s.inputLargeText, multiline && { minHeight: 96, textAlignVertical: 'top' }, style as StyleProp<TextStyle>]}
+      />
+      {hint ? <Text variant="bodyMedium" style={[s.muted, { marginTop: SP.xs, fontSize: 13 }]}>{hint}</Text> : null}
     </View>
   );
 }
 
 /**
- * A rounded search box with a magnifier and a clear button. With `onPress` (and no `onChangeText`) it is a button
- * that looks like a search box, for opening the search screen from the home screen. A placeholder cannot wrap, so
- * give a short one on small phones and the full wording as `label` (read out by TalkBack).
+ * A rounded search box on Paper Searchbar, with a magnifier and a clear button. With `onPress` (and no `onChangeText`)
+ * it is a button that looks like a search box, for opening the search screen from the home screen. A placeholder
+ * cannot wrap, so give a short one on small phones and the full wording as `label` (read out by TalkBack).
  */
 export function SearchBar({ value = '', onChangeText, onPress, placeholder, label, onSubmit, autoFocus, style }: { value?: string; onChangeText?: (v: string) => void; onPress?: () => void; placeholder: string; label?: string; onSubmit?: () => void; autoFocus?: boolean; style?: StyleProp<ViewStyle> }) {
   const { t } = useTranslation();
-  const [focus, setFocus] = useState(false);
   if (onPress && !onChangeText) {
     return (
-      <Pressable onPress={onPress} accessibilityRole="search" accessibilityLabel={placeholder} style={({ pressed }) => [s.search, pressed && { backgroundColor: C.surface }, style]}>
-        <Icon name="search" size={22} color={C.brand} />
-        <Text style={[s.searchText, { color: C.muted }]} numberOfLines={2}>{placeholder}</Text>
+      <Pressable onPress={onPress} accessibilityRole="search" accessibilityLabel={placeholder} style={({ pressed }) => [s.searchPress, pressed && { opacity: 0.85 }, style]}>
+        <View pointerEvents="none">
+          <Searchbar value="" placeholder={placeholder} editable={false} icon="magnify" iconColor={C.brand} elevation={0} style={s.search} inputStyle={s.searchInput} placeholderTextColor={C.muted} />
+        </View>
       </Pressable>
     );
   }
   return (
-    <View style={[s.search, focus && s.inputFocus, style]}>
-      <Icon name="search" size={22} color={C.brand} />
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor="#7a8786"
-        accessibilityLabel={label ?? placeholder}
-        returnKeyType="search"
-        onSubmitEditing={onSubmit}
-        autoFocus={autoFocus}
-        autoCorrect={false}
-        onFocus={() => setFocus(true)}
-        onBlur={() => setFocus(false)}
-        style={[s.searchText, s.searchInput]}
-      />
-      {value ? (
-        <Pressable onPress={() => onChangeText?.('')} hitSlop={8} accessibilityRole="button" accessibilityLabel={t('mobile.clearSearch')} style={({ pressed }) => [s.searchClear, pressed && { backgroundColor: C.surface }]}>
-          <Icon name="close-circle" size={22} color={C.muted} />
-        </Pressable>
-      ) : null}
-    </View>
+    <Searchbar
+      value={value}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      placeholderTextColor={C.muted}
+      accessibilityLabel={label ?? placeholder}
+      returnKeyType="search"
+      onSubmitEditing={onSubmit}
+      autoFocus={autoFocus}
+      autoCorrect={false}
+      icon="magnify"
+      iconColor={C.brand}
+      clearIcon="close-circle"
+      clearAccessibilityLabel={t('mobile.clearSearch')}
+      onClearIconPress={() => onChangeText?.('')}
+      elevation={0}
+      style={[s.search, style]}
+      inputStyle={s.searchInput}
+    />
   );
 }
 
@@ -316,8 +339,8 @@ export function EmptyState({ icon, title, text, action }: { icon: IconName; titl
       <View style={s.emptyIcon}>
         <Icon name={icon} size={30} color={C.brand} />
       </View>
-      <Text style={s.emptyTitle}>{title}</Text>
-      {text ? <Text style={s.emptyText}>{text}</Text> : null}
+      <Text variant="titleMedium" style={s.emptyTitle}>{title}</Text>
+      {text ? <Text variant="bodyMedium" style={s.emptyText}>{text}</Text> : null}
       {action}
     </View>
   );
@@ -330,26 +353,46 @@ export function EmptyState({ icon, title, text, action }: { icon: IconName; titl
 export function Chips<T extends string>({ value, onChange, items, segmented }: { value: T; onChange: (v: T) => void; items: { key: T; label: string }[]; segmented?: boolean }) {
   if (segmented) {
     return (
-      <View style={s.segment} accessibilityRole="radiogroup">
-        {items.map((i) => {
+      <SegmentedButtons
+        value={value}
+        onValueChange={(v) => onChange(v as T)}
+        style={s.segment}
+        buttons={items.map((i) => {
           const on = value === i.key;
-          return (
-            <Pressable key={i.key} onPress={() => onChange(i.key)} style={[s.segmentItem, on && s.segmentOn]} accessibilityRole="radio" accessibilityState={{ selected: on }}>
-              <Text style={[s.segmentText, on && { color: C.brandInk }]}>{i.label}</Text>
-            </Pressable>
-          );
+          return {
+            value: i.key,
+            label: i.label,
+            accessibilityLabel: i.label,
+            checked: on,
+            showSelectedCheck: false,
+            style: [s.segmentItem, on && s.segmentOn],
+            labelStyle: [s.segmentText, on && { color: C.brandInk }],
+            checkedColor: C.brandInk,
+            uncheckedColor: C.muted,
+          };
         })}
-      </View>
+      />
     );
   }
   return (
-    <View style={s.chips}>
+    <View style={s.chips} accessibilityRole="radiogroup">
       {items.map((i) => {
         const on = value === i.key;
         return (
-          <Pressable key={i.key} onPress={() => onChange(i.key)} style={({ pressed }) => [s.chip, on && s.chipOn, pressed && !on && { backgroundColor: C.surface }]} accessibilityRole="radio" accessibilityState={{ selected: on }}>
-            <Text style={[s.chipText, on && { color: C.onBrand }]}>{i.label}</Text>
-          </Pressable>
+          <Chip
+            key={i.key}
+            mode="outlined"
+            selected={on}
+            showSelectedCheck={false}
+            onPress={() => onChange(i.key)}
+            accessibilityLabel={i.label}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: on }}
+            style={[s.chip, on && s.chipOn]}
+            textStyle={[s.chipText, on && { color: C.onBrand }]}
+          >
+            {i.label}
+          </Chip>
         );
       })}
     </View>
@@ -360,8 +403,8 @@ export function Chips<T extends string>({ value, onChange, items, segmented }: {
 export function Row({ label, value, strong, divider, tone }: { label: string; value: ReactNode; strong?: boolean; divider?: boolean; tone?: string }) {
   return (
     <View style={[s.row, divider && s.rowDivider]}>
-      <Text style={[s.rowLabel, strong && { color: C.ink, fontWeight: '600' }]}>{label}</Text>
-      <Text style={[s.value, strong && s.valueStrong, tone ? { color: tone } : null]}>{value}</Text>
+      <Text variant="bodyLarge" style={[s.rowLabel, strong && { color: C.ink, fontWeight: '600' }]}>{label}</Text>
+      <Text variant="bodyLarge" style={[s.value, strong && s.valueStrong, tone ? { color: tone } : null]}>{value}</Text>
     </View>
   );
 }
@@ -371,7 +414,7 @@ export function Badge({ text, color, solid }: { text: string; color: string; sol
   return (
     <View style={[s.badge, { backgroundColor: solid ? color : tint(color, 0.14) }]}>
       {!solid && <View style={[s.badgeDot, { backgroundColor: color }]} />}
-      <Text style={[s.badgeText, { color: solid ? '#fff' : shade(color, 0.28) }]}>{text}</Text>
+      <Text variant="labelMedium" style={[s.badgeText, { color: solid ? '#fff' : shade(color, 0.28) }]}>{text}</Text>
     </View>
   );
 }
@@ -384,23 +427,24 @@ export function ErrorText({ error }: { error: unknown }) {
   return <Notice tone="danger" text={text} />;
 }
 
+/** A tinted message box with a coloured edge (Paper Surface). Danger notices are announced by TalkBack. */
 export function Notice({ text, tone = 'ok' }: { text: string; tone?: 'ok' | 'warn' | 'danger' | 'info' }) {
   const bg = { ok: C.okSoft, warn: C.warnSoft, danger: C.dangerSoft, info: C.brandSoft }[tone];
   const fg = { ok: C.ok, warn: C.warn, danger: C.danger, info: C.brandInk }[tone];
   return (
-    <View style={[s.notice, { backgroundColor: bg, borderLeftColor: fg }]} accessibilityRole={tone === 'danger' ? 'alert' : undefined}>
-      <Text style={[s.noticeText, { color: shade(fg, 0.1) }]}>{text}</Text>
-    </View>
+    <Surface elevation={0} style={[s.notice, { backgroundColor: bg, borderLeftColor: fg }]} accessibilityRole={tone === 'danger' ? 'alert' : undefined}>
+      <Text variant="bodyLarge" style={[s.noticeText, { color: shade(fg, 0.1) }]}>{text}</Text>
+    </Surface>
   );
 }
 
-export const Loading = () => <ActivityIndicator style={{ margin: 32 }} size="large" color={C.brand} />;
+export const Loading = () => <ActivityIndicator animating size="large" color={C.brand} style={{ margin: 32 }} />;
 
 /** A small heading above a group of cards. */
 export function Section({ title, right }: { title: string; right?: ReactNode }) {
   return (
     <View style={s.section}>
-      <Text style={s.sectionText}>{title}</Text>
+      <Text variant="labelLarge" style={s.sectionText}>{title}</Text>
       {right}
     </View>
   );
@@ -411,7 +455,7 @@ export function Amount({ label, value, size = 'lg', onBrand, align = 'left', ton
   const fs = { md: 20, lg: 26, xl: 34 }[size];
   return (
     <View style={{ alignItems: align === 'right' ? 'flex-end' : 'flex-start', flexShrink: 1 }}>
-      <Text style={[s.amountLabel, onBrand && { color: C.onBrandMuted }, { textAlign: align }]}>{label}</Text>
+      <Text variant="labelLarge" style={[s.amountLabel, onBrand && { color: C.onBrandMuted }, { textAlign: align }]}>{label}</Text>
       <Text style={[s.amount, { fontSize: fs, lineHeight: Math.round(fs * 1.2) }, onBrand && { color: C.onBrand }, tone ? { color: tone } : null]} adjustsFontSizeToFit numberOfLines={1}>
         {value}
       </Text>
@@ -439,13 +483,13 @@ export function StatRow({ children }: { children: ReactNode }) {
   return <View style={s.statRow}>{children}</View>;
 }
 
-/** A compact figure tile for a row of stats. */
+/** A compact figure tile for a row of stats (a Paper Surface with a hairline edge). */
 export function Stat({ label, value, tone, style }: { label: string; value: string; tone?: string; style?: StyleProp<ViewStyle> }) {
   return (
-    <View style={[s.stat, style]}>
+    <Surface elevation={0} style={[s.stat, style]}>
       <Text style={[s.statValue, tone ? { color: tone } : null]} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
-      <Text style={s.statLabel}>{label}</Text>
-    </View>
+      <Text variant="bodyMedium" style={s.statLabel}>{label}</Text>
+    </Surface>
   );
 }
 
@@ -478,9 +522,11 @@ export const Chevron = ({ color = C.muted }: { color?: string }) => (
 
 export const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
-  header: { backgroundColor: C.panel, paddingHorizontal: SP.md, paddingBottom: SP.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line, boxShadow: '0px 1px 3px rgba(16, 40, 36, 0.06)', zIndex: 2 },
-  headerInner: { flexDirection: 'row', alignItems: 'center', gap: SP.sm, width: '100%', maxWidth: MAX_W + (SP.lg - SP.md) * 2, alignSelf: 'center' },
-  back: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  header: { height: 'auto', minHeight: 64, backgroundColor: C.panel, paddingHorizontal: SP.md, paddingBottom: SP.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line, boxShadow: '0px 1px 3px rgba(16, 40, 36, 0.06)', zIndex: 2 },
+  headerInner: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: SP.sm, width: '100%', maxWidth: MAX_W + (SP.lg - SP.md) * 2, alignSelf: 'center' },
+  appbarAction: { margin: 0, marginRight: SP.xs },
+  titleBlock: { flex: 1, minWidth: 0, justifyContent: 'center', paddingVertical: SP.xs },
+  headerRight: { flexShrink: 0, alignSelf: 'center' },
   backText: { color: C.ink, fontSize: 36, lineHeight: 40, marginTop: -4, fontWeight: '300' },
   eyebrow: { color: C.muted, fontSize: 13, fontWeight: '600' },
   title: { color: C.ink, fontSize: 22, lineHeight: 28, fontWeight: '800' },
@@ -489,14 +535,15 @@ export const s = StyleSheet.create({
   card: { backgroundColor: C.panel, borderRadius: R.lg, borderWidth: 1, borderColor: C.line, padding: SP.lg, marginBottom: SP.md, boxShadow: shadow },
   cardBrand: { backgroundColor: C.brand, borderColor: C.brand, boxShadow: '0px 4px 14px rgba(15, 118, 110, 0.25)' },
   cardSoft: { backgroundColor: C.surface, borderColor: C.surface, boxShadow: 'none' },
-  btn: { minHeight: 52, borderRadius: R.md, borderWidth: 1, paddingVertical: 12, paddingHorizontal: SP.lg, alignItems: 'center', justifyContent: 'center', marginBottom: SP.sm },
-  btnSmall: { minHeight: 48, paddingVertical: 8, paddingHorizontal: 14, marginBottom: 0, borderRadius: R.md },
+  btn: { minHeight: 52, borderRadius: R.md, marginBottom: SP.sm },
+  btnSmall: { minHeight: 48, marginBottom: 0, borderRadius: R.md },
   btnBig: { minHeight: 60, borderRadius: R.lg },
   btnText: { fontSize: 16, fontWeight: '700', textAlign: 'center' },
   btnRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SP.sm, maxWidth: '100%' },
-  search: { flexDirection: 'row', alignItems: 'center', gap: SP.sm, minHeight: 54, borderRadius: R.pill, borderWidth: 1.5, borderColor: C.lineStrong, backgroundColor: C.panel, paddingLeft: SP.lg, paddingRight: SP.sm, marginBottom: SP.md },
+  search: { minHeight: 54, borderRadius: R.pill, borderWidth: 1.5, borderColor: C.lineStrong, backgroundColor: C.panel, marginBottom: SP.md },
+  searchPress: { marginBottom: 0 },
   searchText: { flex: 1, minWidth: 0, fontSize: 16, color: C.ink },
-  searchInput: { minHeight: 50, paddingVertical: 8 },
+  searchInput: { fontSize: 16, color: C.ink, minHeight: 50 },
   searchClear: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   empty: { alignItems: 'center', paddingVertical: SP.xl, paddingHorizontal: SP.lg, gap: SP.sm },
   emptyIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: C.brandSoft, alignItems: 'center', justifyContent: 'center', marginBottom: SP.xs },
@@ -505,18 +552,17 @@ export const s = StyleSheet.create({
   btnTextSmall: { fontSize: 14 },
   btnTextBig: { fontSize: 18, fontWeight: '800' },
   label: { fontSize: 14, color: C.ink2, fontWeight: '600', marginBottom: 6 },
-  inputWrap: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: C.lineStrong, borderRadius: R.md, backgroundColor: C.panel, paddingHorizontal: 14 },
-  inputFocus: { borderColor: C.brand, boxShadow: '0px 0px 0px 3px rgba(15, 118, 110, 0.15)' },
-  input: { flex: 1, minWidth: 0, minHeight: 52, paddingVertical: 10, fontSize: 17, color: C.ink },
+  input: { backgroundColor: C.panel, fontSize: 17, color: C.ink, minHeight: 56 },
+  inputFocus: { borderColor: C.brand },
   inputLargeText: { fontSize: 28, fontWeight: '800', color: C.ink },
-  prefix: { fontSize: 17, color: C.muted, fontWeight: '700', marginRight: 6 },
+  prefix: { fontSize: 17, color: C.muted, fontWeight: '700' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, marginBottom: SP.lg },
-  chip: { minHeight: 48, justifyContent: 'center', borderWidth: 1.5, borderColor: C.lineStrong, borderRadius: R.pill, paddingVertical: 8, paddingHorizontal: SP.lg, backgroundColor: C.panel, maxWidth: '100%' },
+  chip: { height: 48, flexDirection: 'column', justifyContent: 'center', borderWidth: 1.5, borderColor: C.lineStrong, borderRadius: R.pill, backgroundColor: C.panel },
   chipOn: { backgroundColor: C.brand, borderColor: C.brand },
-  chipText: { fontSize: 15, color: C.ink, fontWeight: '600', flexShrink: 1 },
-  segment: { flexDirection: 'row', backgroundColor: C.surface, borderRadius: R.md, padding: SP.xs, gap: SP.xs, marginBottom: SP.lg },
-  segmentItem: { flex: 1, minHeight: 46, borderRadius: R.sm, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SP.sm, paddingVertical: 6 },
-  segmentOn: { backgroundColor: C.panel, boxShadow: '0px 1px 3px rgba(16, 40, 36, 0.14)' },
+  chipText: { fontSize: 15, color: C.ink, fontWeight: '600', lineHeight: 20, marginVertical: 0, textAlignVertical: 'center' },
+  segment: { backgroundColor: C.surface, borderRadius: R.md, marginBottom: SP.lg },
+  segmentItem: { flex: 1, minHeight: 46, borderRadius: R.sm, borderWidth: 0 },
+  segmentOn: { backgroundColor: C.panel },
   segmentText: { fontSize: 15, fontWeight: '700', color: C.muted, textAlign: 'center' },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 7, gap: SP.md },
   rowDivider: { borderTopWidth: 1, borderTopColor: C.line, marginTop: SP.xs, paddingTop: SP.md },

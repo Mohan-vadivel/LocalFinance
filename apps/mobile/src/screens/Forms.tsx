@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as ImagePicker from 'expo-image-picker';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { LANGUAGES } from '@localfinance/shared';
 import { ApiError, get, newRef, post, put } from '../api';
 import { getPosition } from '../session';
 import { cachedRouteDay, cachedRoutes, myRoutes, type DayCustomer, type MyRoute } from '../store';
-import { Amount, Avatar, Badge, Btn, C, Card, Chevron, Chips, EmptyState, ErrorText, Field, Icon, Loading, Notice, R, Row, SP, Screen, SearchBar, dateIN, money, s, toPaise, useLayout, useNav } from '../ui';
+import { Amount, Avatar, Badge, Btn, C, Card, Chevron, Chips, EmptyState, ErrorText, Field, Icon, Loading, Notice, Row, SP, Screen, SearchBar, dateIN, money, s, toPaise, useLayout, useNav } from '../ui';
 
 // =====================================================================
 // Add customer (with GPS pin)
@@ -197,13 +197,12 @@ function ReadIdCard({ onRead }: { onRead: (f: IdRead['fields']) => void }) {
         <View style={{ marginBottom: SP.md }}>
           <Text style={[s.label, { color: C.danger }]}>{t('ai.readId.duplicates')}</Text>
           {res.duplicates.map((d) => (
-            <Pressable
+            <Card
               key={d.id}
-              disabled={d.otherBranch}
-              onPress={() => nav.push('Customer', { customerId: d.id })}
-              accessibilityRole="button"
+              onPress={d.otherBranch ? undefined : () => nav.push('Customer', { customerId: d.id })}
               accessibilityLabel={d.name}
-              style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: SP.md, padding: SP.md, borderRadius: R.md, borderWidth: 1, borderColor: C.line, backgroundColor: pressed ? C.bg : C.dangerSoft, marginBottom: SP.sm }]}
+              tone="soft"
+              style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md, padding: SP.md, marginBottom: SP.sm, backgroundColor: C.dangerSoft, borderColor: C.line }}
             >
               <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
                 <Text style={{ fontWeight: '800', fontSize: 16, color: C.ink }}>{d.name}</Text>
@@ -215,7 +214,7 @@ function ReadIdCard({ onRead }: { onRead: (f: IdRead['fields']) => void }) {
                 </View>
               </View>
               {!d.otherBranch && <Chevron />}
-            </Pressable>
+            </Card>
           ))}
         </View>
       )}

@@ -174,7 +174,7 @@ function PaymentLine({ customer, loan, payment: p, latest }: { customer: DayCust
         hitSlop={6}
         accessibilityRole="button"
         accessibilityLabel={`${t('print.receipt')} ${money(p.amount)}`}
-        style={({ pressed }) => [{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }, (pressed || busy) && { backgroundColor: C.surface }]}
+        style={({ pressed }) => [{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' }, (pressed || busy) && { backgroundColor: C.surface }]}
       >
         <Icon name="print-outline" size={22} color={C.brand} />
       </Pressable>
