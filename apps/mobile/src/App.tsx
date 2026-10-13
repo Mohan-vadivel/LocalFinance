@@ -8,7 +8,6 @@ import { AddCustomer, LoanRequest, MyRequests, Search } from './screens/Forms';
 import Home from './screens/Home';
 import { MenuProvider } from './Menu';
 import Login from './screens/Login';
-<<<<<<< HEAD
 import { AppLock } from './Lock';
 import { Manager, Summary } from './screens/More';
 import LineSheet from './screens/LineSheet';
@@ -16,12 +15,6 @@ import Plan from './screens/Plan';
 import CollectionReport from './screens/Report';
 import RouteDay from './screens/RouteDay';
 import Settings, { Legal } from './screens/Settings';
-=======
-import { Manager, Settings, Summary } from './screens/More';
-import Plan from './screens/Plan';
-import CollectionReport from './screens/Report';
-import RouteDay from './screens/RouteDay';
->>>>>>> 68d91c8 (Salaries and advances, plan renewal by UPI, support screens, receipt SMS options)
 import Support from './screens/Support';
 import { SessionProvider, useSession } from './session';
 import { TabBar } from './Tabs';
@@ -54,15 +47,12 @@ function Screens({ route }: { route: Route }) {
       return <Manager />;
     case 'Settings':
       return <Settings />;
-<<<<<<< HEAD
     case 'Terms':
       return <Legal page="terms" />;
     case 'Privacy':
       return <Legal page="privacy" />;
     case 'LineSheet':
       return <LineSheet routeId={p.routeId as string | undefined} />;
-=======
->>>>>>> 68d91c8 (Salaries and advances, plan renewal by UPI, support screens, receipt SMS options)
     // Opened from Settings; not in the side menu or tabs.
     case 'Support':
       return <Support />;

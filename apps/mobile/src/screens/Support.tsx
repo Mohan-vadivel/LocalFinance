@@ -4,11 +4,7 @@ import { Linking, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { get } from '../api';
 import { Btn, C, Card, Chevron, ErrorText, Icon, Loading, Notice, SP, Screen, Section, s } from '../ui';
 
-<<<<<<< HEAD
 interface HelpVideo { title: string; language: string; url: string }
-=======
-interface HelpVideo { title: string; language: 'en' | 'ta'; url: string }
->>>>>>> 68d91c8 (Salaries and advances, plan renewal by UPI, support screens, receipt SMS options)
 interface SupportInfo { supportPhone: string | null; supportEmail: string | null; supportHours: string | null; helpVideos: HelpVideo[] }
 
 /** Call or email support, and help videos in the app's language that open in YouTube. */
@@ -31,15 +27,10 @@ export default function Support() {
     void load();
   }, [load]);
 
-<<<<<<< HEAD
   // Videos in the app's language; English ones when there are none yet.
   const all = data?.helpVideos ?? [];
   const mine = all.filter((v) => v.language === i18n.language);
   const videos = mine.length ? mine : all.filter((v) => v.language === 'en');
-=======
-  const lang = i18n.language === 'ta' ? 'ta' : 'en';
-  const videos = (data?.helpVideos ?? []).filter((v) => v.language === lang);
->>>>>>> 68d91c8 (Salaries and advances, plan renewal by UPI, support screens, receipt SMS options)
   const open = (url: string) => void Linking.openURL(url).catch(() => undefined);
 
   return (

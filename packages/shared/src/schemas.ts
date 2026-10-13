@@ -370,11 +370,7 @@ export const reportFilterSchema = z.object({
 });
 export type ReportFilter = z.infer<typeof reportFilterSchema>;
 
-<<<<<<< HEAD
 export const HELP_VIDEO_LANGUAGES = LANGUAGE_CODES;
-=======
-export const HELP_VIDEO_LANGUAGES = ['en', 'ta'] as const;
->>>>>>> 68d91c8 (Salaries and advances, plan renewal by UPI, support screens, receipt SMS options)
 export const helpVideoSchema = z.object({
   title: z.string().trim().min(2).max(120),
   language: z.enum(HELP_VIDEO_LANGUAGES),

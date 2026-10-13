@@ -17,11 +17,7 @@ export default function Support() {
   const { data, error } = useLoad(() => get<SupportInfo>('/support'), []);
   if (error) return <ErrorBox error={error} />;
   if (!data) return <Loading />;
-<<<<<<< HEAD
   const lang = LANGUAGES.find((l) => i18n.language.startsWith(l.code))?.code ?? 'en';
-=======
-  const lang = i18n.language === 'ta' ? 'ta' : 'en';
->>>>>>> 68d91c8 (Salaries and advances, plan renewal by UPI, support screens, receipt SMS options)
   const videos = data.helpVideos.filter((v) => v.language === lang);
   const others = data.helpVideos.filter((v) => v.language !== lang);
   const nothing = !data.supportPhone && !data.supportEmail;
