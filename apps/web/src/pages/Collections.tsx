@@ -3,12 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { Undo2 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BranchPicker, RoutePicker, StaffPicker } from '../components/pickers';
-import { Badge, DataTable, ErrorBox, Stat, useToast, RowActions } from '../components/ui';
+import { Badge, DataTable, ErrorBox, Pager, Stat, useToast, RowActions } from '../components/ui';
 import { get } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateTime, money, today } from '../lib/format';
 import { useLoad } from '../lib/hooks';
-import { Pager } from './Customers';
 import { ReverseForm } from './Loans';
 
 interface Row {
@@ -82,6 +81,7 @@ export default function Collections() {
         <DataTable
           title={`${t('collection.title')} ${from} ${to}`}
           rows={data?.rows}
+          paged={false}
           columns={[
             { key: 'receiptNo', label: t('collection.receiptNo') },
             { key: 'collectedAt', label: t('common.date'), value: (r) => dateTime(r.collectedAt) },
@@ -111,7 +111,7 @@ export default function Collections() {
             },
           ]}
         />
-        <Pager page={page} pages={pages} total={data?.total} onPage={setPage} />
+        <Pager page={page} pages={pages} total={data?.total} pageSize={data?.pageSize} onPage={setPage} />
       </div>
       {reversing && <ReverseForm collection={reversing} onClose={() => setReversing(null)} onSaved={() => { toast(t('common.saved')); void reload(); }} />}
     </div>

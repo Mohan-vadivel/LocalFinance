@@ -1622,5 +1622,18 @@
     "addVideo": "Add video",
     "videoTitle": "Title",
     "videoUrl": "YouTube link"
+  },
+  "table": {
+    "pages": "Pages",
+    "showing": "Showing {{from}}–{{to}} of {{total}}",
+    "total": "{{total}} in all",
+    "perPage": "Rows per page",
+    "first": "First page",
+    "prev": "Previous page",
+    "next": "Next page",
+    "last": "Last page",
+    "search": "Search in this table",
+    "sort": "Sort by this column",
+    "noMatch": "Nothing matches \"{{q}}\""
   }
 }
