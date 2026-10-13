@@ -12,7 +12,11 @@ import {
 } from './loan';
 import { periodRange } from './dates';
 import { formatINR, upiPayLink } from './money';
+<<<<<<< HEAD
 import { LANGUAGES, flattenKeys, missingKeys, resources, translate } from './i18n';
+=======
+import { missingKeys, translate } from './i18n';
+>>>>>>> 68d91c8 (Salaries and advances, plan renewal by UPI, support screens, receipt SMS options)
 
 const st = (rows: ReturnType<typeof generateSchedule>): InstalmentState[] =>
   rows.map((r) => ({ id: String(r.seq), seq: r.seq, dueDate: r.dueDate, principalDue: r.principalDue, interestDue: r.interestDue, principalPaid: 0, interestPaid: 0 }));

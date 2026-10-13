@@ -1456,6 +1456,7 @@
       "moreAlerts": "and {{count}} more"
     }
   },
+<<<<<<< HEAD
   "legal": {
     "updated": "Last updated: 13 October 2026",
     "seeAlso": "Questions about these pages: use Support in the app, or ask your business.",
@@ -1548,6 +1549,8 @@
       }
     }
   },
+=======
+>>>>>>> 68d91c8 (Salaries and advances, plan renewal by UPI, support screens, receipt SMS options)
   "salary": {
     "title": "Staff salaries",
     "month": "Month",
