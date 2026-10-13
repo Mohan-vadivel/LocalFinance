@@ -7,7 +7,7 @@ import { LANGUAGES } from '@localfinance/shared';
 import { ReadIdCard, ReminderButton, RiskBadge, RiskReasons, type RiskReason } from '../components/ai';
 import { MapView } from '../components/MapView';
 import { BranchPicker, LocationPicker, RoutePicker } from '../components/pickers';
-import { Badge, DataTable, DocHead, ErrorBox, Field, FormModal, Loading, PrintDoc, Stat, Tabs, printDoc, statusTone, useToast } from '../components/ui';
+import { Badge, DataTable, DocHead, ErrorBox, Field, FormModal, Loading, Pager, PrintDoc, Stat, Tabs, printDoc, statusTone, useToast } from '../components/ui';
 import { ApiError, get, openFile, post, put, upload } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateIN, dateTime, money, toPaise, toRupeesInput } from '../lib/format';
@@ -257,6 +257,7 @@ export default function Customers() {
         <DataTable
           title={t('customerMod.title')}
           rows={data?.rows}
+          paged={false}
           empty={
             search || branchId || locationId || routeId || status
               ? t('empty.noMatch')
@@ -275,22 +276,9 @@ export default function Customers() {
             { key: 'status', label: t('common.status'), value: (c) => t(`customerMod.statuses.${c.status}`), render: (c) => <Badge tone={statusTone(c.status)}>{t(`customerMod.statuses.${c.status}`)}</Badge> },
           ]}
         />
-        <Pager page={page} pages={pages} total={data?.total} onPage={setPage} />
+        <Pager page={page} pages={pages} total={data?.total} pageSize={data?.pageSize} onPage={setPage} />
       </div>
       {creating && <CustomerForm customer={{}} onClose={() => setCreating(false)} onSaved={(c) => { void reload(); nav(`/customers/${c.id}`); }} />}
-    </div>
-  );
-}
-
-export function Pager({ page, pages, total, onPage }: { page: number; pages: number; total?: number; onPage: (p: number) => void }) {
-  const { t } = useTranslation();
-  if (pages <= 1) return null;
-  return (
-    <div className="row no-print" style={{ marginTop: 10, justifyContent: 'flex-end' }}>
-      <span className="muted">{total}</span>
-      <button className="btn small" disabled={page <= 1} onClick={() => onPage(page - 1)}>{t('common.back')}</button>
-      <span>{page} / {pages}</span>
-      <button className="btn small" disabled={page >= pages} onClick={() => onPage(page + 1)}>{t('common.next')}</button>
     </div>
   );
 }
@@ -445,6 +433,7 @@ export function CustomerDetail() {
             <DataTable
               title={`${c.code} ${t('collection.title')}`}
               rows={collections.data?.rows}
+              paged={false}
               onRow={(r) => nav(`/loans/${r.loanId}`)}
               columns={[
                 { key: 'receiptNo', label: t('collection.receiptNo') },
@@ -459,7 +448,7 @@ export function CustomerDetail() {
                 { key: 'status', label: t('common.status'), value: (r) => (r.reversedAt ? t('collection.reversed') : ''), render: (r) => r.reversedAt && <Badge tone="danger">{t('collection.reversed')}</Badge> },
               ]}
             />
-            <Pager page={colPage} pages={colPages} total={collections.data?.total} onPage={setColPage} />
+            <Pager page={colPage} pages={colPages} total={collections.data?.total} pageSize={collections.data?.pageSize} onPage={setColPage} />
           </div>
         )}
         {tab === 'history' && (history.data ? <HistoryView h={history.data} /> : <Loading />)}

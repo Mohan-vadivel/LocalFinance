@@ -3,13 +3,13 @@ import { useTranslation } from 'react-i18next';
 import { Ban, Banknote, Check, CornerUpLeft, Eye, Printer, Send, Undo2 } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { BranchPicker, FundPicker, ModeSelect, ProductPicker, useFunds } from '../components/pickers';
-import { Badge, ConfirmFormModal, ConfirmPanel, DataTable, DocHead, ErrorBox, Field, FormModal, Loading, Modal, PrintDoc, Stat, Tabs, printDoc, statusTone, useToast, RowActions, type Column, type ConfirmRow, type RowAction } from '../components/ui';
+import { Badge, ConfirmFormModal, ConfirmPanel, DataTable, DocHead, ErrorBox, Field, FormModal, Loading, Modal, Pager, PrintDoc, Stat, Tabs, printDoc, statusTone, useToast, RowActions, type Column, type ConfirmRow, type RowAction } from '../components/ui';
 import { get, post, put } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateIN, dateTime, money, toPaise, toRupeesInput, today } from '../lib/format';
 import { useDebounced, useLoad } from '../lib/hooks';
 import { RiskBadge, RiskReasons } from '../components/ai';
-import { HistoryView, Pager, type History } from './Customers';
+import { HistoryView, type History } from './Customers';
 
 interface Position { principalOutstanding: number; interestOutstanding: number; penaltyOutstanding: number; totalOutstanding: number; overdue: number; dueToday: number; daysPastDue: number }
 interface Summary { principal: number; fee: number; upfrontInterest: number; netDisbursed: number; totalInterest: number; totalRepayable: number }
@@ -210,20 +210,21 @@ export default function Loans() {
       </div>
       <ErrorBox error={error} />
       <div className="card">
-        <LoanTable rows={data?.rows} onRow={(l) => nav(`/loans/${l.id}`)} />
-        <Pager page={page} pages={pages} total={data?.total} onPage={setPage} />
+        <LoanTable rows={data?.rows} paged={false} onRow={(l) => nav(`/loans/${l.id}`)} />
+        <Pager page={page} pages={pages} total={data?.total} pageSize={data?.pageSize} onPage={setPage} />
       </div>
       {creating && <LoanRequestForm onClose={() => setCreating(false)} onSaved={(l) => nav(`/loans/${l.id}`)} />}
     </div>
   );
 }
 
-function LoanTable({ rows, onRow, actions, extra }: { rows: LoanRow[] | undefined; onRow: (l: LoanRow) => void; actions?: (l: LoanRow) => RowAction[]; extra?: Column<LoanRow>[] }) {
+function LoanTable({ rows, onRow, actions, extra, paged }: { rows: LoanRow[] | undefined; onRow: (l: LoanRow) => void; actions?: (l: LoanRow) => RowAction[]; extra?: Column<LoanRow>[]; paged?: boolean }) {
   const { t } = useTranslation();
   return (
     <DataTable
       title={t('loanMod.title')}
       rows={rows}
+      paged={paged}
       onRow={onRow}
       actions={(l) => [{ icon: Eye, label: t('common.view'), onClick: () => onRow(l) }, ...(actions?.(l) ?? [])]}
       columns={[
