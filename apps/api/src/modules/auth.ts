@@ -2,7 +2,7 @@ import { Body, Controller, Get, Injectable, Post, Req, UnauthorizedException } f
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
-import { changePasswordSchema, loginSchema, tenantSettingsSchema } from '@localfinance/shared';
+import { changePasswordSchema, loginSchema, switchTenantSchema, tenantSettingsSchema } from '@localfinance/shared';
 import { z } from 'zod';
 import { AuditService } from '../common/audit.service';
 import { AnyUser, CurrentCtx, Public, type Ctx } from '../common/context';
@@ -60,19 +60,69 @@ export class AuthService {
       }
       user = chosen;
     }
+    return this.admit(user, input.deviceId, ip, 'LOGIN');
+  }
+
+  /** The last checks shared by login and switching business: closed business, phone binding; then fresh tokens. */
+  private async admit(
+    user: { id: string; tenantId: string | null; tokenVersion: number; deviceId: string | null; tenant: { status: string } | null; role: { baseRole: string } },
+    deviceId: string | undefined,
+    ip: string | undefined,
+    action: string,
+  ) {
     if (user.tenant && user.tenant.status === 'CLOSED') throw forbidden('This business is closed');
 
     // Field staff are bound to one phone.
-    if (input.deviceId && user.role.baseRole === 'COLLECTION_AGENT') {
+    if (deviceId && user.role.baseRole === 'COLLECTION_AGENT') {
       if (!user.deviceId) {
-        await this.prisma.user.update({ where: { id: user.id }, data: { deviceId: input.deviceId } });
-      } else if (user.deviceId !== input.deviceId) {
+        await this.prisma.user.update({ where: { id: user.id }, data: { deviceId } });
+      } else if (user.deviceId !== deviceId) {
         throw forbidden('This phone is not registered for your account. Ask your manager to re-bind it.', 'auth.deviceNotAllowed');
       }
     }
     await this.prisma.user.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null } });
-    await this.audit.log({ tenantId: user.tenantId ?? '', userId: user.id, ip, device: input.deviceId }, 'LOGIN', 'User', user.id);
+    await this.audit.log({ tenantId: user.tenantId ?? '', userId: user.id, ip, device: deviceId }, action, 'User', user.id);
     return this.issue(user.id, user.tenantId, user.tokenVersion);
+  }
+
+  /**
+   * Other businesses where an active account has the caller's own phone number. Built only from the caller's own
+   * user row (never from a phone sent by the client), so it shows nothing about a business the person has no account in.
+   */
+  private async otherAccounts(userId: string) {
+    const me = await this.prisma.user.findUnique({ where: { id: userId }, select: { phone: true, tenantId: true } });
+    if (!me?.phone || !me.tenantId) return [];
+    return this.prisma.user.findMany({
+      where: { phone: me.phone, active: true, tenantId: { not: null, notIn: [me.tenantId] }, tenant: { status: { not: 'CLOSED' } } },
+      include: { tenant: true, role: true },
+      orderBy: { tenant: { name: 'asc' } },
+    });
+  }
+
+  async businesses(ctx: Ctx) {
+    // A Super Admin under support access has no account of their own in the business being viewed.
+    if (ctx.role === 'SUPER_ADMIN') return [];
+    return (await this.otherAccounts(ctx.userId)).map((u) => ({ tenantId: u.tenantId!, name: u.tenant!.name }));
+  }
+
+  /**
+   * Moves this phone to the caller's account in another business. Accounts are separate, so that account's own
+   * password is checked (with the same lock-out as login). An unknown business and a wrong password give the same
+   * answer, so nothing is learnt about businesses the caller has no account in.
+   */
+  async switchTenant(ctx: Ctx, input: z.infer<typeof switchTenantSchema>, ip?: string) {
+    const invalid = () => new UnauthorizedException({ message: 'Wrong password', code: 'auth.invalid' });
+    if (ctx.role === 'SUPER_ADMIN') throw invalid();
+    const target = (await this.otherAccounts(ctx.userId)).find((u) => u.tenantId === input.tenantId);
+    if (!target) throw invalid();
+    if (target.lockedUntil && target.lockedUntil > new Date()) throw new UnauthorizedException({ message: 'Account locked after too many attempts. Ask your manager.', code: 'auth.locked' });
+    if (!(await bcrypt.compare(input.password, target.passwordHash))) {
+      const fails = target.failedLogins + 1;
+      await this.prisma.user.update({ where: { id: target.id }, data: { failedLogins: fails, lockedUntil: fails >= MAX_FAILS ? new Date(Date.now() + LOCK_MINUTES * 60_000) : null } });
+      throw fails >= MAX_FAILS ? new UnauthorizedException({ message: 'Account locked after too many attempts. Ask your manager.', code: 'auth.locked' }) : invalid();
+    }
+    await this.audit.log(ctx, 'SWITCH_BUSINESS', 'User', ctx.userId);
+    return this.admit(target, input.deviceId ?? ctx.device, ip, 'LOGIN');
   }
 
   private async issue(userId: string, tenantId: string | null, ver: number) {
@@ -176,6 +226,19 @@ export class AuthController {
       };
     }
     return { ...p, readOnly: ctx.readOnly };
+  }
+
+  /** The caller's other businesses (same phone number, active account), for "Switch business". */
+  @AnyUser()
+  @Get('businesses')
+  businesses(@CurrentCtx() ctx: Ctx) {
+    return this.auth.businesses(ctx);
+  }
+
+  @AnyUser()
+  @Post('switch')
+  switchTenant(@CurrentCtx() ctx: Ctx, @Body(V(switchTenantSchema)) body: z.infer<typeof switchTenantSchema>, @Req() req: { ip?: string }) {
+    return this.auth.switchTenant(ctx, body, req.ip);
   }
 
   @AnyUser()

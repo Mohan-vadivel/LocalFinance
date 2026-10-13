@@ -951,3 +951,23 @@ a.btn.disabled { pointer-events: none; opacity: 0.5; }
 .brief-src { margin: -6px 0 10px; }
 .brief-src .ai-label { white-space: normal; }
 .md-table th.num { text-align: right; }
+
+/* ---------- Terms and privacy (public pages) ---------- */
+.legal { min-height: 100vh; background: var(--bg); padding: 0 16px 48px; }
+.legal-top { max-width: 820px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 0; flex-wrap: wrap; }
+.legal-brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; }
+.legal-brand .logo-mark { width: 34px; height: 34px; border-radius: 9px; }
+.legal-lang { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); }
+.legal-lang svg { width: 16px; height: 16px; }
+.legal-body { max-width: 820px; margin: 0 auto; padding: 32px clamp(18px, 4vw, 40px); }
+.legal-body h1 { font-size: 28px; letter-spacing: -0.02em; margin-bottom: 4px; }
+.legal-body h2 { font-size: 17px; margin: 26px 0 6px; }
+.legal-body p { line-height: 1.65; color: var(--ink-2); margin: 0; }
+.legal-body .legal-intro { font-size: 16px; color: var(--ink); margin-top: 16px; }
+.legal-body .legal-foot { margin-top: 28px; }
+.legal-nav { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 20px; }
+.legal-nav .btn svg { width: 16px; height: 16px; }
+.legal-links { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin: 0; }
+.legal-links a { color: var(--muted); }
+.legal-links a:hover { color: var(--brand); }
+.card .legal-links { justify-content: flex-start; font-size: 14px; }

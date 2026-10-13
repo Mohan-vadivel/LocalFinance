@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Linking, Share, Text, View } from 'react-native';
+import { Linking, Pressable, Share, Text, View } from 'react-native';
 import { addDays } from '@localfinance/shared';
 import { get, newRef } from '../api';
+import { getPrintAsk } from '../device';
+import { istStamp, printReceipt, type ReceiptData } from '../print';
 import { getPosition, useSession } from '../session';
 import { getVisitOrder, nextInOrder } from '../smart';
 import { cachedRouteDay, enqueue, getSynced, isUnsent, removeQueued, routeDay, subscribe, type DayCustomer, type DayLoan } from '../store';
-import { Amount, Avatar, Badge, Btn, C, Card, Chips, ErrorText, Field, Loading, Notice, PIN_COLORS, R, Row, SP, Screen, dateIN, money, s, toPaise, todayIST, useNav } from '../ui';
+import { Amount, Avatar, Badge, Btn, C, Card, Chips, ErrorText, Field, Icon, Loading, Notice, PIN_COLORS, R, Row, SP, Screen, dateIN, money, s, toPaise, todayIST, useNav } from '../ui';
 import { Reminder } from './Reminder';
 import { navigateTo } from './RouteDay';
 
@@ -121,7 +123,7 @@ export default function Customer({ customer: initial, customerId, routeId, amoun
             <View style={{ marginTop: SP.md, backgroundColor: C.bg, borderRadius: R.md, paddingHorizontal: SP.md, paddingVertical: SP.sm }}>
               <Text style={[s.label, { marginTop: SP.xs }]}>{t('collection.lastPayments')}</Text>
               {l.lastPayments.map((p, i) => (
-                <Row key={i} label={`${dateIN(p.date)} · ${t(`common.modes.${p.mode}`)}`} value={money(p.amount)} />
+                <PaymentLine key={i} customer={c} loan={l} payment={p} latest={i === 0} />
               ))}
             </View>
           )}
@@ -135,14 +137,52 @@ export default function Customer({ customer: initial, customerId, routeId, amoun
   );
 }
 
+/** One recent payment, with a button to print its receipt again. */
+function PaymentLine({ customer, loan, payment: p, latest }: { customer: DayCustomer; loan: DayLoan; payment: DayLoan['lastPayments'][number]; latest: boolean }) {
+  const { t } = useTranslation();
+  const { profile } = useSession();
+  const [busy, setBusy] = useState(false);
+  const print = async () => {
+    setBusy(true);
+    const r: ReceiptData = {
+      business: profile?.tenant?.name ?? t('common.appName'),
+      receiptNo: p.receiptNo && p.receiptNo !== '…' ? p.receiptNo : null,
+      customer: customer.name,
+      customerCode: customer.code,
+      loanNumber: loan.number,
+      amount: p.amount,
+      mode: p.mode,
+      at: p.at ?? `${p.date}T00:00:00+05:30`,
+      // The balance now is the balance after this payment only for the latest one.
+      balance: latest ? loan.outstanding : null,
+      agent: p.agent ?? (p.receiptNo === '…' ? profile?.name ?? '' : '-'),
+      footer: profile?.tenant?.settings?.receiptFooter,
+    };
+    await printReceipt(r, t);
+    setBusy(false);
+  };
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.sm }}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Row label={`${dateIN(p.date)} · ${t(`common.modes.${p.mode}`)}`} value={money(p.amount)} />
+      </View>
+      <Pressable
+        onPress={() => void print()}
+        disabled={busy}
+        hitSlop={6}
+        accessibilityRole="button"
+        accessibilityLabel={`${t('print.receipt')} ${money(p.amount)}`}
+        style={({ pressed }) => [{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }, (pressed || busy) && { backgroundColor: C.surface }]}
+      >
+        <Icon name="print-outline" size={22} color={C.brand} />
+      </Pressable>
+    </View>
+  );
+}
+
 /** How long "Undo" stays after saving a collection (only while it is still on the phone). */
 const UNDO_MS = 30_000;
 
-/** `2026-10-05T04:30:00Z` → `05-10-2026 10:00` (IST). */
-const istStamp = (iso: string) => {
-  const d = new Date(Date.parse(iso) + 330 * 60_000).toISOString();
-  return `${dateIN(d.slice(0, 10))} ${d.slice(11, 16)}`;
-};
 
 /** Opens the next customer on the route not visited yet (from the copy on the phone), in place of this one. */
 function NextCustomer({ routeId, currentId }: { routeId: string; currentId: string }) {
@@ -160,7 +200,7 @@ function NextCustomer({ routeId, currentId }: { routeId: string; currentId: stri
   return <Btn big title={`${t('mobile.nextCustomer')}: ${next.routeSeq ? `${next.routeSeq}. ` : ''}${next.name}`} onPress={() => nav.replace('Customer', { customer: next, routeId })} />;
 }
 
-interface Saved { clientRef: string; at: string; amount: number; mode: 'CASH' | 'UPI'; upiRef: string | null; loanNumber: string; message: string }
+interface Saved { clientRef: string; at: string; amount: number; mode: 'CASH' | 'UPI'; upiRef: string | null; loanNumber: string; balance: number; message: string }
 
 function CollectForm({ customer, routeId, initialAmount, onDone }: { customer: DayCustomer; routeId?: string; initialAmount?: number; onDone: () => void }) {
   const { t } = useTranslation();
@@ -177,6 +217,12 @@ function CollectForm({ customer, routeId, initialAmount, onDone }: { customer: D
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const paise = toPaise(amount);
+  // "Ask to print after each collection" (a setting on this phone) and the print in progress.
+  const [askPrint, setAskPrint] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  useEffect(() => {
+    void getPrintAsk().then(setAskPrint);
+  }, []);
 
   // After saving: is it still only on the phone (so it can be undone), and its receipt number once the office has it.
   const [unsent, setUnsent] = useState(false);
@@ -237,7 +283,7 @@ function CollectForm({ customer, routeId, initialAmount, onDone }: { customer: D
     setBusy(false);
     setConfirming(false);
     setNow(Date.now());
-    setSaved({ clientRef: item.clientRef, at: item.collectedAt, amount: paise, mode: payMode, upiRef: item.upiRef, loanNumber: loan.number, message: r.offline || r.sent === 0 ? t('collection.savedOffline') : t('collection.saved') });
+    setSaved({ clientRef: item.clientRef, at: item.collectedAt, amount: paise, mode: payMode, upiRef: item.upiRef, loanNumber: loan.number, balance: Math.max(0, loan.outstanding - paise), message: r.offline || r.sent === 0 ? t('collection.savedOffline') : t('collection.saved') });
   };
 
   const undo = async () => {
@@ -267,6 +313,30 @@ function CollectForm({ customer, routeId, initialAmount, onDone }: { customer: D
     void Share.share({ message: lines.join('\n') }).catch(() => undefined);
   };
 
+  const print = async () => {
+    if (!saved) return;
+    setPrinting(true);
+    setAskPrint(false);
+    await printReceipt(
+      {
+        business: profile?.tenant?.name ?? t('common.appName'),
+        receiptNo,
+        customer: customer.name,
+        customerCode: customer.code,
+        loanNumber: saved.loanNumber,
+        amount: saved.amount,
+        mode: saved.mode,
+        upiRef: saved.upiRef,
+        at: saved.at,
+        balance: saved.balance,
+        agent: profile?.name ?? '',
+        footer: profile?.tenant?.settings?.receiptFooter,
+      },
+      t,
+    );
+    setPrinting(false);
+  };
+
   if (saved) {
     const left = Math.max(0, Math.ceil((Date.parse(saved.at) + UNDO_MS - now) / 1000));
     return (
@@ -275,9 +345,22 @@ function CollectForm({ customer, routeId, initialAmount, onDone }: { customer: D
         <Text style={[s.big, { fontSize: 34, marginBottom: SP.xs }]} numberOfLines={1} adjustsFontSizeToFit>{money(saved.amount)}</Text>
         <Text style={[s.muted, { marginBottom: SP.lg }]}>{saved.loanNumber} · {t(`common.modes.${saved.mode}`)} · {t('collection.receiptNo')}: {receiptNo ?? t('mobile.receiptPending')}</Text>
         {error && <Notice tone="danger" text={error} />}
+        {askPrint && (
+          <View style={{ backgroundColor: C.brandSoft, borderRadius: R.md, padding: SP.md, marginBottom: SP.md, gap: SP.sm }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.sm }}>
+              <Icon name="print-outline" size={22} color={C.brandInk} />
+              <Text style={{ flex: 1, color: C.brandInk, fontWeight: '700', fontSize: 15 }}>{t('mobile.printer.askNow')}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm }}>
+              <Btn small title={t('print.receipt')} onPress={() => void print()} busy={printing} style={{ flexGrow: 1, flexBasis: 120 }} />
+              <Btn small kind="outline" title={t('mobile.printer.notNow')} onPress={() => setAskPrint(false)} style={{ flexGrow: 1, flexBasis: 120 }} />
+            </View>
+          </View>
+        )}
         {routeId && <NextCustomer routeId={routeId} currentId={customer.id} />}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, marginBottom: SP.sm }}>
           <Btn small kind="tonal" title={t('mobile.shareReceipt')} onPress={share} style={{ flexGrow: 1, flexBasis: 140 }} />
+          {!askPrint && <Btn small kind="tonal" title={t('print.receipt')} onPress={() => void print()} busy={printing} style={{ flexGrow: 1, flexBasis: 140 }} />}
           {unsent && left > 0 && <Btn small kind="outline" title={`${t('mobile.undo')} (${left})`} onPress={() => void undo()} style={{ flexGrow: 1, flexBasis: 140 }} />}
         </View>
         <Btn kind="ghost" title={t('common.close')} onPress={onDone} style={{ marginBottom: 0 }} />

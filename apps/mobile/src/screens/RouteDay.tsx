@@ -77,17 +77,20 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
       subtitle={day.route.location ? `${day.route.location} · ${dateIN(day.date)}` : dateIN(day.date)}
       scroll={false}
       right={
-        can('collection.record') ? (
-          <Pressable
-            onPress={() => setSpeaking(true)}
-            accessibilityRole="button"
-            accessibilityLabel={t('ai.voice.button')}
-            style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 14, borderRadius: R.pill, backgroundColor: pressed ? '#c9e8e1' : C.brandSoft }]}
-          >
-            <Icon name="mic" size={20} color={C.brandInk} />
-            <Text style={{ color: C.brandInk, fontWeight: '800', fontSize: 15 }}>{t('ai.voice.button')}</Text>
-          </Pressable>
-        ) : undefined
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.xs }}>
+          <IconButton icon="document-text-outline" label={t('mobile.sheet.button')} color={C.brandInk} onPress={() => nav.push('LineSheet', { routeId })} />
+          {can('collection.record') && (
+            <Pressable
+              onPress={() => setSpeaking(true)}
+              accessibilityRole="button"
+              accessibilityLabel={t('ai.voice.button')}
+              style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 14, borderRadius: R.pill, backgroundColor: pressed ? '#c9e8e1' : C.brandSoft }]}
+            >
+              <Icon name="mic" size={20} color={C.brandInk} />
+              <Text style={{ color: C.brandInk, fontWeight: '800', fontSize: 15 }}>{t('ai.voice.button')}</Text>
+            </Pressable>
+          )}
+        </View>
       }
     >
       <VoiceSheet visible={speaking} customers={list} onClose={() => setSpeaking(false)} onCollect={(c, amount) => { setSpeaking(false); nav.push('Customer', { customer: c, routeId, amount }); }} />

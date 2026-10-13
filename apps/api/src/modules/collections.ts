@@ -326,6 +326,8 @@ export class CollectionsService {
       include: { loans: { where: { status: 'ACTIVE' }, include: { instalments: { orderBy: { seq: 'asc' } } } } },
     });
     const loanIds = customers.flatMap((c) => c.loans.map((l) => l.id));
+    // Each customer's area (location), for grouping the printed line sheet.
+    const areas = await this.prisma.location.findMany({ where: { tenantId: ctx.tenantId, id: { in: [...new Set(customers.map((c) => c.locationId))] } }, select: { id: true, name: true } });
     const [recent, todays, visits, promises] = await Promise.all([
       this.prisma.collection.findMany({ where: { loanId: { in: loanIds }, reversedAt: null }, orderBy: { collectedAt: 'desc' }, take: 2000 }),
       this.prisma.collection.findMany({ where: { loanId: { in: loanIds }, date, reversedAt: null } }),
@@ -337,6 +339,10 @@ export class CollectionsService {
         select: { customerId: true, promiseDate: true },
       }),
     ]);
+    // Who took each recent payment, for reprinting a receipt on the phone (names from this business only).
+    const agentNames = new Map(
+      (await this.prisma.user.findMany({ where: { tenantId: ctx.tenantId, id: { in: [...new Set(recent.map((r) => r.agentId))] } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]),
+    );
     // For the smart visit order on the phone: the hour (IST) a customer usually pays at, from their last ten payments,
     // and a promise to pay that is due and not yet kept.
     const usualHour = (customerId: string) => {
@@ -378,7 +384,7 @@ export class CollectionsService {
             totalPaid: instalments.reduce((s, i) => s + i.principalPaid + i.interestPaid, 0),
             instalmentsPaid: instalments.filter((i) => i.principalPaid + i.interestPaid >= i.principalDue + i.interestDue).length,
             instalmentsTotal: instalments.length,
-            lastPayments: recent.filter((r) => r.loanId === l.id).slice(0, 5).map((r) => ({ date: r.date, amount: r.amount, mode: r.mode, receiptNo: r.receiptNo })),
+            lastPayments: recent.filter((r) => r.loanId === l.id).slice(0, 5).map((r) => ({ date: r.date, at: r.collectedAt, amount: r.amount, mode: r.mode, receiptNo: r.receiptNo, agent: agentNames.get(r.agentId) ?? null })),
           };
         });
         const dueNow = loans.reduce((s, l) => s + l.dueNow, 0);
@@ -397,6 +403,7 @@ export class CollectionsService {
           lat: c.lat,
           lng: c.lng,
           routeSeq: c.routeSeq,
+          area: areas.find((a) => a.id === c.locationId)?.name ?? null,
           status: c.status,
           dueNow,
           paidToday,

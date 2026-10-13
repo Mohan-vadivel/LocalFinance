@@ -29,6 +29,13 @@ export const loginSchema = z.object({
   deviceId: z.string().max(200).optional(),
 });
 
+/** Moving to another business the same phone number has an account in; that account's own password is needed. */
+export const switchTenantSchema = z.object({
+  tenantId: id,
+  password: z.string().min(6),
+  deviceId: z.string().max(200).optional(),
+});
+
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(6),
   newPassword: z.string().min(8),
