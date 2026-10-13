@@ -621,7 +621,13 @@
         "collected": "Collected",
         "seq": "Route no."
       }
-    }
+    },
+    "startRoute": "Start collecting",
+    "collectNow": "Collect {{amount}}",
+    "addNote": "Add a note",
+    "searchStart": "Type at least 2 letters of a name, or a phone or loan number.",
+    "clearSearch": "Clear search",
+    "branchToday": "Branch today"
   },
   "fund": {
     "title": "Funds",

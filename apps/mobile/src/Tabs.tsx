@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard, Platform, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSession } from './session';
-import { C, Icon, MenuCtx, SP, useNav, type IconName } from './ui';
+import { C, Icon, MenuCtx, SP, useLayout, useNav, type IconName } from './ui';
 
 interface Tab { key: string; icon: IconName; iconOn: IconName; label: string; onPress: () => void; show: boolean; active: boolean }
 
@@ -19,6 +19,7 @@ export function TabBar() {
   const { can } = useSession();
   const insets = useSafeAreaInsets();
   const keyboard = useKeyboardOpen();
+  const { narrow } = useLayout();
   const top = nav.stack[nav.stack.length - 1];
   if (keyboard) return null;
   const at = (name: string) => top?.name === name && !(name === 'Search' && top.params?.forLoan);
@@ -43,13 +44,14 @@ export function TabBar() {
           accessibilityState={{ selected: x.active }}
           accessibilityLabel={x.label}
           android_ripple={{ color: C.surface, borderless: true }}
-          style={({ pressed }) => [{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 2 }, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [{ flex: 1, minWidth: 0, minHeight: 58, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 4, gap: 3 }, pressed && { opacity: 0.7 }]}
         >
           {/* The active tab gets a soft pill behind its icon, as on Android's own navigation bars. */}
           <View style={{ width: 56, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: x.active ? C.brandSoft : 'transparent' }}>
             <Icon name={x.active ? x.iconOn : x.icon} size={22} color={x.active ? C.brand : C.ink2} />
           </View>
-          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ fontSize: 12, fontWeight: x.active ? '800' : '600', color: x.active ? C.brandInk : C.muted, paddingHorizontal: 2 }}>{x.label}</Text>
+          {/* Up to two short lines, so "Customers" and long Tamil labels are never cut on a 320dp phone. */}
+          <Text numberOfLines={2} style={{ fontSize: narrow ? 11 : 12, lineHeight: narrow ? 14 : 15, textAlign: 'center', fontWeight: x.active ? '800' : '600', color: x.active ? C.brandInk : C.ink2, paddingHorizontal: 2 }}>{x.label}</Text>
         </Pressable>
       ))}
     </View>

@@ -2,9 +2,10 @@ import { useCallback, useContext, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { get } from '../api';
 import { useSession } from '../session';
 import { cachedRouteDay, getFailed, getLastSync, getQueue, myRoutes, subscribe, sync, type MyRoute } from '../store';
-import { AmountPair, Avatar, Badge, Btn, C, Card, Chevron, ErrorText, Icon, IconButton, MAX_W, MAX_W_WIDE, MenuCtx, Notice, Progress, R, SP, Section, dateIN, money, s, todayIST, useLayout, useNav, useScreenEdges, type IconName } from '../ui';
+import { AmountPair, Avatar, Badge, Btn, C, Card, Chevron, EmptyState, ErrorText, Icon, IconButton, MAX_W, MAX_W_WIDE, MenuCtx, Notice, Progress, R, SP, SearchBar, Section, dateIN, money, s, todayIST, useLayout, useNav, useScreenEdges, type IconName } from '../ui';
 
 /** Pending, failed and last-sync state, kept current as the queue changes. */
 export function useSyncState() {
@@ -34,6 +35,22 @@ export function SyncBar() {
     setBusy(false);
   };
   const tone = st.failed > 0 ? C.danger : st.pending ? C.warn : C.ok;
+  const time = st.lastSync ? new Date(st.lastSync).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '-';
+  // Nothing waiting: one slim line with a round sync button, so the screen's real work stays near the top.
+  if (!st.pending && !st.failed) {
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.sm, marginBottom: SP.md, paddingLeft: SP.md, paddingRight: SP.xs, minHeight: 48, borderRadius: R.pill, backgroundColor: C.okSoft }}>
+        <Icon name="checkmark-circle" size={20} color={C.ok} />
+        <Text style={{ flex: 1, minWidth: 0, color: C.ok, fontWeight: '700', fontSize: 14 }}>
+          {t('mobile.allSynced')}
+          {st.lastSync || msg ? <Text style={{ color: C.ink2, fontWeight: '500' }}>{st.lastSync ? ` · ${t('mobile.lastSync')}: ${time}` : ''}{msg ? ` · ${msg}` : ''}</Text> : null}
+        </Text>
+        <Pressable onPress={() => void run()} disabled={busy} accessibilityRole="button" accessibilityLabel={t('mobile.syncNow')} hitSlop={4} style={({ pressed }) => [{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }, (pressed || busy) && { backgroundColor: 'rgba(6,118,71,0.12)' }]}>
+          <Icon name="sync" size={22} color={C.ok} />
+        </Pressable>
+      </View>
+    );
+  }
   return (
     <Card style={[{ flexDirection: 'row', alignItems: 'center', gap: SP.md, paddingVertical: SP.md }, compact && { flexWrap: 'wrap', rowGap: SP.sm }]}>
       <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: tone, boxShadow: `0px 0px 0px 4px ${tone}22` }} />
@@ -44,7 +61,7 @@ export function SyncBar() {
           {st.pending ? `${t('mobile.pendingSync')}: ${st.pending}` : st.failed ? t('mobile.failedTitle') : t('mobile.allSynced')}
         </Text>
         <Text style={[s.muted, { fontSize: 13 }]}>
-          {t('mobile.lastSync')}: {st.lastSync ? new Date(st.lastSync).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '-'} {msg ? `· ${msg}` : ''}
+          {t('mobile.lastSync')}: {time} {msg ? `· ${msg}` : ''}
         </Text>
         {st.failed > 0 && (
           <Pressable onPress={() => nav.push('Summary')} hitSlop={8} style={{ paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -55,7 +72,7 @@ export function SyncBar() {
           </Pressable>
         )}
       </View>
-      <Btn small kind="tonal" title={t('mobile.syncNow')} onPress={() => void run()} busy={busy} style={compact ? { flexGrow: 1 } : undefined} />
+      <Btn small kind="primary" icon="sync" title={t('mobile.syncNow')} onPress={() => void run()} busy={busy} style={compact ? { flexGrow: 1 } : undefined} />
     </Card>
   );
 }
@@ -110,6 +127,12 @@ export default function Home() {
     return subscribe(read);
   }, [routes]);
   const isManager = can('report.view', 'route.manage');
+  // Managers and owners: the branch's figures for today on the home card (the same figures as "Team today").
+  const [team, setTeam] = useState<{ dueToday: number; collectedToday: number; collectionRate: number | null } | null>(null);
+  useEffect(() => {
+    if (isManager && refreshing) void get<{ dueToday: number; collectedToday: number; collectionRate: number | null }>('/dashboard').then(setTeam).catch(() => setTeam(null));
+  }, [isManager, refreshing]);
+  const canSearch = can('customer.view', 'collection.record');
 
   const todays = (routes ?? []).filter((r) => r.collectsToday);
   const known = Object.values(progress);
@@ -118,7 +141,6 @@ export default function Home() {
 
   // The most used places, as tiles. Everything else (and settings) is in the side menu.
   const actions: { title: string; icon: IconName; color: string; onPress: () => void; show: boolean }[] = [
-    { title: t('mobile.search'), icon: 'search', color: '#0f766e', onPress: () => nav.push('Search'), show: can('customer.view', 'collection.record') },
     { title: t('mobile.addCustomer'), icon: 'person-add', color: '#2563eb', onPress: () => nav.push('AddCustomer', { routes: routes ?? [] }), show: can('customer.create') },
     { title: t('mobile.daySummary'), icon: 'today', color: '#7c3aed', onPress: () => nav.push('Summary'), show: true },
     { title: t('collSummary.title'), icon: 'bar-chart', color: '#c2410c', onPress: () => nav.push('CollectionReport'), show: true },
@@ -134,16 +156,26 @@ export default function Home() {
   const routeW = routeCols === 2 ? (contentW - SP.md) / 2 : undefined;
   // Equal-width action tiles: 2 on a phone, 3 on a tablet; a landscape tablet shows them in a 2/5 side column.
   const tileCols = tablet && !wide ? 3 : 2;
+  // The route to open from "Start collecting": the first of today's routes with someone not visited yet.
+  const startRoute = todays.find((r) => !progress[r.id] || progress[r.id].visited < progress[r.id].total) ?? null;
   const tileArea = wide ? ((contentW - SP.lg) * 2) / 5 : contentW;
   const tileW = Math.floor((tileArea - SP.md * (tileCols - 1)) / tileCols);
 
   const todayCard = (
     <Card tone="brand" style={{ padding: SP.xl - 4 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SP.md, gap: SP.sm, flexWrap: 'wrap' }}>
-        <Text style={{ color: C.onBrand, fontWeight: '800', fontSize: 16, flexShrink: 1 }}>{t('common.today')}</Text>
+        <Text style={{ color: C.onBrand, fontWeight: '800', fontSize: 16, flexShrink: 1 }}>{team && todays.length === 0 ? t('mobile.branchToday') : t('common.today')}</Text>
         <Text style={{ color: C.onBrandMuted, fontWeight: '600' }}>{dateIN(todayIST())}</Text>
       </View>
-      {known.length > 0 ? (
+      {team && todays.length === 0 ? (
+        <>
+          <AmountPair onBrand main={{ label: t('dashboard.collectedToday'), value: money(team.collectedToday) }} side={{ label: t('dashboard.dueToday'), value: money(team.dueToday) }} />
+          <View style={{ marginTop: SP.lg }}>
+            <Progress value={(team.collectionRate ?? 0) / 100} color="#ffffff" track="rgba(255,255,255,0.25)" />
+            <Text style={{ color: C.onBrandMuted, marginTop: SP.sm, fontWeight: '600' }}>{t('dashboard.collectionRate')}: {team.collectionRate == null ? '-' : `${team.collectionRate}%`}</Text>
+          </View>
+        </>
+      ) : known.length > 0 ? (
         <>
           <AmountPair onBrand main={{ label: t('report.collected'), value: money(totals.collected) }} side={{ label: t('report.due'), value: money(totals.due) }} />
           <View style={{ marginTop: SP.lg }}>
@@ -163,6 +195,12 @@ export default function Home() {
           </View>
         </View>
       )}
+      {/* The main job of the day, one tap from home: open today's route at the next customer. */}
+      {startRoute && can('collection.record') ? (
+        <Btn big icon="play" kind="light" title={t('mobile.startRoute')} onPress={() => nav.push('RouteDay', { routeId: startRoute.id, name: startRoute.name })} style={{ marginTop: SP.lg, marginBottom: 0 }} />
+      ) : team && todays.length === 0 ? (
+        <Btn icon="people" kind="light" title={t('mobile.managerView')} onPress={() => nav.push('Manager')} style={{ marginTop: SP.lg, marginBottom: 0 }} />
+      ) : null}
     </Card>
   );
 
@@ -208,12 +246,12 @@ export default function Home() {
             accessibilityRole="button"
             android_ripple={{ color: C.surface }}
             style={({ pressed }) => [
-              { width: tileW, minHeight: 112, backgroundColor: C.panel, borderRadius: R.lg, borderWidth: 1, borderColor: C.line, padding: SP.lg, justifyContent: 'space-between', gap: SP.md, boxShadow: '0px 1px 2px rgba(16, 40, 36, 0.06), 0px 2px 8px rgba(16, 40, 36, 0.05)' },
+              { width: tileW, minHeight: 92, backgroundColor: C.panel, borderRadius: R.lg, borderWidth: 1, borderColor: C.line, padding: 14, justifyContent: 'flex-start', gap: SP.sm, boxShadow: '0px 1px 2px rgba(16, 40, 36, 0.06), 0px 2px 8px rgba(16, 40, 36, 0.05)' },
               pressed && { backgroundColor: '#f6f9f8', transform: [{ scale: 0.98 }] },
             ]}
           >
-            <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: a.color + '1f', alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name={a.icon} size={24} color={a.color} />
+            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: a.color + '1f', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name={a.icon} size={22} color={a.color} />
             </View>
             <Text style={{ fontSize: 15, fontWeight: '700', color: C.ink, lineHeight: 20 }} numberOfLines={3}>{a.title}</Text>
           </Pressable>
@@ -224,12 +262,14 @@ export default function Home() {
 
   const main = (
     <>
+      {canSearch && <SearchBar placeholder={t('mobile.search')} onPress={() => nav.push('Search')} />}
       {todayCard}
       <SyncBar />
       {offline && <Notice tone="warn" text={t('mobile.offlineCopy')} />}
       <ErrorText error={error} />
-      <Section title={t('mobile.myRoutes')} />
-      {routes && routes.length === 0 && <Notice tone="warn" text={t('mobile.noRoutes')} />}
+      {/* A manager or owner without routes of their own sees no empty "My routes" section. */}
+      {!(isManager && routes?.length === 0) && <Section title={t('mobile.myRoutes')} />}
+      {routes && routes.length === 0 && !isManager && <EmptyState icon="map-outline" title={t('mobile.noRoutes')} />}
       {routeCards}
     </>
   );

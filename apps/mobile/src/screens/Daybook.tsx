@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { ApiError, get, post } from '../api';
 import { useSession } from '../session';
-import { Badge, Btn, C, Card, Chips, ErrorText, Field, Loading, Notice, Row, SP, Screen, Section, dateIN, money, s, toPaise, todayIST } from '../ui';
+import { Badge, Btn, C, Card, Chips, EmptyState, ErrorText, Field, Loading, Notice, Row, SP, Screen, Section, dateIN, money, s, toPaise, todayIST } from '../ui';
 
 interface Category { id: string; name: string; kind: string; active: boolean }
 type Status = 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -69,12 +69,12 @@ export default function Daybook() {
             }}
           />
         ) : (
-          <Btn big title={t('daybook.newEntry')} onPress={() => { setMsg(''); setAdding(true); }} style={{ marginBottom: SP.md }} />
+          <Btn big icon="add-circle-outline" title={t('daybook.newEntry')} onPress={() => { setMsg(''); setAdding(true); }} style={{ marginBottom: SP.md }} />
         )}
         <Chips segmented value={tab} onChange={setTab} items={(['PENDING', 'APPROVED', 'REJECTED'] as const).map((k) => ({ key: k, label: t(`daybook.statuses.${k}`) }))} />
         <ErrorText error={error} />
         {!rows && !error && <Loading />}
-        {rows?.length === 0 && <Notice tone="info" text={tab === 'PENDING' ? t('daybook.nothingWaiting') : t('common.noData')} />}
+        {rows?.length === 0 && <EmptyState icon={tab === 'PENDING' ? 'checkmark-done-circle-outline' : 'document-text-outline'} title={tab === 'PENDING' ? t('daybook.nothingWaiting') : t('common.noData')} />}
         {tab === 'REJECTED' && rows && rows.length > 0 && <RejectedTotals rows={rows} />}
         {(rows ?? []).map((r) => (
           <RequestCard key={r.id} r={r} canDecide={approver && r.status === 'PENDING' && r.requestedById !== profile?.id} onDecided={() => void load()} />
