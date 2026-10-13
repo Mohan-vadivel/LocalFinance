@@ -140,11 +140,11 @@ function Drawer({ anim, close }: { anim: Animated.Value; close: () => void }) {
           <Group title={t('mobile.menuAccount')} items={account} isActive={isActive} />
 
           <Text style={groupTitle}>{t('common.language')}</Text>
-          <View style={{ flexDirection: 'row', gap: SP.sm, paddingHorizontal: SP.lg, marginBottom: SP.md }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, paddingHorizontal: SP.lg, marginBottom: SP.md }}>
             {LANGUAGES.map((l) => {
               const on = i18n.language === l.code;
               return (
-                <Pressable key={l.code} onPress={() => void changeLang(l.code)} accessibilityRole="radio" accessibilityState={{ selected: on }} style={({ pressed }) => [{ flex: 1, minHeight: 44, borderRadius: R.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: on ? C.brand : C.lineStrong, backgroundColor: on ? C.brandSoft : C.panel }, pressed && { opacity: 0.8 }]}>
+                <Pressable key={l.code} onPress={() => void changeLang(l.code)} accessibilityRole="radio" accessibilityState={{ selected: on }} style={({ pressed }) => [{ flexBasis: '30%', flexGrow: 1, minHeight: 44, borderRadius: R.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: on ? C.brand : C.lineStrong, backgroundColor: on ? C.brandSoft : C.panel }, pressed && { opacity: 0.8 }]}>
                   <Text style={{ fontWeight: '700', fontSize: 15, color: on ? C.brandInk : C.ink2 }}>{l.nativeName}</Text>
                 </Pressable>
               );

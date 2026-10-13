@@ -43,7 +43,7 @@ export default function Login() {
             <Text style={{ color: C.ink, fontSize: 28, fontWeight: '800', textAlign: 'center' }}>{t('common.appName')}</Text>
           </View>
           <View style={{ marginBottom: SP.lg }}>
-            <Chips segmented value={i18n.language} onChange={(v) => void setLanguage(v)} items={LANGUAGES.map((l) => ({ key: l.code, label: l.nativeName }))} />
+            <Chips value={i18n.language} onChange={(v) => void setLanguage(v)} items={LANGUAGES.map((l) => ({ key: l.code, label: l.nativeName }))} />
           </View>
           <Card style={{ padding: compact ? SP.lg : SP.xl }}>
             <ErrorText error={error} />

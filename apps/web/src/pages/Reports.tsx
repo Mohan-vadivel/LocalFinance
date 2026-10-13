@@ -7,7 +7,7 @@ import { get } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateIN, money, monthStart, pct, today } from '../lib/format';
 import { useLoad } from '../lib/hooks';
-import type { Permission } from '@localfinance/shared';
+import { localeOf, type Permission } from '@localfinance/shared';
 
 type Row = Record<string, unknown>;
 type Filter = 'location' | 'route' | 'agent' | 'product' | 'dates' | 'months';
@@ -88,7 +88,7 @@ export default function Reports() {
     value: (r) => {
       const v = r[c];
       if (c === 'weekday' && typeof v === 'number') return t(`weekdays.${v}`);
-      if (c === 'month' && typeof v === 'string' && /^\d{4}-\d{2}$/.test(v)) return new Date(`${v}-01T00:00:00Z`).toLocaleString(i18n.language === 'ta' ? 'ta-IN' : 'en-IN', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+      if (c === 'month' && typeof v === 'string' && /^\d{4}-\d{2}$/.test(v)) return new Date(`${v}-01T00:00:00Z`).toLocaleString(localeOf(i18n.language), { month: 'short', year: 'numeric', timeZone: 'UTC' });
       if (c === 'type' && typeof v === 'string') return t(`investor.txnTypes.${v}`, { defaultValue: v });
       if (c === 'status' && typeof v === 'string') return t(`loanMod.statuses.${v}`, { defaultValue: v });
       if (c === 'source' && typeof v === 'string') return t(`fund.sourceTypes.${v}`, { defaultValue: v });

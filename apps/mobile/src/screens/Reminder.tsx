@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking, Share, Text, View } from 'react-native';
-import { LANGUAGES, addDays, formatINR, translate } from '@localfinance/shared';
+import { LANGUAGES, addDays, formatINR, isLanguage, translate, type LanguageCode } from '@localfinance/shared';
 import { ApiError, post } from '../api';
 import { useSession } from '../session';
 import { mobile10 } from '../smart';
 import type { DayCustomer } from '../store';
 import { Badge, Btn, C, Card, Chips, ErrorText, Field, Loading, Notice, SP, dateIN, s, todayIST } from '../ui';
 
-interface Draft { text: string; phone: string; language: 'en' | 'ta'; source: 'ai' | 'rules' }
+interface Draft { text: string; phone: string; language: LanguageCode; source: 'ai' | 'rules' }
 type Tone = 'gentle' | 'firm';
 
 /**
@@ -16,7 +16,7 @@ type Tone = 'gentle' | 'firm';
  * connection. Arrears and penalty are what is pending; with nothing pending, the next instalment (today, or tomorrow
  * on a daily loan) is a gentle reminder.
  */
-function localDraft(c: DayCustomer, lang: 'en' | 'ta', business: string): Draft {
+function localDraft(c: DayCustomer, lang: LanguageCode, business: string): Draft {
   const overdue = c.loans.reduce((sum, l) => sum + l.arrears + l.penalty, 0);
   const days = c.loans.reduce((m, l) => Math.max(m, l.daysPastDue), 0);
   const today = c.loans.find((l) => l.dueToday > 0);
@@ -34,7 +34,7 @@ export function Reminder({ customer, onDone }: { customer: DayCustomer; onDone: 
   const { profile } = useSession();
   const [tone, setTone] = useState<Tone>('gentle');
   // Unset until the first draft: the office uses the customer's own language.
-  const [lang, setLang] = useState<'en' | 'ta' | null>(null);
+  const [lang, setLang] = useState<LanguageCode | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [text, setText] = useState('');
   const [offline, setOffline] = useState(false);
@@ -42,7 +42,7 @@ export function Reminder({ customer, onDone }: { customer: DayCustomer; onDone: 
   const [error, setError] = useState<unknown>(null);
 
   const load = useCallback(
-    async (language: 'en' | 'ta' | null, tn: Tone) => {
+    async (language: LanguageCode | null, tn: Tone) => {
       setBusy(true);
       setError(null);
       try {
@@ -52,7 +52,7 @@ export function Reminder({ customer, onDone }: { customer: DayCustomer; onDone: 
         setText(d.text);
         setLang(d.language);
       } catch (e) {
-        const l = language ?? (customer.language === 'ta' || customer.language === 'en' ? customer.language : i18n.language === 'ta' ? 'ta' : 'en');
+        const l = language ?? (isLanguage(customer.language) ? customer.language : isLanguage(i18n.language) ? i18n.language : 'en');
         if (!(e instanceof ApiError && e.status === 0)) setError(e);
         else setOffline(true);
         const d = localDraft(customer, l, profile?.tenant?.name ?? t('common.appName'));
@@ -87,7 +87,7 @@ export function Reminder({ customer, onDone }: { customer: DayCustomer; onDone: 
       <Chips
         segmented
         value={lang ?? ''}
-        onChange={(l) => void load(l as 'en' | 'ta', tone)}
+        onChange={(l) => void load(l as LanguageCode, tone)}
         items={LANGUAGES.map((l) => ({ key: l.code, label: l.nativeName }))}
       />
       {!offline && (

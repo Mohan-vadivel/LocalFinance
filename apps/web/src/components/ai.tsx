@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { LANGUAGES, type LanguageCode } from '@localfinance/shared';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Bell, Camera, Copy, LoaderCircle, MessageCircle, MessageSquareText, RefreshCw, ScanLine, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp, TriangleAlert } from 'lucide-react';
@@ -95,7 +96,7 @@ export function RiskReasons({ s, compact }: { s: RiskSummary; compact?: boolean 
 interface ReminderDraft {
   text: string;
   phone: string;
-  language: 'en' | 'ta';
+  language: LanguageCode;
   source: 'ai' | 'rules';
   overdue: number;
   daysLate: number;
@@ -108,7 +109,7 @@ export function ReminderModal({ customer, onClose }: { customer: { id: string; n
   const { t } = useTranslation();
   const status = useAiStatus();
   const [tone, setTone] = useState<'gentle' | 'firm'>('gentle');
-  const [lang, setLang] = useState<'en' | 'ta'>(aiLang(customer.language));
+  const [lang, setLang] = useState<LanguageCode>(aiLang(customer.language));
   const [draft, setDraft] = useState<ReminderDraft | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(true);
@@ -168,7 +169,7 @@ export function ReminderModal({ customer, onClose }: { customer: { id: string; n
       <div className="reminder-opts">
         <div className="opt">
           <span className="opt-label">{t('ai.reminder.language')}</span>
-          <Tabs value={lang} onChange={setLang} items={[{ key: 'en', label: 'English' }, { key: 'ta', label: 'தமிழ்' }]} />
+          <Tabs value={lang} onChange={setLang} items={LANGUAGES.map((l) => ({ key: l.code, label: l.nativeName }))} />
         </div>
         {aiOn && (
           <div className="opt">

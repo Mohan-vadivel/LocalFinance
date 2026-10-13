@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Injectable, Param, Post, Query } from '@nestjs/common';
-import { addDays, formatINR, reportFilterSchema, todayIST, translate, weekday, type Permission, type ReportFilter } from '@localfinance/shared';
+import { LANGUAGES, LANGUAGE_CODES, addDays, formatINR, isLanguage, reportFilterSchema, todayIST, translate, weekday, type Permission, type ReportFilter } from '@localfinance/shared';
 import { createHash } from 'crypto';
 import { z } from 'zod';
 import { AuditService } from '../common/audit.service';
@@ -13,8 +13,9 @@ import { V } from '../common/zod.pipe';
 import { CustomersService } from './customers';
 import { DashboardService, ProfitLossService, ReportsService } from './reports';
 
-const LANG_NAMES: Record<string, string> = { en: 'English', ta: 'Tamil' };
-const langName = (code: string) => LANG_NAMES[code] ?? 'English';
+const langName = (code: string) => LANGUAGES.find((l) => l.code === code)?.name ?? 'English';
+/** Tells the model to write in the language's own script, not in English letters. */
+const langFull = (code: string) => (code === 'en' ? 'English' : `${langName(code)} (in ${langName(code)} script)`);
 const rs = (paise: number) => formatINR(paise, { decimals: false });
 
 export interface Alert {
@@ -268,7 +269,7 @@ export class AiService {
       const res = await this.claude.json<{ bullets: string[] }>({
         system:
           `You write the morning briefing for the owner or manager of "${ctx.tenantName}", a small daily-collection lending business in Tamil Nadu, India. ` +
-          `Write 3 to 6 short bullet points in ${langName(lang)}, plain everyday words, no jargon. Lead with what needs action today. ` +
+          `Write 3 to 6 short bullet points in ${langFull(lang)}, plain everyday words, no jargon. Lead with what needs action today. ` +
           `Use only the facts given; never invent numbers. Money is already formatted in rupees. Each bullet is one sentence with no markdown.`,
         content: [{ type: 'text', text: `Facts for ${facts.today} (yesterday was ${facts.yesterday}):\n${JSON.stringify(money, null, 1)}` }],
         schema: { type: 'object', properties: { bullets: { type: 'array', items: { type: 'string' } } }, required: ['bullets'], additionalProperties: false },
@@ -380,7 +381,7 @@ export class AiService {
       `Use the tools to look up real figures; never guess a number. Call "places" first when the question names a branch, area, line, agent or scheme. ` +
       `IMPORTANT: every money field in tool results is in paise (100 paise = 1 rupee). Divide by 100 and write rupees with Indian grouping, like ₹1,25,000. ` +
       `Counts, days and percentages are not money. Dates are YYYY-MM-DD. "Line" means route. ` +
-      `Reply in ${langName(input.language)}, in plain short sentences a busy owner can read on a phone. Lead with the answer, then the few figures behind it. ` +
+      `Reply in ${langFull(input.language)}, in plain short sentences a busy owner can read on a phone. Lead with the answer, then the few figures behind it. ` +
       `A small table in markdown is fine when comparing several items. If the tools cannot answer, say what you could not find. ` +
       `Only answer about this business's own data.`;
     const messages = [
@@ -412,7 +413,7 @@ export class AiService {
         .sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
       if (next && (!nextDue || next.dueDate < nextDue.date)) nextDue = { date: next.dueDate, amount: next.principalDue + next.interestDue - next.principalPaid - next.interestPaid };
     }
-    const lang = input.language ?? (c.language === 'ta' ? 'ta' : 'en');
+    const lang = input.language ?? (isLanguage(c.language) ? c.language : 'en');
     const vars = { name: c.name, amount: rs(overdue), days: daysLate, business: ctx.tenantName, nextDate: nextDue ? nextDue.date.split('-').reverse().join('-') : '', nextAmount: nextDue ? rs(nextDue.amount) : '' };
     const template = translate(lang, overdue > 0 ? 'ai.reminder.overdue' : nextDue ? 'ai.reminder.upcoming' : 'ai.reminder.none', vars);
     const base = { phone: c.phone, language: lang, overdue, daysLate, nextDue };
@@ -422,7 +423,7 @@ export class AiService {
       res = await this.claude.json<{ message: string }>({
       system:
         `You write short, polite payment reminders that a small lending business in Tamil Nadu sends to its customers by SMS or WhatsApp. ` +
-        `Write in ${langName(lang)}${lang === 'ta' ? ' (Tamil script)' : ''}. Respectful and warm, never threatening or shaming, no legal language. ` +
+        `Write in ${langFull(lang)}. Respectful and warm, never threatening or shaming, no legal language. ` +
         `At most 3 short sentences (under 300 characters). Mention the amount and that the collection agent will come or they can pay at the office. ` +
         `Sign with the business name. Plain text, no emojis, no markdown. Use only the facts given.`,
       content: [{ type: 'text', text: JSON.stringify({ ...vars, overdue: overdue > 0, tone: input.tone ?? 'gentle', note: input.note ?? '' }) }],
@@ -512,11 +513,11 @@ export function alertText(a: Alert, lang: string) {
 
 const askSchema = z.object({
   question: z.string().trim().min(2).max(1000),
-  language: z.enum(['en', 'ta']).default('en'),
+  language: z.enum(LANGUAGE_CODES).default('en'),
   history: z.array(z.object({ role: z.enum(['user', 'assistant']), text: z.string().max(6000) })).max(12).optional(),
 });
 const reminderSchema = z.object({
-  language: z.enum(['en', 'ta']).optional(),
+  language: z.enum(LANGUAGE_CODES).optional(),
   tone: z.enum(['gentle', 'firm']).optional(),
   note: z.string().max(200).optional(),
 });
@@ -525,7 +526,7 @@ const readIdSchema = z.object({
   // Base64 without the data: prefix; about 3.5 MB of image at most.
   image: z.string().min(100).max(4_800_000).regex(/^[A-Za-z0-9+/=\s]+$/, 'Not a picture'),
 });
-const branchQuery = z.object({ branchId: z.string().optional(), language: z.enum(['en', 'ta']).optional() });
+const branchQuery = z.object({ branchId: z.string().optional(), language: z.enum(LANGUAGE_CODES).optional() });
 
 @Controller('ai')
 export class AiController {

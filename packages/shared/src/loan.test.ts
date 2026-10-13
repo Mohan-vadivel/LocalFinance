@@ -12,7 +12,7 @@ import {
 } from './loan';
 import { periodRange } from './dates';
 import { formatINR } from './money';
-import { missingKeys, translate } from './i18n';
+import { LANGUAGES, flattenKeys, missingKeys, resources, translate } from './i18n';
 
 const st = (rows: ReturnType<typeof generateSchedule>): InstalmentState[] =>
   rows.map((r) => ({ id: String(r.seq), seq: r.seq, dueDate: r.dueDate, principalDue: r.principalDue, interestDue: r.interestDue, principalPaid: 0, interestPaid: 0 }));
@@ -115,8 +115,11 @@ describe('misc', () => {
 });
 
 describe('language files', () => {
-  it('Tamil has every English key', () => {
-    expect(missingKeys('ta')).toEqual([]);
+  it.each(LANGUAGES.filter((l) => l.code !== 'en').map((l) => l.code))('%s has every English key, with the same placeholders', (code) => {
+    expect(missingKeys(code)).toEqual([]);
+    const vars = (s: string) => [...s.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]).sort().join(',');
+    const bad = flattenKeys(resources.en.translation).filter((k) => vars(translate('en', k)) !== vars(translate(code, k)));
+    expect(bad).toEqual([]);
   });
   it('translates with placeholders and falls back to English', () => {
     expect(translate('ta', 'common.save')).toBe('சேமி');

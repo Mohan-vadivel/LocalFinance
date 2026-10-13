@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as XLSX from 'xlsx';
 import { FileSpreadsheet, Inbox, Printer } from 'lucide-react';
-import { weekday } from '@localfinance/shared';
+import { localeOf, weekday } from '@localfinance/shared';
 import { BranchPicker, RoutePicker } from '../components/pickers';
 import { ErrorBox, Loading } from '../components/ui';
 import { get } from '../lib/api';
@@ -67,7 +67,7 @@ export default function LineList() {
   const [routeId, setRouteId] = useState('');
   const { data, error, loading } = useLoad(() => get<LineListData>('/reports/line-list', { month, branchId, routeId }), [month, branchId, routeId]);
 
-  const monthName = new Date(`${month}-01T00:00:00Z`).toLocaleString(i18n.language === 'ta' ? 'ta-IN' : 'en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const monthName = new Date(`${month}-01T00:00:00Z`).toLocaleString(localeOf(i18n.language), { month: 'long', year: 'numeric', timeZone: 'UTC' });
   const showRoute = !data?.route;
   const title = `${t('lineList.title')} · ${data?.route?.name ?? t('lineList.allLines')} · ${monthName}`;
 

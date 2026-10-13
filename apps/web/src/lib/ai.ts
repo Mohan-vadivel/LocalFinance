@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { LANGUAGES, type LanguageCode } from '@localfinance/shared';
 import { get } from './api';
 import { useAuth } from './auth';
 import { dateIN, money } from './format';
@@ -67,4 +68,4 @@ export function alertValues(values: Record<string, string | number>) {
 }
 
 /** The UI language as the AI endpoints want it. */
-export const aiLang = (lng: string): 'en' | 'ta' => (lng.startsWith('ta') ? 'ta' : 'en');
+export const aiLang = (lng: string): LanguageCode => LANGUAGES.find((l) => lng.startsWith(l.code))?.code ?? 'en';
