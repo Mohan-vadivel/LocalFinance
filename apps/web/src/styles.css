@@ -1017,3 +1017,5 @@ th.num .th-sort { flex-direction: row-reverse; }
   .pager .pg.num:not(.on) { display: none; }
   .pager .pg-gap { display: none; }
 }
+.dt-filter { height: 32px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; font-size: 13px; max-width: 220px; }
+.dt-filter:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }

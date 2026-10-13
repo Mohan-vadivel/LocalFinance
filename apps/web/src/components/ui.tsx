@@ -349,6 +349,7 @@ export function DataTable<T extends object>({ rows, columns: cols, title, empty,
   const { t, i18n } = useTranslation();
   const all = rows ?? [];
   const [q, setQ] = useState('');
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSizeState] = useState(savedPageSize);
@@ -369,9 +370,20 @@ export function DataTable<T extends object>({ rows, columns: cols, title, empty,
   const dataCols = cols.filter((c) => c.key !== 'actions' && c.key !== '__actions');
   const sortable = (c: Column<T>) => c.key !== 'actions' && c.key !== '__actions' && dataCols.includes(c) && (c.value || ['string', 'number'].includes(typeof all.map((r) => raw(r, c)).find((v) => v != null)));
 
+  // Columns with a few distinct values (status, route, branch, mode...) get a drop-down filter automatically.
+  const filterCols = useMemo(() => dataCols.filter((c) => {
+    if (c.money || c.num) return false;
+    const distinct = new Set(all.map((r) => String(raw(r, c) ?? '')).filter(Boolean));
+    return distinct.size >= 2 && distinct.size <= 15;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [all]);
+  const filtering = !!q.trim() || Object.values(filters).some(Boolean);
+
   const list = useMemo(() => {
     const needle = q.trim().toLowerCase();
     let out = needle ? all.filter((r) => dataCols.some((c) => String(raw(r, c) ?? '').toLowerCase().includes(needle))) : all;
+    const active = filterCols.filter((c) => filters[c.key]);
+    if (active.length) out = out.filter((r) => active.every((c) => String(raw(r, c) ?? '') === filters[c.key]));
     if (sort) {
       const c = dataCols.find((x) => x.key === sort.key);
       if (c) {
@@ -386,12 +398,12 @@ export function DataTable<T extends object>({ rows, columns: cols, title, empty,
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [all, q, sort, i18n.language]);
+  }, [all, q, sort, filters, i18n.language]);
 
   const pages = paged ? Math.max(1, Math.ceil(list.length / pageSize)) : 1;
   const cur = Math.min(page, pages);
   // Back to the first page when the search, the sort or the number of rows changes (not on every new array).
-  useEffect(() => setPage(1), [q, sort, all.length]);
+  useEffect(() => setPage(1), [q, sort, filters, all.length]);
   const shown = !paged || printing ? list : list.slice((cur - 1) * pageSize, cur * pageSize);
   const onSort = (c: Column<T>) => setSort((s) => (s?.key !== c.key ? { key: c.key, dir: 1 } : s.dir === 1 ? { key: c.key, dir: -1 } : null));
 
@@ -413,8 +425,14 @@ export function DataTable<T extends object>({ rows, columns: cols, title, empty,
     <div>
       <div className="dt-toolbar no-print">
         {title && <h3>{title}</h3>}
-        {paged && <span className="count-pill">{q ? `${list.length} / ${all.length}` : all.length}</span>}
+        {paged && <span className="count-pill">{filtering ? `${list.length} / ${all.length}` : all.length}</span>}
         <span className="spacer" />
+        {paged && filterCols.map((c) => (
+          <select key={c.key} className="dt-filter" aria-label={c.label} value={filters[c.key] ?? ''} onChange={(e) => setFilters((f) => ({ ...f, [c.key]: e.target.value }))}>
+            <option value="">{`${c.label}: ${t('common.all')}`}</option>
+            {[...new Set(all.map((r) => String(raw(r, c) ?? '')).filter(Boolean))].sort().map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+        ))}
         {paged && all.length > 10 && (
           <label className="dt-search">
             <Search aria-hidden />
@@ -469,8 +487,8 @@ export function DataTable<T extends object>({ rows, columns: cols, title, empty,
                     <span className="ico">
                       <Inbox aria-hidden />
                     </span>
-                    <span>{q && all.length ? t('table.noMatch', { q }) : emptyState.message}</span>
-                    {!q && emptyState.action && (
+                    <span>{q.trim() && all.length ? t('table.noMatch', { q: q.trim() }) : filtering && all.length ? t('table.noFilterMatch') : emptyState.message}</span>
+                    {!filtering && emptyState.action && (
                       <button type="button" className="btn primary small no-print" onClick={emptyState.action.onClick}>
                         <Plus aria-hidden />
                         {emptyState.action.label}

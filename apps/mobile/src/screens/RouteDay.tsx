@@ -4,7 +4,7 @@ import { Linking, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { MapPins } from '../MapPins';
 import { getPosition, useSession } from '../session';
 import { getVisitOrder, lastKnownHere, onVisitOrder, orderDay, setVisitOrder, type VisitOrder } from '../smart';
-import { routeDay, subscribe, type DayCustomer, type RouteDay as Day } from '../store';
+import { routeDay, subscribe, type DayCustomer, type PinStatus, type RouteDay as Day } from '../store';
 import { AmountPair, Badge, Btn, C, Card, Chevron, Chips, Icon, IconButton, Notice, PIN_COLORS, Progress, R, SP, Screen, SearchBar, dateIN, money, s, useLayout, useNav } from '../ui';
 import { EmptyState, FailureState, LoadingState, NoSearchResults, useSlowLoad } from '../states';
 import { SyncBar } from './Home';
@@ -28,7 +28,7 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
   const [view, setView] = useState<'map' | 'list'>('list');
   const [refreshing, setRefreshing] = useState(false);
   const [me, setMe] = useState<{ lat: number; lng: number } | null>(null);
-  const [show, setShow] = useState<'all' | 'pending'>('all');
+  const [show, setShow] = useState<'all' | PinStatus>('all');
   const [q, setQ] = useState('');
   const { can } = useSession();
   // Route order or smart order (remembered on the phone); smart order needs no connection and never waits for GPS.
@@ -71,7 +71,7 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
   const needle = q.trim().toLowerCase();
   const digits = needle.replace(/\D/g, '');
   const shown = ordered.list.filter(
-    (c) => (show === 'all' || c.pin === 'PENDING') && (!needle || c.name.toLowerCase().includes(needle) || (digits.length >= 3 && c.phone.replace(/\D/g, '').includes(digits))),
+    (c) => (show === 'all' || c.pin === show) && (!needle || c.name.toLowerCase().includes(needle) || (digits.length >= 3 && c.phone.replace(/\D/g, '').includes(digits))),
   );
 
   return (
@@ -117,7 +117,14 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
         <SyncBar />
         {/* Find first: the search box and the "not visited" filter sit above the list, where the thumb is. */}
         <SearchBar value={q} onChangeText={setQ} placeholder={compact ? t('common.search') : t('mobile.filterRoute')} label={t('mobile.filterRoute')} />
-        <Chips value={show} onChange={setShow} items={[{ key: 'all', label: `${t('common.all')} (${list.length})` }, { key: 'pending', label: `${t('mobile.pendingOnly')} (${list.filter((c) => c.pin === 'PENDING').length})` }]} />
+        {/* Status filter: one tap to see only the customers still to visit, or only the missed ones. */}
+        <Chips value={show} onChange={setShow} items={[
+          { key: 'all', label: `${t('common.all')} (${list.length})` },
+          { key: 'PENDING', label: `${t('mobile.pins.PENDING')} (${list.filter((c) => c.pin === 'PENDING').length})` },
+          { key: 'PARTIAL', label: `${t('mobile.pins.PARTIAL')} (${list.filter((c) => c.pin === 'PARTIAL').length})` },
+          { key: 'MISSED', label: `${t('mobile.pins.MISSED')} (${list.filter((c) => c.pin === 'MISSED').length})` },
+          { key: 'PAID', label: `${t('mobile.pins.PAID')} (${list.filter((c) => c.pin === 'PAID').length})` },
+        ]} />
         {/* List or map, and route or smart order, side by side (stacked on a narrow phone with long labels). */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: SP.sm }}>
           <View style={{ flexGrow: 1, flexBasis: 136 }}>
@@ -147,7 +154,7 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
         {shown.length === 0 &&
           (needle ? (
             <NoSearchResults query={q.trim()} onClear={() => setQ('')} />
-          ) : show === 'pending' ? (
+          ) : show === 'PENDING' ? (
             <EmptyState icon="checkmark-done" title={t('mobile.routeDone')} />
           ) : (
             <EmptyState icon="people-outline" title={t('common.noData')} help={t('states.empty.help')} />

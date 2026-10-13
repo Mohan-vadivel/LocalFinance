@@ -1640,7 +1640,8 @@
     "last": "Last page",
     "search": "Search in this table",
     "sort": "Sort by this column",
-    "noMatch": "Nothing matches \"{{q}}\""
+    "noMatch": "Nothing matches \"{{q}}\"",
+    "noFilterMatch": "Nothing matches the filters"
   },
   "states": {
     "actions": {
