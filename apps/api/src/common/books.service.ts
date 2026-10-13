@@ -173,3 +173,13 @@ export function positionOf(loan: Loan & { instalments: Instalment[] }, asOf = to
   const charged = loan.status === 'ACTIVE' ? penaltyCharged(states, penaltyRule(loan), asOf) : loan.penaltyPaid + loan.penaltyWaived;
   return loanPosition(states, { charged, paid: loan.penaltyPaid, waived: loan.penaltyWaived }, asOf);
 }
+
+/**
+ * What one active loan owes on a day: the instalments due that day, and what is overdue. The dashboard and the area
+ * summary both add these up, so they always agree.
+ */
+export function dayFiguresOf(loan: Loan & { instalments: Instalment[] }, today = todayIST()) {
+  const p = positionOf(loan, today);
+  const dueToday = loan.instalments.filter((i) => i.dueDate === today).reduce((s, i) => s + i.principalDue + i.interestDue, 0);
+  return { dueToday, overdue: p.overdue, outstanding: p.totalOutstanding, daysPastDue: p.daysPastDue };
+}

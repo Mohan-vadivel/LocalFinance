@@ -1235,3 +1235,123 @@ describe('routes with several areas', () => {
     assert.deepEqual(again.locations.map((l) => l.name), ['Anna Nagar'], 'a second start adds nothing');
   });
 });
+
+describe('setup view, area tracking and area rules', () => {
+  let demoBranch, annaArea, kkArea, annaRoute, bareArea, dormantArea, dormantCustomer, dormantRoute;
+
+  test('the setup view lists each branch, its areas and the routes in each area, with counts that match the lists', async () => {
+    const tree = await ok(api('GET', '/structure/tree', { token: owner }));
+    demoBranch = tree.branches.find((b) => b.code === 'MDU');
+    assert.ok(demoBranch, 'the demo branch is listed');
+    annaArea = demoBranch.areas.find((a) => a.name === 'Anna Nagar');
+    kkArea = demoBranch.areas.find((a) => a.name === 'KK Nagar');
+    assert.ok(annaArea && kkArea);
+    annaRoute = annaArea.routes.find((r) => r.name === 'Anna Nagar Daily 1').id;
+    // A route that covers two areas is listed under each of them.
+    assert.ok(annaArea.routes.some((r) => r.name === 'Two Areas Route'));
+    assert.ok(kkArea.routes.some((r) => r.name === 'Two Areas Route'));
+    // The counts are the same as the lists the other endpoints give.
+    const routes = await ok(api('GET', '/routes', { token: owner }));
+    for (const area of demoBranch.areas) {
+      const listed = await ok(api('GET', `/routes?locationId=${area.id}`, { token: owner }));
+      assert.equal(area.routeCount, listed.length, `${area.name}: routes`);
+      const active = await ok(api('GET', `/customers?locationId=${area.id}&status=ACTIVE`, { token: owner }));
+      assert.equal(area.customerCount, active.total, `${area.name}: customers`);
+      for (const r of area.routes) assert.equal(r.customerCount, routes.find((x) => x.id === r.id).customerCount, `${r.name}: customers`);
+    }
+    assert.equal(tree.branches.length >= 2, true, 'the owner sees every branch');
+  });
+
+  test('the setup view and area tracking show only the caller\'s branches; agents cannot open either', async () => {
+    const mine = await ok(api('GET', '/structure/tree', { token: manager }));
+    assert.deepEqual(mine.branches.map((b) => b.code), ['MDU']);
+    assert.equal((await api('GET', '/structure/tree', { token: agent })).status, 403);
+    assert.equal((await api('GET', '/structure/areas-summary', { token: agent })).status, 403);
+    assert.equal((await api('GET', '/structure/areas-summary', { token: manager })).status, 200);
+    const sum = await ok(api('GET', '/structure/areas-summary', { token: manager }));
+    assert.ok(sum.areas.every((a) => a.branchName === 'Madurai'), 'a manager sees only the Madurai areas');
+  });
+
+  test('the area summary adds up to the dashboard, for the owner and for a branch manager', async () => {
+    for (const [who, token] of [['owner', owner], ['manager', manager]]) {
+      const dash = await ok(api('GET', '/dashboard', { token }));
+      const sum = await ok(api('GET', '/structure/areas-summary', { token }));
+      assert.equal(sum.date, dash.date, `${who}: date`);
+      assert.equal(sum.totals.collectedToday, dash.collectedToday, `${who}: collected today`);
+      assert.equal(sum.totals.dueToday, dash.dueToday, `${who}: due today`);
+      assert.equal(sum.totals.overdue, dash.overdueAtStart, `${who}: overdue`);
+      assert.equal(sum.totals.activeLoans, dash.activeLoans, `${who}: active loans`);
+      if (who === 'owner') assert.ok(dash.activeLoans > 0, 'the demo business has active loans to add up');
+    }
+  });
+
+  test('an agent adds a customer by choosing the area, then the route, and sees only that area\'s routes', async () => {
+    const kkRoutes = await ok(api('GET', `/routes?branchId=${demoBranch.id}&locationId=${kkArea.id}`, { token: agent }));
+    assert.ok(kkRoutes.length > 0 && kkRoutes.every((r) => r.locations.some((l) => l.id === kkArea.id)));
+    assert.ok(!kkRoutes.some((r) => r.name === 'Anna Nagar Daily 1'), 'the Anna Nagar route is not offered for KK Nagar');
+    const c = await ok(api('POST', '/customers', { token: agent, body: { name: 'Area Agent Customer', phone: '9123400001', address: '12 Area Street', locationId: annaArea.id, routeId: annaRoute } }));
+    assert.equal(c.locationId, annaArea.id);
+    assert.equal(c.routeId, annaRoute);
+    // A route outside the chosen area is refused, whichever way round.
+    const outside = await api('POST', '/customers', { token: agent, body: { name: 'Wrong Area', phone: '9123400005', address: '12 Area Street', locationId: kkArea.id, routeId: annaRoute } });
+    assert.equal(outside.status, 400);
+    assert.equal(outside.data.message, 'The route is not in the chosen location');
+  });
+
+  test('an area with no route, and a route with no customers, are flagged on the setup view', async () => {
+    bareArea = await ok(api('POST', '/locations', { token: owner, body: { branchId: demoBranch.id, name: 'Bare Area' } }));
+    let tree = await ok(api('GET', '/structure/tree', { token: owner }));
+    let node = tree.branches.find((b) => b.code === 'MDU').areas.find((a) => a.id === bareArea.id);
+    assert.equal(node.noRoute, true);
+    assert.ok(tree.warnings.areasWithoutRoute >= 1);
+    const empty = await ok(api('POST', '/routes', { token: owner, body: { locationIds: [bareArea.id], name: 'Empty Route', collectionDays: [1] } }));
+    tree = await ok(api('GET', '/structure/tree', { token: owner }));
+    node = tree.branches.find((b) => b.code === 'MDU').areas.find((a) => a.id === bareArea.id);
+    assert.equal(node.noRoute, false);
+    assert.equal(node.routes.find((r) => r.id === empty.id).noCustomers, true);
+    assert.ok(tree.warnings.routesWithoutCustomers >= 1);
+  });
+
+  test('an inactive area takes no new customers or routes; what it has stays, and the summary keeps it marked inactive', async () => {
+    dormantArea = await ok(api('POST', '/locations', { token: owner, body: { branchId: demoBranch.id, name: 'Dormant Area' } }));
+    dormantCustomer = await ok(api('POST', '/customers', { token: owner, body: { name: 'Dormant Customer', phone: '9123400003', address: '14 Dormant Street', locationId: dormantArea.id } }));
+    dormantRoute = await ok(api('POST', '/routes', { token: owner, body: { locationIds: [dormantArea.id], name: 'Dormant Route', collectionDays: [1] } }));
+    await ok(api('PUT', `/locations/${dormantArea.id}`, { token: owner, body: { branchId: demoBranch.id, name: 'Dormant Area', active: false } }));
+    const late = await api('POST', '/customers', { token: owner, body: { name: 'Late Customer', phone: '9123400002', address: '13 Dormant Street', locationId: dormantArea.id } });
+    assert.equal(late.status, 400);
+    assert.equal(late.data.code, 'structure.areaInactive');
+    const newRoute = await api('POST', '/routes', { token: owner, body: { locationIds: [annaArea.id, dormantArea.id], name: 'Dormant Mix', collectionDays: [1] } });
+    assert.equal(newRoute.status, 400);
+    assert.equal(newRoute.data.code, 'structure.areaInactive');
+    // Its customer can still be edited, and its route keeps the area it already covers.
+    await ok(api('PUT', `/customers/${dormantCustomer.id}`, { token: owner, body: { name: 'Dormant Customer', phone: '9123400003', address: '14 Dormant Street', locationId: dormantArea.id } }));
+    await ok(api('PUT', `/routes/${dormantRoute.id}`, { token: owner, body: { locationIds: [dormantArea.id], name: 'Dormant Route', collectionDays: [1] } }));
+    const sum = await ok(api('GET', '/structure/areas-summary', { token: owner }));
+    const row = sum.areas.find((a) => a.id === dormantArea.id);
+    assert.equal(row.active, false);
+    assert.equal(row.customerCount, 1, 'the old customer is still counted');
+    const tree = await ok(api('GET', '/structure/tree', { token: owner }));
+    assert.equal(tree.branches.find((b) => b.code === 'MDU').areas.find((a) => a.id === dormantArea.id).active, false);
+    assert.equal((await ok(api('GET', `/customers/${dormantCustomer.id}`, { token: owner }))).locationId, dormantArea.id);
+    // Reactivated, it takes customers again.
+    await ok(api('PUT', `/locations/${dormantArea.id}`, { token: owner, body: { branchId: demoBranch.id, name: 'Dormant Area', active: true } }));
+    await ok(api('POST', '/customers', { token: owner, body: { name: 'Back Customer', phone: '9123400006', address: '15 Dormant Street', locationId: dormantArea.id } }));
+  });
+
+  test('another business sees and changes none of these areas, routes or counts', async () => {
+    await ok(api('POST', '/platform/tenants', { token: superAdmin, body: { name: 'Rival Setup', ownerName: 'Rival Owner', ownerPhone: '9113333333', ownerPassword: 'Rival@1234' } }));
+    const rival = await login('9113333333', 'Rival@1234');
+    const rt = await ok(api('GET', '/structure/tree', { token: rival }));
+    const seen = JSON.stringify(rt);
+    assert.ok(!seen.includes(annaArea.id) && !seen.includes(dormantArea.id) && !seen.includes(demoBranch.id), 'the tree shows none of the demo business');
+    assert.equal((await ok(api('GET', '/structure/areas-summary', { token: rival }))).areas.length, 0);
+    assert.equal((await ok(api('GET', `/routes?locationId=${annaArea.id}`, { token: rival }))).length, 0);
+    assert.equal((await api('PUT', `/locations/${dormantArea.id}`, { token: rival, body: { branchId: demoBranch.id, name: 'Taken', active: true } })).status, 404);
+    assert.equal((await api('POST', '/customers', { token: rival, body: { name: 'Rival Customer', phone: '9123400004', address: '1 Rival Street', locationId: annaArea.id, routeId: annaRoute } })).status, 404);
+    assert.equal((await api('POST', '/routes', { token: rival, body: { locationIds: [annaArea.id], name: 'Rival Route', collectionDays: [1] } })).status, 404);
+    assert.equal((await api('PUT', `/routes/${annaRoute}`, { token: rival, body: { locationIds: [annaArea.id], name: 'Hijack', collectionDays: [1] } })).status, 404);
+    const after = await ok(api('GET', '/structure/areas-summary', { token: owner }));
+    assert.equal(after.areas.find((a) => a.id === annaArea.id).name, 'Anna Nagar');
+    assert.equal(after.areas.find((a) => a.id === dormantArea.id).active, true, 'the reactivated area is back');
+  });
+});

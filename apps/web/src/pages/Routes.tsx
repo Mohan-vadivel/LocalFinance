@@ -9,7 +9,7 @@ import { del, get, post, put } from '../lib/api';
 import { dateIN, today } from '../lib/format';
 import { useLoad } from '../lib/hooks';
 
-interface Area { id: string; name: string }
+interface Area { id: string; name: string; active?: boolean }
 
 interface Route {
   id: string;
@@ -37,7 +37,8 @@ function AreasPicker({ branchId, value, onChange }: { branchId: string; value: s
   return (
     <div>
       <div className="row">
-        {(areas.data ?? []).map((a) => {
+        {/* Inactive areas take no new routes; an area the route already covers stays ticked. */}
+        {(areas.data ?? []).filter((a) => a.active !== false || value.includes(a.id)).map((a) => {
           const i = value.indexOf(a.id);
           return (
             <label key={a.id} className="field inline">

@@ -2,7 +2,7 @@ import { Controller, Get, Injectable, Query } from '@nestjs/common';
 import { ageingBucket, AGEING_BUCKETS, addDays, addMonthsClamped, diffDays, weekday, periodRange, reportFilterSchema, todayIST, type Permission, type ReportFilter, type SummaryPeriod } from '@localfinance/shared';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { positionOf } from '../common/books.service';
+import { dayFiguresOf, positionOf } from '../common/books.service';
 import { CurrentCtx, Perm, type Ctx } from '../common/context';
 import { bad, notFound } from '../common/errors';
 import { PrismaService } from '../common/prisma.service';
@@ -864,10 +864,9 @@ export class DashboardService {
     let portfolio = 0;
     const ageing = AGEING_BUCKETS.map((b) => ({ bucket: b.key, loans: 0, amount: 0 }));
     for (const l of loans) {
-      const p = positionOf(l, today);
-      portfolio += p.totalOutstanding;
-      const todayDue = l.instalments.filter((i) => i.dueDate === today).reduce((s, i) => s + i.principalDue + i.interestDue, 0);
-      dueToday += todayDue;
+      const p = dayFiguresOf(l, today);
+      portfolio += p.outstanding;
+      dueToday += p.dueToday;
       overdueStart += p.overdue;
       const k = ageingBucket(p.daysPastDue);
       if (k) {

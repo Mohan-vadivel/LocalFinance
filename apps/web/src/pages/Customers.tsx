@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Eye, HandCoins, MessageCircle, Phone, Printer } from 'lucide-react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { LANGUAGES } from '@localfinance/shared';
 import { ReadIdCard, ReminderButton, RiskBadge, RiskReasons, type RiskReason } from '../components/ai';
 import { MapView } from '../components/MapView';
@@ -225,7 +225,9 @@ export default function Customers() {
   // Searches as you type, once typing pauses.
   const search = useDebounced(q.trim());
   const [branchId, setBranchId] = useState('');
-  const [locationId, setLocationId] = useState('');
+  // Opened from Area tracking with ?locationId=, the list starts on that area.
+  const [params] = useSearchParams();
+  const [locationId, setLocationId] = useState(params.get('locationId') ?? '');
   const [routeId, setRouteId] = useState('');
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);

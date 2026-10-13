@@ -78,10 +78,12 @@ export class CustomersService {
     };
   }
 
-  private async resolvePlace(ctx: Ctx, input: z.infer<typeof customerSchema>) {
+  private async resolvePlace(ctx: Ctx, input: z.infer<typeof customerSchema>, currentLocationId?: string) {
     const loc = await this.prisma.location.findFirst({ where: { id: input.locationId, tenantId: ctx.tenantId } });
     if (!loc) throw notFound('Location');
     assertBranch(ctx, loc.branchId);
+    // An inactive area takes no new customers; a customer who is already in it can be edited.
+    if (!loc.active && loc.id !== currentLocationId) throw bad('This area is inactive. Choose an active area.', 'structure.areaInactive');
     if (input.routeId) {
       const r = await this.prisma.route.findFirst({ where: { id: input.routeId, tenantId: ctx.tenantId } });
       if (!r) throw notFound('Route');
@@ -141,7 +143,7 @@ export class CustomersService {
     const before = await this.prisma.customer.findFirst({ where: { id, tenantId: ctx.tenantId } });
     if (!before) throw notFound('Customer');
     assertBranch(ctx, before.branchId);
-    const loc = await this.resolvePlace(ctx, input);
+    const loc = await this.resolvePlace(ctx, input, before.locationId);
     const dup = await this.findDuplicate(ctx, input.phone, input.idNumber, id);
     if (dup) throw conflict(`A customer with this phone or ID already exists: ${dup.name} (${dup.code})`, 'customerMod.duplicate');
     const { clientRef: _ignored, ...data } = input;

@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Text, View } from 'react-native';
 import { LANGUAGES } from '@localfinance/shared';
 import { ApiError, get, newRef, post, put } from '../api';
-import { getPosition } from '../session';
+import { getPosition, useSession } from '../session';
 import { cachedRouteDay, cachedRoutes, myRoutes, type DayCustomer, type MyRoute } from '../store';
 import { Amount, Avatar, Badge, Btn, C, Card, Chevron, Chips, ErrorText, Field, Icon, Notice, Row, SP, Screen, SearchBar, dateIN, money, s, toPaise, useLayout, useNav } from '../ui';
 import { ActionError, EmptyState, FailureState, FormProblems, LoadingState, NoSearchResults, SkeletonList, SuccessState, fieldError, useRequired, useSlowLoad, type Problem } from '../states';
@@ -12,19 +12,91 @@ import { ActionError, EmptyState, FailureState, FormProblems, LoadingState, NoSe
 // =====================================================================
 // Add customer (with GPS pin)
 // =====================================================================
+/** An area the agent can put a customer in, and a route that covers it (the route's own areas are listed too). */
+interface PickArea { id: string; name: string; active?: boolean }
+interface PickRoute { id: string; name: string; active?: boolean; locations?: { id: string; name: string }[] }
+/** The areas the given routes cover, for when the server cannot be reached. */
+const areasOf = (rs: MyRoute[]): PickArea[] => {
+  const seen = new Map<string, PickArea>();
+  for (const r of rs) for (const l of r.locations?.length ? r.locations : [{ id: r.locationId, name: r.location }]) seen.set(l.id, { id: l.id, name: l.name, active: true });
+  return [...seen.values()];
+};
+
+/**
+ * Branch, then area, then route. The area starts as the agent's own route's area and the route list is only the
+ * chosen area's routes. Opened with the routes already on screen, those are used first; the lists come from the
+ * server and, offline, from the routes the phone kept.
+ */
 export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
   const { t } = useTranslation();
   const nav = useNav();
-  // Opened from the side menu there is no route list passed in, so read this agent's routes (cached offline).
-  const [routes, setRoutes] = useState<MyRoute[]>(given);
+  const { profile } = useSession();
+  const [branchId, setBranchId] = useState(given[0]?.branchId ?? profile?.branches[0]?.id ?? '');
+  const [areaId, setAreaId] = useState(given[0]?.locationId ?? '');
   const [routeId, setRouteId] = useState(given[0]?.id ?? '');
+  const [areas, setAreas] = useState<PickArea[]>([]);
+  const [routes, setRoutes] = useState<PickRoute[]>(given);
+  // Opened from the side menu there is no route list passed in: the agent's own route gives the default branch and area.
   useEffect(() => {
     if (given.length) return;
     void myRoutes().then((r) => {
-      setRoutes(r.data ?? []);
-      setRouteId((cur) => cur || (r.data?.[0]?.id ?? ''));
+      const first = r.data?.[0];
+      if (!first) return;
+      setBranchId((cur) => cur || first.branchId);
+      setAreaId((cur) => cur || first.locationId);
+      setRouteId((cur) => cur || first.id);
     });
   }, [given.length]);
+  // Areas of the chosen branch. Offline, the areas the phone's own routes cover.
+  useEffect(() => {
+    if (!branchId) return;
+    let live = true;
+    get<PickArea[]>('/locations', { branchId })
+      .then((list) => {
+        if (live) setAreas(list.filter((a) => a.active !== false));
+      })
+      .catch(() =>
+        myRoutes().then((r) => {
+          if (live) setAreas(areasOf(r.data ?? []));
+        }),
+      );
+    return () => {
+      live = false;
+    };
+  }, [branchId]);
+  // Once the branch's areas are known, the chosen area must be one of them; otherwise the first one is used.
+  useEffect(() => {
+    if (areas.length && !areas.some((a) => a.id === areaId)) setAreaId(areas[0].id);
+  }, [areas, areaId]);
+  // Routes of the chosen area only. Offline, the phone's own routes that cover it.
+  useEffect(() => {
+    if (!areaId) return;
+    let live = true;
+    const apply = (list: PickRoute[]) => {
+      if (!live) return;
+      setRoutes(list);
+      setRouteId((cur) => (list.some((r) => r.id === cur) ? cur : (list[0]?.id ?? '')));
+    };
+    get<PickRoute[]>('/routes', { branchId, locationId: areaId })
+      .then((list) => apply(list.filter((r) => r.active !== false)))
+      .catch(() =>
+        myRoutes().then((r) => apply((r.data ?? []).filter((x) => x.locations?.some((l) => l.id === areaId) || x.locationId === areaId))),
+      );
+    return () => {
+      live = false;
+    };
+  }, [areaId, branchId]);
+  const chooseBranch = (id: string) => {
+    setBranchId(id);
+    setAreaId('');
+    setRouteId('');
+    setRoutes([]);
+  };
+  const chooseArea = (id: string) => {
+    setAreaId(id);
+    setRouteId('');
+  };
+  const areaName = areas.find((a) => a.id === areaId)?.name;
   const [f, setF] = useState({ name: '', phone: '', altPhone: '', address: '', landmark: '', idType: 'AADHAAR', idNumber: '', occupation: '', monthlyIncome: '', language: 'ta', guarantorName: '', guarantorPhone: '' });
   const [gps, setGps] = useState<{ lat: number; lng: number; accuracy: number | null } | null>(null);
   const [locating, setLocating] = useState(false);
@@ -40,6 +112,7 @@ export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
   const set = (k: keyof typeof f) => (v: string) => setF({ ...f, [k]: v });
   const route = routes.find((r) => r.id === routeId);
   const problems: Problem[] = [];
+  if (!areaId) problems.push({ text: t('mobile.chooseArea') });
   if (!route) problems.push({ text: t('mobile.chooseRoute') });
   if (!f.name) problems.push({ field: 'name', text: req(t('common.name')) });
   if (!f.phone) problems.push({ field: 'phone', text: req(t('common.phone')) });
@@ -75,7 +148,8 @@ export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
         occupation: f.occupation || null,
         monthlyIncome: f.monthlyIncome ? toPaise(f.monthlyIncome) : null,
         language: f.language,
-        locationId: route.locationId,
+        // The area the agent picked; it is one of the route's areas (the server checks).
+        locationId: areaId,
         routeId: route.id,
         guarantorName: f.guarantorName || null,
         guarantorPhone: f.guarantorPhone || null,
@@ -106,8 +180,16 @@ export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
       <FormProblems problems={shownProblems} />
       <ReadIdCard onRead={(x) => setF((cur) => ({ ...cur, name: x.name || cur.name, idType: x.idType && ID_TYPES.includes(x.idType) ? x.idType : cur.idType, idNumber: x.idNumber || cur.idNumber, address: x.address || cur.address }))} />
       <Card>
+        {(profile?.branches.length ?? 0) > 1 && (
+          <>
+            <Text style={s.h2}>{t('common.branch')}</Text>
+            <Chips value={branchId} onChange={chooseBranch} items={(profile?.branches ?? []).map((b) => ({ key: b.id, label: b.name }))} />
+          </>
+        )}
+        <Text style={s.h2}>{t('areas.area')}</Text>
+        {areas.length ? <Chips value={areaId} onChange={chooseArea} items={areas.map((a) => ({ key: a.id, label: a.name }))} /> : <Notice tone="warn" text={t('areas.none')} />}
         <Text style={s.h2}>{t('common.route')}</Text>
-        <Chips value={routeId} onChange={setRouteId} items={routes.map((r) => ({ key: r.id, label: r.name }))} />
+        {routes.length ? <Chips value={routeId} onChange={setRouteId} items={routes.map((r) => ({ key: r.id, label: r.name }))} /> : <Notice tone="warn" text={t('mobile.noRouteInArea')} />}
         <View style={{ height: 1, backgroundColor: C.line, marginBottom: SP.lg }} />
         <Field label={t('common.name')} value={f.name} onChangeText={set('name')} error={fieldError(shownProblems, 'name')} />
         <Field label={t('common.phone')} value={f.phone} onChangeText={set('phone')} keyboardType="phone-pad" error={fieldError(shownProblems, 'phone')} />

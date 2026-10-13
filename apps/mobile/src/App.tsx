@@ -7,6 +7,7 @@ import { loadLanguage } from './i18n';
 import { PaperIcon, paperTheme } from './theme';
 import Customer from './screens/Customer';
 import Daybook from './screens/Daybook';
+import { AreaDetail, Areas } from './screens/Areas';
 import { AddCustomer, LoanRequest, MyRequests, Search } from './screens/Forms';
 import Home from './screens/Home';
 import { MenuProvider } from './Menu';
@@ -33,6 +34,8 @@ const NEEDS: Record<string, string[]> = {
   LoanRequest: ['loan.request'],
   MyRequests: ['loan.request'],
   Daybook: ['daybook.request', 'daybook.approve'],
+  Areas: ['report.view'],
+  AreaDetail: ['report.view'],
 };
 
 function Screens({ route }: { route: Route }) {
@@ -67,6 +70,10 @@ function Screens({ route }: { route: Route }) {
       return <Summary />;
     case 'CollectionReport':
       return <CollectionReport />;
+    case 'Areas':
+      return <Areas />;
+    case 'AreaDetail':
+      return <AreaDetail areaId={p.areaId as string} name={p.name as string} />;
     case 'Manager':
       return <Manager />;
     case 'Settings':

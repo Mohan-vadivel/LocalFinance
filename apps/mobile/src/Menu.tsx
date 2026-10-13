@@ -83,6 +83,7 @@ function Drawer({ anim, close }: { anim: Animated.Value; close: () => void }) {
     { key: 'Summary', icon: 'today-outline', label: t('mobile.daySummary'), onPress: () => go('Summary') },
     { key: 'CollectionReport', icon: 'bar-chart-outline', label: t('collSummary.title'), onPress: () => go('CollectionReport') },
     { key: 'Manager', icon: 'people-outline', label: t('mobile.managerView'), onPress: () => go('Manager'), show: can('report.view', 'route.manage') },
+    { key: 'Areas', icon: 'map-outline', label: t('areas.menu'), onPress: () => go('Areas'), show: can('report.view') },
   ];
   const account: Item[] = [
     { key: 'Settings', icon: 'settings-outline', label: t('mobile.settings.title'), onPress: () => go('Settings') },

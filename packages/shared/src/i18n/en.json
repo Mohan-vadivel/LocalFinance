@@ -107,7 +107,9 @@
     "salaries": "Salaries",
     "support": "Help and support",
     "plan": "Plan and renewal",
-    "platformSettings": "Platform settings"
+    "platformSettings": "Platform settings",
+    "setup": "Setup",
+    "areas": "Area tracking"
   },
   "roles": {
     "SUPER_ADMIN": "Super Admin",
@@ -631,7 +633,9 @@
     "addNote": "Add a note",
     "searchStart": "Type at least 2 letters of a name, or a phone or loan number.",
     "clearSearch": "Clear search",
-    "branchToday": "Branch today"
+    "branchToday": "Branch today",
+    "chooseArea": "Choose an area",
+    "noRouteInArea": "No route in this area yet. Ask your manager to add one."
   },
   "fund": {
     "title": "Funds",
@@ -1715,5 +1719,41 @@
         "success": "Success"
       }
     }
+  },
+  "structure": {
+    "title": "Setup",
+    "intro": "Branches, areas and routes in one place. Add or edit each level from here.",
+    "addArea": "Add area",
+    "addRoute": "Add route",
+    "counts": "{{areas}} areas · {{routes}} routes · {{customers}} customers",
+    "noRoute": "No route covers this area yet",
+    "noCustomers": "No customers on this route yet",
+    "warnings": "{{areas}} active areas have no route. {{routes}} active routes have no customers.",
+    "noWarnings": "Nothing needs attention.",
+    "inactive": "Inactive",
+    "inactiveHint": "Inactive areas are hidden when adding customers and routes. Their history stays.",
+    "noAreas": "No areas in this branch yet.",
+    "areaInactive": "This area is inactive. Choose an active area.",
+    "tracking": "Area tracking"
+  },
+  "areas": {
+    "title": "Area tracking",
+    "intro": "Each area with its routes, customers and today's money. Tap an area to see its routes and customers.",
+    "area": "Area",
+    "routes": "Routes",
+    "customers": "Customers",
+    "activeLoans": "Active loans",
+    "collectedToday": "Collected today",
+    "dueToday": "Due today",
+    "overdue": "Overdue",
+    "total": "Total",
+    "none": "No areas yet.",
+    "routesIn": "Routes in {{name}}",
+    "customersIn": "Customers in {{name}}",
+    "noRoutes": "No route covers this area yet.",
+    "noCustomers": "No customers in this area yet.",
+    "openAll": "Open all customers",
+    "showing": "Showing {{count}} of {{total}}",
+    "menu": "Areas"
   }
 }
