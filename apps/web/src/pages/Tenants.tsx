@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Ban, CircleCheck, Eye, Pencil } from 'lucide-react';
+import { diffDays } from '@localfinance/shared';
 import { DataTable, ErrorBox, Field, FormModal, Stat, statusTone, Badge, RowActions } from '../components/ui';
 import { get, patch, post, setSupportTenant } from '../lib/api';
-import { dateIN } from '../lib/format';
+import { dateIN, today } from '../lib/format';
 import { useLoad } from '../lib/hooks';
 
 interface Tenant {
@@ -11,6 +12,7 @@ interface Tenant {
   name: string;
   businessId: string | null;
   plan: string;
+  planExpiresOn: string | null;
   status: string;
   maxBranches: number;
   maxStaff: number;
@@ -26,7 +28,7 @@ export default function Tenants() {
   const stats = useLoad(() => get<Record<string, number>>('/platform/tenants/stats'), []);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Tenant | null>(null);
-  const [f, setF] = useState({ name: '', businessId: '', ownerName: '', ownerPhone: '', ownerEmail: '', ownerPassword: '', plan: 'STANDARD', maxBranches: 10, maxStaff: 100, maxActiveLoans: 50000 });
+  const [f, setF] = useState({ name: '', businessId: '', ownerName: '', ownerPhone: '', ownerEmail: '', ownerPassword: '', plan: 'STANDARD', planExpiresOn: '', maxBranches: 10, maxStaff: 100, maxActiveLoans: 50000 });
   const [error, setError] = useState<unknown>(null);
 
   const setStatus = async (tn: Tenant, status: string) => {
@@ -66,6 +68,15 @@ export default function Tenants() {
           columns={[
             { key: 'name', label: t('common.name') },
             { key: 'plan', label: t('tenant.plan') },
+            {
+              key: 'planExpiresOn',
+              label: t('tenant.planExpiresOn'),
+              value: (r) => dateIN(r.planExpiresOn),
+              render: (r) => {
+                const left = r.planExpiresOn ? diffDays(r.planExpiresOn, today()) : null;
+                return left === null ? '-' : <Badge tone={left < 0 ? 'danger' : left < 15 ? 'warn' : undefined}>{dateIN(r.planExpiresOn)}</Badge>;
+              },
+            },
             { key: 'status', label: t('common.status'), render: (r) => <Badge tone={statusTone(r.status)}>{t(`tenant.statuses.${r.status}`)}</Badge> },
             { key: 'branches', label: t('nav.branches'), value: (r) => `${r.usage.branches}/${r.maxBranches}` },
             { key: 'staff', label: t('nav.staff'), value: (r) => `${r.usage.staff}/${r.maxStaff}` },
@@ -95,7 +106,7 @@ export default function Tenants() {
           title={t('tenant.new')}
           onClose={() => setCreating(false)}
           onSubmit={async () => {
-            await post('/platform/tenants', { ...f, businessId: f.businessId || undefined, ownerEmail: f.ownerEmail || undefined });
+            await post('/platform/tenants', { ...f, businessId: f.businessId || undefined, ownerEmail: f.ownerEmail || undefined, planExpiresOn: f.planExpiresOn || null });
             await list.reload();
           }}
         >
@@ -106,6 +117,7 @@ export default function Tenants() {
           <Field label={t('tenant.ownerEmail')}><input value={f.ownerEmail} onChange={(e) => setF({ ...f, ownerEmail: e.target.value })} /></Field>
           <Field label={t('tenant.ownerPassword')}><input type="password" value={f.ownerPassword} onChange={(e) => setF({ ...f, ownerPassword: e.target.value })} /></Field>
           <Field label={t('tenant.plan')}><input value={f.plan} onChange={(e) => setF({ ...f, plan: e.target.value })} /></Field>
+          <Field label={t('tenant.planExpiresOn')}><input type="date" value={f.planExpiresOn} onChange={(e) => setF({ ...f, planExpiresOn: e.target.value })} /></Field>
           <Field label={t('tenant.maxBranches')}><input type="number" value={f.maxBranches} onChange={(e) => setF({ ...f, maxBranches: Number(e.target.value) })} /></Field>
           <Field label={t('tenant.maxStaff')}><input type="number" value={f.maxStaff} onChange={(e) => setF({ ...f, maxStaff: Number(e.target.value) })} /></Field>
           <Field label={t('tenant.maxActiveLoans')}><input type="number" value={f.maxActiveLoans} onChange={(e) => setF({ ...f, maxActiveLoans: Number(e.target.value) })} /></Field>
@@ -124,18 +136,20 @@ export default function Tenants() {
 
 function TenantEdit({ tenant, onClose, onSaved }: { tenant: Tenant; onClose: () => void; onSaved: () => void }) {
   const { t } = useTranslation();
-  const [f, setF] = useState({ name: tenant.name, plan: tenant.plan, maxBranches: tenant.maxBranches, maxStaff: tenant.maxStaff, maxActiveLoans: tenant.maxActiveLoans });
+  const [f, setF] = useState({ name: tenant.name, plan: tenant.plan, planExpiresOn: tenant.planExpiresOn ?? '', maxBranches: tenant.maxBranches, maxStaff: tenant.maxStaff, maxActiveLoans: tenant.maxActiveLoans });
   return (
     <FormModal
       title={`${t('common.edit')}: ${tenant.name}`}
       onClose={onClose}
       onSubmit={async () => {
-        await patch(`/platform/tenants/${tenant.id}`, f);
+        await patch(`/platform/tenants/${tenant.id}`, { ...f, planExpiresOn: f.planExpiresOn || null });
         onSaved();
       }}
     >
       <Field label={t('common.name')}><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
       <Field label={t('tenant.plan')}><input value={f.plan} onChange={(e) => setF({ ...f, plan: e.target.value })} /></Field>
+      <Field label={t('tenant.planExpiresOn')}><input type="date" value={f.planExpiresOn} onChange={(e) => setF({ ...f, planExpiresOn: e.target.value })} /></Field>
+      <div className="full muted">{t('tenant.planExpiresHelp')}</div>
       <Field label={t('tenant.maxBranches')}><input type="number" value={f.maxBranches} onChange={(e) => setF({ ...f, maxBranches: Number(e.target.value) })} /></Field>
       <Field label={t('tenant.maxStaff')}><input type="number" value={f.maxStaff} onChange={(e) => setF({ ...f, maxStaff: Number(e.target.value) })} /></Field>
       <Field label={t('tenant.maxActiveLoans')}><input type="number" value={f.maxActiveLoans} onChange={(e) => setF({ ...f, maxActiveLoans: Number(e.target.value) })} /></Field>

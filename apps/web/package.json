@@ -19,6 +19,7 @@
     "react-i18next": "15.7.4",
     "react-leaflet": "5.0.0",
     "react-router-dom": "7.18.4",
+    "toqr": "0.1.1",
     "xlsx": "0.18.5"
   },
   "devDependencies": {

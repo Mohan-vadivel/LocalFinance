@@ -9,8 +9,10 @@ import Home from './screens/Home';
 import { MenuProvider } from './Menu';
 import Login from './screens/Login';
 import { Manager, Settings, Summary } from './screens/More';
+import Plan from './screens/Plan';
 import CollectionReport from './screens/Report';
 import RouteDay from './screens/RouteDay';
+import Support from './screens/Support';
 import { SessionProvider, useSession } from './session';
 import { TabBar } from './Tabs';
 import type { DayCustomer, MyRoute } from './store';
@@ -42,6 +44,11 @@ function Screens({ route }: { route: Route }) {
       return <Manager />;
     case 'Settings':
       return <Settings />;
+    // Opened from Settings; not in the side menu or tabs.
+    case 'Support':
+      return <Support />;
+    case 'Plan':
+      return <Plan />;
     default:
       return <Home />;
   }

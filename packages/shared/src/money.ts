@@ -15,3 +15,15 @@ export function formatINR(paise: number, opts: { symbol?: boolean; decimals?: bo
   const body = decimals ? `${grouped}.${fraction}` : grouped;
   return `${negative ? '-' : ''}${symbol ? '₹' : ''}${body}`;
 }
+
+/**
+ * A UPI payment link ("upi://pay", the NPCI deep link). UPI apps open it with the payee, amount and note filled in;
+ * the same text in a QR code can be scanned by any UPI app.
+ */
+export function upiPayLink(p: { upiId: string; name: string; amount?: number; note?: string }): string {
+  const q = [`pa=${p.upiId}`, `pn=${encodeURIComponent(p.name)}`];
+  if (p.amount && p.amount > 0) q.push(`am=${(p.amount / 100).toFixed(2)}`);
+  q.push('cu=INR');
+  if (p.note) q.push(`tn=${encodeURIComponent(p.note.slice(0, 80))}`);
+  return `upi://pay?${q.join('&')}`;
+}

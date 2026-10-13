@@ -93,6 +93,7 @@ export class TenantsService implements OnModuleInit {
           name: input.name,
           businessId: input.businessId,
           plan: input.plan,
+          planExpiresOn: input.planExpiresOn ?? null,
           maxBranches: input.maxBranches,
           maxStaff: input.maxStaff,
           maxActiveLoans: input.maxActiveLoans,
@@ -123,7 +124,7 @@ export class TenantsService implements OnModuleInit {
     const { settings, ...rest } = input;
     const merged = settings ? tenantSettingsSchema.parse({ ...(t.settings as object), ...settings }) : undefined;
     const updated = await this.prisma.tenant.update({ where: { id }, data: { ...rest, ...(merged ? { settings: merged } : {}) } });
-    await this.audit.log(ctx, 'UPDATE', 'Tenant', id, { status: t.status, plan: t.plan }, rest);
+    await this.audit.log(ctx, 'UPDATE', 'Tenant', id, { status: t.status, plan: t.plan, planExpiresOn: t.planExpiresOn }, rest);
     return updated;
   }
 

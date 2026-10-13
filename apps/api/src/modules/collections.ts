@@ -10,6 +10,7 @@ import {
   reverseCollectionSchema,
   syncSchema,
   todayIST,
+  translate,
   visitSchema,
 } from '@localfinance/shared';
 import type { Prisma } from '@prisma/client';
@@ -189,8 +190,16 @@ export class CollectionsService {
     const loan = await this.prisma.loan.findFirst({ where: { id: c.loanId, tenantId: ctx.tenantId }, include: { customer: true, instalments: true } });
     if (!loan) throw notFound('Loan');
     const pos = positionOf(loan);
-    const vars = { business: ctx.tenantName, amount: formatINR(c.amount), loan: loan.number, date: c.date, balance: formatINR(pos.totalOutstanding), receipt: c.receiptNo };
-    return this.notify.sms(ctx.tenantId, loan.customer.phone, loan.customer.language, 'sms.collection', vars, ctx.settings.smsTemplates?.collection);
+    // The business chooses whether the receipt also tells the customer the arrears (when there are any) and the balance.
+    const lang = loan.customer.language;
+    const arrears = ctx.settings.smsShowArrears && pos.overdue > 0 ? formatINR(pos.overdue) : '';
+    const balance = ctx.settings.smsShowBalance ? formatINR(pos.totalOutstanding) : '';
+    const details = [arrears && translate(lang, 'sms.arrearsPart', { amount: arrears }), balance && translate(lang, 'sms.balancePart', { amount: balance })]
+      .filter(Boolean)
+      .map((p) => ` ${p}`)
+      .join('');
+    const vars = { business: ctx.tenantName, amount: formatINR(c.amount), loan: loan.number, date: c.date, arrears, balance, details, receipt: c.receiptNo };
+    return this.notify.sms(ctx.tenantId, loan.customer.phone, lang, 'sms.collection', vars, ctx.settings.smsTemplates?.collection);
   }
 
   async recordVisit(ctx: Ctx, input: z.infer<typeof visitSchema>) {

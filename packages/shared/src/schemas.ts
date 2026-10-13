@@ -21,6 +21,12 @@ const phone = z.string().regex(/^[0-9+][0-9 -]{6,15}$/, 'Invalid phone number');
 const lat = z.number().min(-90).max(90);
 const lng = z.number().min(-180).max(180);
 const optStr = z.string().trim().max(500).optional().nullable();
+/** A calendar date that exists (2026-02-30 is refused). */
+const realDate = date.refine((d) => {
+  const t = Date.parse(`${d}T00:00:00Z`);
+  return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === d;
+}, 'Not a real date');
+const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Use YYYY-MM');
 
 export const loginSchema = z.object({
   login: z.string().trim().min(3), // phone or email
@@ -50,6 +56,9 @@ export const tenantSettingsSchema = z.object({
    * ID card reading and reminder drafts. Off until the owner turns it on. Features that run on our own server are always on.
    */
   aiEnabled: z.boolean().default(false),
+  /** What the collection receipt SMS tells the customer besides the amount received. */
+  smsShowArrears: z.boolean().default(true),
+  smsShowBalance: z.boolean().default(true),
 });
 export type TenantSettings = z.infer<typeof tenantSettingsSchema>;
 
@@ -61,6 +70,7 @@ export const createTenantSchema = z.object({
   ownerEmail: z.string().email().optional(),
   ownerPassword: z.string().min(8),
   plan: z.string().default('STANDARD'),
+  planExpiresOn: realDate.optional().nullable(),
   maxBranches: z.number().int().positive().default(10),
   maxStaff: z.number().int().positive().default(100),
   maxActiveLoans: z.number().int().positive().default(50_000),
@@ -68,6 +78,7 @@ export const createTenantSchema = z.object({
 export const updateTenantSchema = z.object({
   name: z.string().trim().min(2).optional(),
   plan: z.string().optional(),
+  planExpiresOn: realDate.optional().nullable(),
   status: z.enum(TENANT_STATUSES).optional(),
   maxBranches: z.number().int().positive().optional(),
   maxStaff: z.number().int().positive().optional(),
@@ -309,6 +320,27 @@ export const expenseCategorySchema = z.object({
   name: z.string().trim().min(2),
   kind: z.enum(['EXPENSE', 'INCOME', 'DRAWING', 'BANK']),
 });
+/** Staff salaries: the monthly amount, advances paid against it, and each month's payment net of advances. */
+export const salaryRateSchema = z.object({ amount: paise });
+export const salaryAdvanceSchema = z.object({
+  userId: id,
+  branchId: id,
+  date,
+  amount: positivePaise,
+  mode: z.enum(PAYMENT_MODES),
+  note: optStr,
+});
+export const salaryPaySchema = z.object({
+  userId: id,
+  branchId: id,
+  month,
+  date,
+  mode: z.enum(PAYMENT_MODES),
+  /** Advances to take back from this payment; all that is outstanding (up to the salary) when omitted. */
+  advanceDeduct: paise.optional(),
+  note: optStr,
+});
+
 export const dayCloseSchema = z.object({ branchId: id, date });
 
 export const handoverSchema = z.object({
@@ -329,3 +361,30 @@ export const reportFilterSchema = z.object({
   productId: id.optional(),
 });
 export type ReportFilter = z.infer<typeof reportFilterSchema>;
+
+export const HELP_VIDEO_LANGUAGES = ['en', 'ta'] as const;
+export const helpVideoSchema = z.object({
+  title: z.string().trim().min(2).max(120),
+  language: z.enum(HELP_VIDEO_LANGUAGES),
+  url: z
+    .string()
+    .trim()
+    .url()
+    .refine((u) => /^https:\/\/((www|m)\.)?(youtube\.com|youtu\.be)\//i.test(u), 'Use a YouTube link'),
+});
+export type HelpVideo = z.infer<typeof helpVideoSchema>;
+/** Settings for the whole platform, edited by the Super Admin: support contacts, help videos and plan renewal by UPI. */
+export const platformSettingsSchema = z.object({
+  supportPhone: phone.nullable(),
+  supportEmail: z.string().trim().email().nullable(),
+  supportHours: z.string().trim().max(200).nullable(),
+  helpVideos: z.array(helpVideoSchema).max(50),
+  upiId: z
+    .string()
+    .trim()
+    .regex(/^[\w.-]{2,256}@[A-Za-z][\w]{1,64}$/, 'Invalid UPI ID')
+    .nullable(),
+  upiName: z.string().trim().min(2).max(60),
+  yearlyPrice: paise,
+});
+export type PlatformSettings = z.infer<typeof platformSettingsSchema>;

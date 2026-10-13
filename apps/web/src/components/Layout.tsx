@@ -11,6 +11,9 @@ import {
   BadgeCheck,
   BookOpen,
   Building2,
+  CreditCard,
+  IdCard,
+  LifeBuoy,
   ChartColumn,
   ChevronRight,
   Circle,
@@ -28,6 +31,7 @@ import {
   Route,
   Settings,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   Store,
   Sun,
@@ -60,6 +64,7 @@ const groups: { title: string; items: Item[] }[] = [
       { to: '/', key: 'nav.dashboard', perms: ['report.view', 'loan.approve', 'loan.disburse', 'handover.verify', 'daybook.manage'], icon: LayoutDashboard },
       { to: '/ask', key: 'nav.ask', perms: ['report.view'], icon: Sparkles },
       { to: '/tenants', key: 'nav.tenants', roles: ['SUPER_ADMIN'], icon: Building2 },
+      { to: '/platform-settings', key: 'nav.platformSettings', roles: ['SUPER_ADMIN'], icon: SlidersHorizontal },
     ],
   },
   {
@@ -88,6 +93,7 @@ const groups: { title: string; items: Item[] }[] = [
     items: [
       { to: '/funds', key: 'nav.funds', perms: ['fund.manage'], icon: Landmark },
       { to: '/investors', key: 'nav.investors', perms: ['investor.manage'], icon: PiggyBank },
+      { to: '/salaries', key: 'nav.salaries', perms: ['salary.manage'], icon: IdCard },
       { to: '/daybook', key: 'nav.daybook', perms: ['daybook.view', 'daybook.manage', 'daybook.request', 'daybook.approve'], icon: BookOpen },
       { to: '/handovers', key: 'nav.handovers', perms: ['handover.verify'], icon: ArrowLeftRight },
     ],
@@ -240,6 +246,14 @@ export function Layout() {
             </div>
             <div className="r">{t(`roles.${profile.role}`)}</div>
           </div>
+          {profile.role === 'TENANT_ADMIN' && !profile.readOnly && (
+            <NavLink to="/plan" className="icon-btn ghost" aria-label={t('nav.plan')} title={t('nav.plan')}>
+              <CreditCard />
+            </NavLink>
+          )}
+          <NavLink to="/support" className="icon-btn ghost" aria-label={t('nav.support')} title={t('nav.support')}>
+            <LifeBuoy />
+          </NavLink>
           <button className="icon-btn ghost" onClick={() => void logout()} aria-label={t('common.logout')} title={t('common.logout')}>
             <LogOut />
           </button>

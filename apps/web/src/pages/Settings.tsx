@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { LANGUAGES, type TenantSettings } from '@localfinance/shared';
 import { AiSettingsCard } from '../components/ai';
 import { DataTable, ErrorBox, Field, Loading, useToast } from '../components/ui';
@@ -13,7 +14,7 @@ interface SettingsData { id: string; name: string; logoUrl: string | null; statu
 export default function Settings() {
   const { t } = useTranslation();
   const toast = useToast();
-  const { reload: reloadProfile } = useAuth();
+  const { profile, reload: reloadProfile } = useAuth();
   const { data, error, reload } = useLoad(() => get<SettingsData>('/settings'), []);
   const [f, setF] = useState<{ name: string; logoUrl: string; s: TenantSettings } | null>(null);
   const [holiday, setHoliday] = useState('');
@@ -132,6 +133,17 @@ export default function Settings() {
       <AiSettingsCard onChange={(aiEnabled) => setF((x) => (x ? { ...x, s: { ...x.s, aiEnabled } } : x))} />
       <div className="card">
         <h3>{t('settings.smsTemplates')}</h3>
+        <div className="row" style={{ flexWrap: 'wrap', marginBottom: 6 }}>
+          <label className="field inline">
+            <input type="checkbox" checked={s.smsShowArrears} onChange={(e) => setS({ smsShowArrears: e.target.checked })} />
+            {t('settings.smsShowArrears')}
+          </label>
+          <label className="field inline">
+            <input type="checkbox" checked={s.smsShowBalance} onChange={(e) => setS({ smsShowBalance: e.target.checked })} />
+            {t('settings.smsShowBalance')}
+          </label>
+        </div>
+        <p className="muted">{t('settings.smsOptionsHelp', { arrears: '{{arrears}}', balance: '{{balance}}' })}</p>
         <p className="muted">{t('settings.smsHelp')}</p>
         <div className="form">
           {['collection', 'disbursement', 'reminder'].map((k) => (
@@ -152,6 +164,16 @@ export default function Settings() {
           {data.supportAccessUntil && <button className="btn" onClick={() => void support(0)}>{t('settings.revokeSupport')}</button>}
         </div>
       </div>
+      {profile?.role === 'TENANT_ADMIN' && (
+        <div className="card">
+          <h3>{t('plan.title')}</h3>
+          <p className="muted">{t('plan.settingsHelp')}</p>
+          <div className="row">
+            <Link className="btn" to="/plan">{t('plan.title')}</Link>
+            <Link className="btn" to="/support">{t('nav.support')}</Link>
+          </div>
+        </div>
+      )}
       <div className="card">
         <h3>{t('settings.backup')}</h3>
         <p className="muted">{t('settings.backupHelp')}</p>
@@ -173,7 +195,7 @@ export function Audit() {
         <h1>{t('audit.title')}</h1>
         <select value={entity} onChange={(e) => { setEntity(e.target.value); setPage(1); }}>
           <option value="">{t('common.all')}</option>
-          {['Customer', 'Loan', 'Collection', 'User', 'Role', 'Fund', 'Investment', 'Investor', 'DaybookEntry', 'DayClose', 'Handover', 'LoanProduct', 'Settings', 'Branch', 'Location', 'Route', 'Tenant'].map((e) => <option key={e} value={e}>{e}</option>)}
+          {['Customer', 'Loan', 'Collection', 'User', 'Role', 'Fund', 'Investment', 'Investor', 'DaybookEntry', 'DayClose', 'Handover', 'LoanProduct', 'Settings', 'Branch', 'Location', 'Route', 'Tenant', 'StaffSalary', 'SalaryAdvance', 'SalaryPayment'].map((e) => <option key={e} value={e}>{e}</option>)}
         </select>
       </div>
       <ErrorBox error={error} />

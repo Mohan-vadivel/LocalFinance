@@ -516,6 +516,202 @@ describe('investors and profit and loss', () => {
   });
 });
 
+describe('staff salaries and advances', () => {
+  let branchId, agentUser, officerUser, third;
+  const month = () => today().slice(0, 7);
+
+  test('built-in roles of a business set up before salaries get the new right once, on start-up', async () => {
+    // Make the demo business look as it did before version 2: no salary right anywhere.
+    execSync(`npx prisma db execute --url "${DB}" --stdin`, {
+      cwd: root,
+      input: `UPDATE "Role" SET "permissions" = array_remove("permissions", 'salary.manage'), "permsVersion" = 1 WHERE "tenantId" IS NOT NULL;`,
+      stdio: ['pipe', 'ignore', 'inherit'],
+    });
+    assert.ok(!(await ok(api('GET', '/auth/me', { token: accountant }))).permissions.includes('salary.manage'));
+    server.kill();
+    await new Promise((r) => server.once('exit', r));
+    server = spawn('node', ['dist/main.js'], { cwd: root, env, stdio: 'ignore' });
+    for (let i = 0; i < 60 && !(await fetch(BASE + '/health').then((r) => r.ok, () => false)); i++) await new Promise((r) => setTimeout(r, 250));
+    assert.ok((await ok(api('GET', '/auth/me', { token: accountant }))).permissions.includes('salary.manage'));
+    assert.ok((await ok(api('GET', '/auth/me', { token: owner }))).permissions.includes('salary.manage'));
+    for (const token of [agent, manager, officer, auditor]) assert.ok(!(await ok(api('GET', '/auth/me', { token }))).permissions.includes('salary.manage'));
+  });
+
+  test('agents, loan officers and branch managers cannot see or pay salaries; the owner and accountant can', async () => {
+    branchId = (await ok(api('GET', '/branches', { token: owner })))[0].id;
+    const staff = await ok(api('GET', '/staff', { token: owner }));
+    agentUser = staff.find((s) => s.phone === '9000000004');
+    officerUser = staff.find((s) => s.phone === '9000000003');
+    for (const token of [agent, officer, manager, auditor]) {
+      assert.equal((await api('GET', '/salaries', { token })).status, 403);
+      assert.equal((await api('PUT', `/salaries/staff/${agentUser.id}`, { token, body: { amount: 100 } })).status, 403);
+      assert.equal((await api('POST', '/salaries/advances', { token, body: { userId: agentUser.id, branchId, date: today(), amount: 100, mode: 'CASH' } })).status, 403);
+      assert.equal((await api('POST', '/salaries/payments', { token, body: { userId: agentUser.id, branchId, month: month(), date: today(), mode: 'CASH' } })).status, 403);
+    }
+    const me = await ok(api('GET', '/auth/me', { token: accountant }));
+    assert.ok(me.permissions.includes('salary.manage'), 'the accountant has the new right by default');
+    assert.ok(!(await ok(api('GET', '/auth/me', { token: agent }))).permissions.includes('salary.manage'));
+    const list = await ok(api('GET', `/salaries?month=${month()}`, { token: accountant }));
+    assert.ok(list.rows.some((r) => r.userId === agentUser.id));
+    await ok(api('GET', '/salaries', { token: owner }));
+  });
+
+  test('a month is paid once, net of advances, through the day book', async () => {
+    await ok(api('PUT', `/salaries/staff/${agentUser.id}`, { token: accountant, body: { amount: 1_200_000 } }));
+    // Nothing can be paid before a salary is set.
+    const none = await api('POST', '/salaries/payments', { token: accountant, body: { userId: officerUser.id, branchId, month: month(), date: today(), mode: 'CASH' } });
+    assert.equal(none.status, 400);
+    await ok(api('POST', '/salaries/advances', { token: accountant, body: { userId: agentUser.id, branchId, date: today(), amount: 300_000, mode: 'CASH', note: 'Festival' } }));
+    let list = await ok(api('GET', `/salaries?month=${month()}`, { token: accountant }));
+    let row = list.rows.find((r) => r.userId === agentUser.id);
+    assert.equal(row.status, 'UNPAID');
+    assert.equal(row.salary, 1_200_000);
+    assert.equal(row.advancesThisMonth, 300_000);
+    assert.equal(row.advanceOutstanding, 300_000);
+    assert.equal(row.netDue, 900_000);
+
+    const body = { userId: agentUser.id, branchId, month: month(), date: today(), mode: 'CASH' };
+    assert.equal((await api('POST', '/salaries/payments', { token: accountant, body: { ...body, advanceDeduct: 300_001 } })).status, 400, 'cannot take back more than was advanced');
+    const next = new Date(Date.UTC(Number(month().slice(0, 4)), Number(month().slice(5, 7)), 1)).toISOString().slice(0, 7);
+    assert.equal((await api('POST', '/salaries/payments', { token: accountant, body: { ...body, month: next } })).status, 400, 'a future month cannot be paid');
+    const paid = await ok(api('POST', '/salaries/payments', { token: accountant, body }));
+    assert.equal(paid.gross, 1_200_000);
+    assert.equal(paid.advanceDeducted, 300_000);
+    assert.equal(paid.net, 900_000);
+    assert.equal((await api('POST', '/salaries/payments', { token: owner, body })).status, 409, 'the same month cannot be paid twice');
+
+    list = await ok(api('GET', `/salaries?month=${month()}`, { token: owner }));
+    row = list.rows.find((r) => r.userId === agentUser.id);
+    assert.equal(row.status, 'PAID');
+    assert.equal(row.advanceOutstanding, 0);
+    assert.equal(row.payment.net, 900_000);
+    assert.ok(list.totals.paid >= 900_000);
+
+    const day = await ok(api('GET', `/daybook?branchId=${branchId}&from=${today()}`, { token: accountant }));
+    const lines = day.entries.filter((e) => e.refType === 'SalaryAdvance' || e.refType === 'SalaryPayment');
+    assert.deepEqual(lines.map((e) => [e.direction, e.amount, e.categoryName]).sort(), [['OUT', 300_000, 'Salary'], ['OUT', 900_000, 'Salary']]);
+    assert.equal(day.closing.cash + day.closing.bank, day.opening.cash + day.opening.bank + day.receipts - day.payments);
+
+    const history = await ok(api('GET', `/salaries/staff/${agentUser.id}`, { token: accountant }));
+    assert.equal(history.payments.length, 1);
+    assert.equal(history.advances.length, 1);
+    // Advance and payment together are the month's salary in profit and loss.
+    const pl = await ok(api('GET', `/reports/profit-loss?from=${today()}&to=${today()}`, { token: owner }));
+    assert.ok(pl.current.expenseBreakdown.find((r) => r.category === 'Salary').amount >= 1_200_000);
+    const log = await ok(api('GET', '/audit?entity=SalaryPayment', { token: owner }));
+    assert.ok(log.rows.some((r) => r.action === 'PAY_SALARY'));
+  });
+
+  test("another business can neither see nor pay this business's staff", async () => {
+    await ok(api('POST', '/platform/tenants', { token: superAdmin, body: { name: 'Salary Isolation Finance', ownerName: 'Fourth Owner', ownerPhone: '9333333333', ownerPassword: 'Fourth@1234' } }));
+    third = await login('9333333333', 'Fourth@1234');
+    const ownBranch = await ok(api('POST', '/branches', { token: third, body: { name: 'Fourth Main', code: 'FM' } }));
+    const list = await ok(api('GET', '/salaries', { token: third }));
+    assert.ok(!list.rows.some((r) => r.userId === agentUser.id));
+    assert.equal(list.totals.paid, 0);
+    assert.equal(list.totals.advanceOutstanding, 0);
+    assert.equal((await api('GET', `/salaries/staff/${agentUser.id}`, { token: third })).status, 404);
+    assert.equal((await api('PUT', `/salaries/staff/${agentUser.id}`, { token: third, body: { amount: 1 } })).status, 404);
+    assert.equal((await api('POST', '/salaries/advances', { token: third, body: { userId: agentUser.id, branchId: ownBranch.id, date: today(), amount: 100, mode: 'CASH' } })).status, 404);
+    assert.equal((await api('POST', '/salaries/payments', { token: third, body: { userId: agentUser.id, branchId: ownBranch.id, month: today().slice(0, 7), date: today(), mode: 'CASH' } })).status, 404);
+    // Its own owner paying into the demo branch is refused too.
+    const thirdOwner = (await ok(api('GET', '/staff', { token: third })))[0] ?? (await ok(api('GET', '/auth/me', { token: third })));
+    await ok(api('PUT', `/salaries/staff/${thirdOwner.id}`, { token: third, body: { amount: 500_000 } }));
+    assert.equal((await api('POST', '/salaries/advances', { token: third, body: { userId: thirdOwner.id, branchId, date: today(), amount: 100, mode: 'CASH' } })).status, 404);
+    const backup = await ok(api('GET', '/settings/backup', { token: third }));
+    assert.equal(backup.tables.SalaryPayment.length, 0);
+    assert.equal(backup.tables.SalaryAdvance.length, 0);
+    assert.ok((await ok(api('GET', '/settings/backup', { token: owner }))).tables.SalaryPayment.length >= 1);
+  });
+});
+
+describe('plan, support and receipt SMS', () => {
+  test('only the Super Admin edits support settings; every logged-in user can read them', async () => {
+    const settings = {
+      supportPhone: '+91 98765 43210',
+      supportEmail: 'help@wits.example',
+      supportHours: 'Mon to Sat, 9 am to 6 pm',
+      helpVideos: [
+        { title: 'Recording a collection', language: 'en', url: 'https://www.youtube.com/watch?v=abc123' },
+        { title: 'வசூல் பதிவு செய்வது', language: 'ta', url: 'https://youtu.be/xyz789' },
+      ],
+      upiId: 'wits@okaxis',
+      upiName: 'WITS Software',
+      yearlyPrice: 1_200_000,
+    };
+    for (const token of [owner, accountant, agent]) {
+      assert.equal((await api('PUT', '/platform/settings', { token, body: settings })).status, 403);
+      assert.equal((await api('GET', '/platform/settings', { token })).status, 403);
+    }
+    assert.equal((await api('PUT', '/platform/settings', { token: superAdmin, body: { ...settings, helpVideos: [{ title: 'Bad', language: 'en', url: 'https://example.com/v' }] } })).status, 400, 'only YouTube links');
+    assert.equal((await api('PUT', '/platform/settings', { token: superAdmin, body: { ...settings, upiId: 'not a upi id' } })).status, 400);
+    await ok(api('PUT', '/platform/settings', { token: superAdmin, body: settings }));
+    assert.deepEqual(await ok(api('GET', '/platform/settings', { token: superAdmin })), settings);
+    const support = await ok(api('GET', '/support', { token: agent }));
+    assert.equal(support.supportPhone, settings.supportPhone);
+    assert.equal(support.helpVideos.length, 2);
+    assert.equal(support.upiId, undefined, 'the renewal details are only on the plan screen');
+    await ok(api('GET', '/support', { token: superAdmin }));
+    assert.equal((await api('GET', '/support')).status, 401);
+  });
+
+  test('the owner sees days left, the price and a UPI link; nobody else does', async () => {
+    const demo = (await ok(api('GET', '/auth/me', { token: owner }))).tenant.id;
+    const day = (n) => new Date(Date.now() + 330 * 60_000 + n * 86_400_000).toISOString().slice(0, 10);
+    assert.equal((await api('PATCH', `/platform/tenants/${demo}`, { token: superAdmin, body: { planExpiresOn: '2026-02-30' } })).status, 400);
+    assert.equal((await api('PATCH', `/platform/tenants/${demo}`, { token: owner, body: { planExpiresOn: day(400) } })).status, 403);
+    await ok(api('PATCH', `/platform/tenants/${demo}`, { token: superAdmin, body: { planExpiresOn: day(10) } }));
+    const plan = await ok(api('GET', '/plan', { token: owner }));
+    assert.equal(plan.planExpiresOn, day(10));
+    assert.equal(plan.daysLeft, 10);
+    assert.equal(plan.expiringSoon, true);
+    assert.equal(plan.yearlyPrice, 1_200_000);
+    assert.equal(plan.upiId, 'wits@okaxis');
+    assert.match(plan.upiLink, /^upi:\/\/pay\?pa=wits@okaxis&pn=WITS%20Software&am=12000\.00&cu=INR&tn=/);
+    for (const token of [agent, manager, accountant, officer, auditor, superAdmin]) assert.equal((await api('GET', '/plan', { token })).status, 403);
+    await ok(api('PATCH', `/platform/tenants/${demo}`, { token: superAdmin, body: { planExpiresOn: day(40) } }));
+    assert.equal((await ok(api('GET', '/plan', { token: owner }))).expiringSoon, false);
+    assert.equal((await ok(api('GET', '/platform/tenants', { token: superAdmin }))).find((t) => t.id === demo).planExpiresOn, day(40));
+    // Another business's owner sees only their own plan.
+    const third = await login('9333333333', 'Fourth@1234');
+    const theirs = await ok(api('GET', '/plan', { token: third }));
+    assert.equal(theirs.planExpiresOn, null);
+    assert.equal(theirs.daysLeft, null);
+  });
+
+  test('the receipt SMS shows arrears and balance unless the business turns them off', async () => {
+    const s = (await ok(api('GET', '/settings', { token: owner }))).settings;
+    assert.equal(s.smsShowArrears, true);
+    assert.equal(s.smsShowBalance, true);
+    const loans = (await ok(api('GET', '/loans?status=ACTIVE', { token: owner }))).rows;
+    const cols = (await ok(api('GET', `/collections?from=2020-01-01&to=${today()}`, { token: owner }))).rows.filter((c) => !c.reversedAt);
+    const late = cols.find((c) => loans.find((l) => l.id === c.loanId)?.position?.overdue > 0);
+    assert.ok(late, 'the demo data has a customer in arrears');
+    const resend = async () => (await ok(api('POST', `/collections/${late.id}/resend-receipt`, { token: owner }))).body;
+    // Customers get the SMS in their own language.
+    const ARREARS = /(Arrears|நிலுவை) ₹[\d,]+\.\d\d\./;
+    const BALANCE = /(Balance|மீதி) ₹[\d,]+\.\d\d\./;
+    let sms = await resend();
+    assert.match(sms, ARREARS);
+    assert.match(sms, BALANCE);
+    await ok(api('PUT', '/settings', { token: owner, body: { settings: { smsShowBalance: false } } }));
+    sms = await resend();
+    assert.match(sms, ARREARS);
+    assert.doesNotMatch(sms, BALANCE);
+    await ok(api('PUT', '/settings', { token: owner, body: { settings: { smsShowArrears: false } } }));
+    sms = await resend();
+    assert.doesNotMatch(sms, ARREARS);
+    assert.doesNotMatch(sms, BALANCE);
+    assert.match(sms, /(Receipt|ரசீது) R\d+/);
+    // The other business's switches are its own.
+    const third = await login('9333333333', 'Fourth@1234');
+    assert.equal((await ok(api('GET', '/settings', { token: third }))).settings.smsShowBalance, true);
+    await ok(api('PUT', '/settings', { token: owner, body: { settings: { smsShowArrears: true, smsShowBalance: true } } }));
+    sms = await resend();
+    assert.ok(sms.search(ARREARS) < sms.search(BALANCE) && sms.search(ARREARS) > 0);
+  });
+});
+
 describe('multi-tenancy', () => {
   let otherAdmin, otherTenantId, demoCustomerId;
 
