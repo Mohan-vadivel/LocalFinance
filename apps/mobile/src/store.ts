@@ -12,7 +12,11 @@ export interface Profile {
   branches: { id: string; name: string }[];
   tenant: { id: string; name: string } | null;
 }
-export interface MyRoute { id: string; name: string; location: string; locationId: string; branchId: string; collectsToday: boolean; customerCount: number }
+/** Areas a route covers. `locations` is the list (main area first); `location` is the main area alone, for older data. */
+export interface RouteAreas { location: string; locations?: { id: string; name: string }[] }
+/** All the route's areas as one line, e.g. "Anna Nagar · KK Nagar". Falls back to the main area. */
+export const areaText = (r: RouteAreas) => (r.locations?.length ? r.locations.map((l) => l.name) : [r.location]).filter(Boolean).join(' · ');
+export interface MyRoute extends RouteAreas { id: string; name: string; locationId: string; branchId: string; collectsToday: boolean; customerCount: number }
 export interface DayLoan {
   id: string;
   number: string;
@@ -51,7 +55,7 @@ export interface DayCustomer {
   promiseDate?: string | null;
   loans: DayLoan[];
 }
-export interface RouteDay { route: { id: string; name: string; location: string }; date: string; customers: DayCustomer[] }
+export interface RouteDay { route: { id: string; name: string } & RouteAreas; date: string; customers: DayCustomer[] }
 
 // ---------- Offline queue ----------
 export interface QueuedCollection {

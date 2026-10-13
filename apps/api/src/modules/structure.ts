@@ -14,6 +14,7 @@ import { AuditService } from '../common/audit.service';
 import { CurrentCtx, Perm, type Ctx } from '../common/context';
 import { bad, conflict, notFound } from '../common/errors';
 import { PrismaService } from '../common/prisma.service';
+import { routeAreas, withAreas } from '../common/areas';
 import { assertBranch, assertOwned, branchScope } from '../common/scope';
 import { V } from '../common/zod.pipe';
 
@@ -23,6 +24,14 @@ export class StructureService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
   ) {}
+
+  /** Routes made before a route could have several areas cover their main area. Gives each of them its area row. Idempotent. */
+  async onModuleInit() {
+    const routes = await this.prisma.route.findMany({ where: { areas: { none: {} } }, select: { id: true, tenantId: true, locationId: true } });
+    if (routes.length) {
+      await this.prisma.routeLocation.createMany({ data: routes.map((r) => ({ tenantId: r.tenantId, routeId: r.id, locationId: r.locationId })), skipDuplicates: true });
+    }
+  }
 
   // ---------- Branches ----------
   async branches(ctx: Ctx) {
@@ -78,8 +87,12 @@ export class StructureService {
       const loc = await tx.location.update({ where: { id }, data: input });
       if (input.branchId !== l.branchId) {
         // Moving a location moves its routes and customers to the new branch; history goes with them.
+        const mainRoutes = (await tx.route.findMany({ where: { locationId: id }, select: { id: true } })).map((r) => r.id);
         await tx.route.updateMany({ where: { locationId: id }, data: { branchId: input.branchId } });
         await tx.customer.updateMany({ where: { locationId: id }, data: { branchId: input.branchId } });
+        // Routes of the old branch lose this area; routes that moved with it lose their areas of the old branch.
+        await tx.routeLocation.deleteMany({ where: { locationId: id, route: { branchId: { not: input.branchId } } } });
+        await tx.routeLocation.deleteMany({ where: { routeId: { in: mainRoutes }, location: { branchId: { not: input.branchId } } } });
       }
       return loc;
     });
@@ -90,15 +103,20 @@ export class StructureService {
   // ---------- Routes ----------
   async routes(ctx: Ctx, q: { branchId?: string; locationId?: string }) {
     const rows = await this.prisma.route.findMany({
-      where: { ...branchScope(ctx, q.branchId), ...(q.locationId ? { locationId: q.locationId } : {}) },
+      // A route matches an area when the area is its main one or one of its other areas.
+      where: {
+        ...branchScope(ctx, q.branchId),
+        ...(q.locationId ? { OR: [{ locationId: q.locationId }, { areas: { some: { locationId: q.locationId } } }] } : {}),
+      },
       orderBy: { name: 'asc' },
-      include: { location: { select: { name: true, branchId: true } }, assignments: true },
+      include: { location: { select: { name: true, branchId: true } }, assignments: true, ...withAreas },
     });
     const counts = await this.prisma.customer.groupBy({ by: ['routeId'], where: { tenantId: ctx.tenantId, status: 'ACTIVE' }, _count: true });
     const users = await this.prisma.user.findMany({ where: { tenantId: ctx.tenantId }, select: { id: true, name: true } });
     const today = todayIST();
-    return rows.map((r) => ({
+    return rows.map(({ areas, ...r }) => ({
       ...r,
+      locations: routeAreas({ locationId: r.locationId, areas }),
       customerCount: counts.find((c) => c.routeId === r.id)?._count ?? 0,
       assignments: r.assignments.map((a) => ({
         ...a,
@@ -108,23 +126,44 @@ export class StructureService {
     }));
   }
 
+  /**
+   * The areas a route is made of, checked against the business and the branch. The first one is the main area.
+   * Every area must be in the same branch, which becomes the route's branch.
+   */
+  private async routeAreaRows(ctx: Ctx, ids: string[]) {
+    const rows = await this.prisma.location.findMany({ where: { id: { in: ids }, tenantId: ctx.tenantId } });
+    if (rows.length !== ids.length) throw notFound('Location');
+    const areas = ids.map((id) => rows.find((l) => l.id === id)!);
+    for (const a of areas) assertBranch(ctx, a.branchId);
+    if (areas.some((a) => a.branchId !== areas[0].branchId)) throw bad('All areas of a route must be in the same branch');
+    return areas;
+  }
+
   async createRoute(ctx: Ctx, input: z.infer<typeof routeSchema>) {
-    const loc = await this.prisma.location.findFirst({ where: { id: input.locationId, tenantId: ctx.tenantId } });
-    if (!loc) throw notFound('Location');
-    assertBranch(ctx, loc.branchId);
-    const r = await this.prisma.route.create({ data: { ...input, branchId: loc.branchId, tenantId: ctx.tenantId } });
+    const [main] = await this.routeAreaRows(ctx, input.locationIds);
+    const r = await this.prisma.$transaction(async (tx) => {
+      const route = await tx.route.create({
+        data: { name: input.name, collectionDays: input.collectionDays, active: input.active, locationId: main.id, branchId: main.branchId, tenantId: ctx.tenantId },
+      });
+      await tx.routeLocation.createMany({ data: input.locationIds.map((locationId) => ({ tenantId: ctx.tenantId, routeId: route.id, locationId })) });
+      return route;
+    });
     await this.audit.log(ctx, 'CREATE', 'Route', r.id, undefined, input);
     return r;
   }
 
   async updateRoute(ctx: Ctx, id: string, input: z.infer<typeof routeSchema>) {
     const r = await this.route(ctx, id);
-    const loc = await this.prisma.location.findFirst({ where: { id: input.locationId, tenantId: ctx.tenantId } });
-    if (!loc) throw notFound('Location');
-    assertBranch(ctx, loc.branchId);
+    const [main] = await this.routeAreaRows(ctx, input.locationIds);
     const u = await this.prisma.$transaction(async (tx) => {
-      const route = await tx.route.update({ where: { id }, data: { ...input, branchId: loc.branchId } });
-      await tx.customer.updateMany({ where: { routeId: id }, data: { locationId: loc.id, branchId: loc.branchId } });
+      const route = await tx.route.update({
+        where: { id },
+        data: { name: input.name, collectionDays: input.collectionDays, active: input.active, locationId: main.id, branchId: main.branchId },
+      });
+      await tx.routeLocation.deleteMany({ where: { routeId: id, locationId: { notIn: input.locationIds } } });
+      await tx.routeLocation.createMany({ data: input.locationIds.map((locationId) => ({ tenantId: ctx.tenantId, routeId: id, locationId })), skipDuplicates: true });
+      // A customer keeps their own area while it is still on the route; the others move to the main area.
+      await tx.customer.updateMany({ where: { routeId: id, locationId: { notIn: input.locationIds } }, data: { locationId: main.id, branchId: main.branchId } });
       return route;
     });
     await this.audit.log(ctx, 'UPDATE', 'Route', id, r, input);
@@ -132,10 +171,10 @@ export class StructureService {
   }
 
   async route(ctx: Ctx, id: string) {
-    const r = await this.prisma.route.findFirst({ where: { id, tenantId: ctx.tenantId }, include: { location: true } });
+    const r = await this.prisma.route.findFirst({ where: { id, tenantId: ctx.tenantId }, include: { location: true, ...withAreas } });
     if (!r) throw notFound('Route');
     assertBranch(ctx, r.branchId);
-    return r;
+    return { ...r, locations: routeAreas(r) };
   }
 
   /** Customers on a route in visiting order, with pin data. */
@@ -192,7 +231,7 @@ export class StructureService {
   async myRoutes(ctx: Ctx, date = todayIST()) {
     const assignments = await this.prisma.routeAssignment.findMany({
       where: { tenantId: ctx.tenantId, userId: ctx.userId, fromDate: { lte: date }, OR: [{ toDate: null }, { toDate: { gte: date } }] },
-      include: { route: { include: { location: true } } },
+      include: { route: { include: { location: true, ...withAreas } } },
     });
     const wd = weekday(date);
     const routes = assignments.map((a) => a.route).filter((r, i, arr) => r.active && arr.findIndex((x) => x.id === r.id) === i);
@@ -201,6 +240,7 @@ export class StructureService {
       id: r.id,
       name: r.name,
       location: r.location.name,
+      locations: routeAreas(r),
       branchId: r.branchId,
       locationId: r.locationId,
       collectsToday: r.collectionDays.includes(wd),

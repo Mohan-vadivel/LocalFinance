@@ -95,12 +95,20 @@ export const locationSchema = z.object({
   active: z.boolean().optional(),
 });
 
-export const routeSchema = z.object({
-  locationId: id,
-  name: z.string().trim().min(2),
-  collectionDays: z.array(z.number().int().min(0).max(6)).default([1, 2, 3, 4, 5, 6]),
-  active: z.boolean().optional(),
-});
+/**
+ * A route covers one or more areas. locationIds[0] is the main area. `locationId` (one area) is still accepted so
+ * older apps keep working; the parsed output always has `locationIds`, with duplicates removed.
+ */
+export const routeSchema = z
+  .object({
+    locationIds: z.array(id).min(1, 'Choose at least one area').max(20).optional(),
+    locationId: id.optional(),
+    name: z.string().trim().min(2),
+    collectionDays: z.array(z.number().int().min(0).max(6)).default([1, 2, 3, 4, 5, 6]),
+    active: z.boolean().optional(),
+  })
+  .refine((r) => (r.locationIds?.length ?? 0) > 0 || !!r.locationId, { message: 'Choose at least one area', path: ['locationIds'] })
+  .transform(({ locationIds, locationId, ...rest }) => ({ ...rest, locationIds: [...new Set(locationIds?.length ? locationIds : [locationId as string])] }));
 export const routeOrderSchema = z.object({ customerIds: z.array(id) });
 export const routeAssignSchema = z.object({
   userId: id,

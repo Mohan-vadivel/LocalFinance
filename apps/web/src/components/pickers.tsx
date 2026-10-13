@@ -44,7 +44,7 @@ export function LocationPicker(p: PickerProps & { branchId?: string }) {
   return <Picker {...p} options={data} placeholder={t('common.location')} />;
 }
 
-export interface RouteOpt extends Opt { locationId: string; location: { name: string; branchId: string } }
+export interface RouteOpt extends Opt { locationId: string; location: { name: string; branchId: string }; locations: Opt[] }
 /** Routes, optionally narrowed to a branch or location. `onPickRoute` also gets the chosen route's location and branch. */
 export function RoutePicker(p: PickerProps & { branchId?: string; locationId?: string; onPickRoute?: (r: RouteOpt | null) => void }) {
   const { t } = useTranslation();

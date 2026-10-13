@@ -191,9 +191,10 @@ export function CustomerForm({ customer, onClose, onSaved }: { customer: Partial
           value={f.routeId}
           onChange={(v) => setF((x) => ({ ...x, routeId: v }))}
           onPickRoute={(r) => {
-            // Choosing a route fills in its area and branch, so the two can never disagree.
+            // Choosing a route fills in its area and branch, so the two can never disagree. A route can cover
+            // several areas: the area already chosen stays when the route covers it, otherwise the route's main area is used.
             if (!r) return;
-            setF((x) => ({ ...x, routeId: r.id, locationId: r.locationId }));
+            setF((x) => ({ ...x, routeId: r.id, locationId: r.locations.some((a) => a.id === x.locationId) ? x.locationId : r.locationId }));
             setBranchId(r.location.branchId);
           }}
         />

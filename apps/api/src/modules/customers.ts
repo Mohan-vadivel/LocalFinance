@@ -85,7 +85,9 @@ export class CustomersService {
     if (input.routeId) {
       const r = await this.prisma.route.findFirst({ where: { id: input.routeId, tenantId: ctx.tenantId } });
       if (!r) throw notFound('Route');
-      if (r.locationId !== loc.id) throw bad('The route is not in the chosen location');
+      // The customer's area must be one of the route's areas (its main area or another one).
+      const onRoute = r.locationId === loc.id || (await this.prisma.routeLocation.findFirst({ where: { routeId: r.id, locationId: loc.id }, select: { id: true } }));
+      if (!onRoute) throw bad('The route is not in the chosen location');
     }
     return loc;
   }

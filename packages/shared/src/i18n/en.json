@@ -173,7 +173,11 @@
     "optimise": "Suggest shortest order",
     "saveOrder": "Save order",
     "customersOnRoute": "Customers on route",
-    "map": "Map"
+    "map": "Map",
+    "areas": "Areas",
+    "mainArea": "Main area",
+    "areasHint": "Tick every area this route covers. The first one you tick is the main area.",
+    "chooseBranch": "Choose a branch first to see its areas."
   },
   "weekdays": {
     "0": "Sun",
