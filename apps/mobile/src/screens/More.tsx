@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
-import { BASE, get, post } from '../api';
+import { get } from '../api';
 import { MapPins } from '../MapPins';
 import { useSession } from '../session';
 import { alertValues } from '../smart';
@@ -308,55 +308,5 @@ function Briefing({ brief, alerts }: { brief: Brief | null; alerts: Alert[] | nu
         </View>
       )}
     </Card>
-  );
-}
-
-// =====================================================================
-// Settings: language, password, log out
-// =====================================================================
-export function Settings() {
-  const { t } = useTranslation();
-  const { profile, logout } = useSession();
-  const [pw, setPw] = useState({ currentPassword: '', newPassword: '' });
-  const [msg, setMsg] = useState('');
-  const [error, setError] = useState<unknown>(null);
-  const [busy, setBusy] = useState(false);
-  const changePassword = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      await post('/auth/password', pw);
-      setMsg(t('common.saved'));
-      // The server ends all sessions after a password change.
-      await logout();
-    } catch (e) {
-      setError(e);
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <Screen title={t('mobile.accountSettings')}>
-      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md }}>
-        <Avatar name={profile?.name ?? '?'} size={52} />
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: 18, fontWeight: '800', color: C.ink }}>{profile?.name ?? ''}</Text>
-          <Text style={s.muted}>{profile?.roleName ?? ''}</Text>
-        </View>
-      </Card>
-      <Card>
-        <Text style={s.h2}>{t('auth.changePassword')}</Text>
-        <Field label={t('auth.currentPassword')} value={pw.currentPassword} onChangeText={(v) => setPw({ ...pw, currentPassword: v })} secureTextEntry />
-        <Field label={t('auth.newPassword')} value={pw.newPassword} onChangeText={(v) => setPw({ ...pw, newPassword: v })} secureTextEntry />
-        <ErrorText error={error} />
-        {msg ? <Notice text={msg} /> : null}
-        <Btn kind="tonal" title={t('common.save')} onPress={() => void changePassword()} busy={busy} disabled={pw.newPassword.length < 8 || pw.currentPassword.length < 6} />
-      </Card>
-      <Card>
-        <Row label={t('common.name')} value={profile?.name ?? ''} />
-        <Row label={t('staff.role')} value={profile?.roleName ?? ''} divider />
-        <Row label="API" value={BASE} divider />
-      </Card>
-    </Screen>
   );
 }

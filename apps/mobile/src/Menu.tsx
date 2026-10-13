@@ -84,7 +84,7 @@ function Drawer({ anim, close }: { anim: Animated.Value; close: () => void }) {
     { key: 'Manager', icon: 'people-outline', label: t('mobile.managerView'), onPress: () => go('Manager'), show: can('report.view', 'route.manage') },
   ];
   const account: Item[] = [
-    { key: 'Settings', icon: 'person-circle-outline', label: t('mobile.accountSettings'), onPress: () => go('Settings') },
+    { key: 'Settings', icon: 'settings-outline', label: t('mobile.settings.title'), onPress: () => go('Settings') },
     { key: 'sync', icon: 'sync-outline', label: syncing ? '…' : t('mobile.syncNow'), onPress: () => void runSync(), badge: st.pending ? String(st.pending) : undefined },
   ];
   const isActive = (i: Item) => i.key === current;

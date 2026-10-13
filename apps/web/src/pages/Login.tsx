@@ -5,6 +5,7 @@ import { BookOpen, Building2, ChevronRight, Languages, Route, TrendingUp, Users 
 import { ErrorBox, Field } from '../components/ui';
 import { useAuth } from '../lib/auth';
 import { setLanguage } from '../lib/i18n';
+import { LegalLinks } from './Legal';
 
 export default function Login() {
   const { t, i18n } = useTranslation();
@@ -116,6 +117,7 @@ export default function Login() {
               ))}
             </select>
           </div>
+          <LegalLinks />
         </form>
       </div>
     </div>

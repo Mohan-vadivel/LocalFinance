@@ -10,7 +10,8 @@ export interface Profile {
   language: string;
   permissions: string[];
   branches: { id: string; name: string }[];
-  tenant: { id: string; name: string } | null;
+  tenant: { id: string; name: string; settings?: { receiptFooter?: string } } | null;
+  phone?: string;
 }
 export interface MyRoute { id: string; name: string; location: string; locationId: string; branchId: string; collectsToday: boolean; customerCount: number }
 export interface DayLoan {
@@ -25,7 +26,8 @@ export interface DayLoan {
   penalty: number;
   outstanding: number;
   daysPastDue: number;
-  lastPayments: { date: string; amount: number; mode: string; receiptNo: string }[];
+  /** Recent payments; `at` and `agent` (who took it) are for reprinting a receipt. A receipt number of '…' is still on the phone. */
+  lastPayments: { date: string; at?: string; amount: number; mode: string; receiptNo: string; agent?: string | null }[];
 }
 export type PinStatus = 'PAID' | 'PARTIAL' | 'MISSED' | 'NOTHING_DUE' | 'PENDING';
 export interface DayCustomer {
@@ -38,6 +40,8 @@ export interface DayCustomer {
   lat: number | null;
   lng: number | null;
   routeSeq: number | null;
+  /** The customer's area (location), for grouping the printed line sheet. */
+  area?: string | null;
   status: string;
   dueNow: number;
   paidToday: number;
@@ -194,7 +198,7 @@ function applyLocal(c: DayCustomer, item: QueueItem) {
     if (l) {
       l.dueNow = Math.max(0, l.dueNow - item.amount);
       l.outstanding = Math.max(0, l.outstanding - item.amount);
-      l.lastPayments = [{ date: item.collectedAt.slice(0, 10), amount: item.amount, mode: item.mode, receiptNo: '…' }, ...l.lastPayments];
+      l.lastPayments = [{ date: item.collectedAt.slice(0, 10), at: item.collectedAt, amount: item.amount, mode: item.mode, receiptNo: '…' }, ...l.lastPayments];
     }
     c.dueNow = c.loans.reduce((s, x) => s + x.dueNow, 0);
     c.pin = c.dueNow === 0 ? 'PAID' : 'PARTIAL';
@@ -282,6 +286,18 @@ export async function saveProfile(p: Profile | null) {
   if (p) await write(K.profile, p);
   else await AsyncStorage.multiRemove([K.profile, K.routes]);
 }
+/**
+ * Removes everything this phone keeps for the business it was working in (routes, route copies, receipts, rejected
+ * entries), so after switching business none of it shows under the other one. Callers make sure nothing is waiting
+ * to sync first.
+ */
+export async function clearBusinessCache() {
+  const keys = await AsyncStorage.getAllKeys();
+  await AsyncStorage.multiRemove(keys.filter((k) => k.startsWith('lf.day.') || [K.queue, K.failed, K.synced, K.lastSync, K.routes, K.profile].includes(k)));
+  snapshots.clear();
+  changed();
+}
+
 export const cachedProfile = () => read<Profile | null>(K.profile, null);
 
 /** The last downloaded copy of a route's day, read from the phone only (no network). */

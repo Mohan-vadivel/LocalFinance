@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { addDays, periodRange, type SummaryPeriod } from '@localfinance/shared';
 import { get } from '../api';
+import { useSession } from '../session';
 import { getQueue, subscribe } from '../store';
-import { Amount, Btn, C, Card, Chips, ErrorText, IconButton, Loading, Notice, Row, SP, Screen, Stat, StatRow, dateIN, money, s, todayIST } from '../ui';
+import { Amount, Btn, C, Card, Chevron, Chips, ErrorText, Icon, IconButton, Loading, Notice, Row, SP, Screen, Stat, StatRow, dateIN, money, s, todayIST, useNav } from '../ui';
 
 interface Totals { total: number; cash: number; upi: number; bank: number; count: number }
 interface Summary {
@@ -21,6 +22,8 @@ interface Summary {
 /** Daily, weekly and monthly collection totals with the cash and UPI split. */
 export default function CollectionReport() {
   const { t } = useTranslation();
+  const nav = useNav();
+  const { can } = useSession();
   const [period, setPeriod] = useState<SummaryPeriod>('DAY');
   const [date, setDate] = useState(todayIST());
   const [data, setData] = useState<Summary | null>(null);
@@ -106,6 +109,17 @@ export default function CollectionReport() {
                 {data.byAgent.map((a) => (
                   <Line key={a.agentId} name={a.agent} t={a} />
                 ))}
+              </Card>
+            )}
+            {/* A printable list of one route's customers (PDF made on the phone). */}
+            {can('collection.record', 'report.view') && (
+              <Card onPress={() => nav.push('LineSheet')} accessibilityLabel={t('mobile.sheet.button')} style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md }}>
+                <Icon name="document-text-outline" size={26} color={C.brand} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontWeight: '800', fontSize: 16, color: C.ink }}>{t('mobile.sheet.button')}</Text>
+                  <Text style={s.muted}>{t('mobile.sheet.help')}</Text>
+                </View>
+                <Chevron />
               </Card>
             )}
             {data.byRoute.length > 0 && (

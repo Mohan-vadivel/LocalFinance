@@ -10,6 +10,7 @@ import Branches from './pages/Branches';
 import CollectionSummary from './pages/CollectionSummary';
 import DeskEntry from './pages/DeskEntry';
 import LineAbstract from './pages/LineAbstract';
+import Legal from './pages/Legal';
 import LineList from './pages/LineList';
 import Import from './pages/Import';
 import Collections from './pages/Collections';
@@ -107,7 +108,12 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
-          <Guarded />
+          <Switch>
+            {/* Terms and privacy are public: readable before logging in. */}
+            <Route path="/terms" element={<Legal page="terms" />} />
+            <Route path="/privacy" element={<Legal page="privacy" />} />
+            <Route path="*" element={<Guarded />} />
+          </Switch>
         </ToastProvider>
       </AuthProvider>
     </BrowserRouter>

@@ -7,6 +7,7 @@ import { get, post, put } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateIN, dateTime, today } from '../lib/format';
 import { useLoad } from '../lib/hooks';
+import { LegalLinks } from './Legal';
 
 interface SettingsData { id: string; name: string; logoUrl: string | null; status: string; supportAccessUntil: string | null; settings: TenantSettings }
 
@@ -156,6 +157,10 @@ export default function Settings() {
         <h3>{t('settings.backup')}</h3>
         <p className="muted">{t('settings.backupHelp')}</p>
         <button className="btn" disabled={busy} onClick={() => void backup()}>{t('settings.downloadBackup')}</button>
+      </div>
+      <div className="card">
+        <h3>{t('mobile.settings.legal')}</h3>
+        <LegalLinks />
       </div>
     </div>
   );

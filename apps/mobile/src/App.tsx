@@ -8,9 +8,12 @@ import { AddCustomer, LoanRequest, MyRequests, Search } from './screens/Forms';
 import Home from './screens/Home';
 import { MenuProvider } from './Menu';
 import Login from './screens/Login';
-import { Manager, Settings, Summary } from './screens/More';
+import { AppLock } from './Lock';
+import { Manager, Summary } from './screens/More';
+import LineSheet from './screens/LineSheet';
 import CollectionReport from './screens/Report';
 import RouteDay from './screens/RouteDay';
+import Settings, { Legal } from './screens/Settings';
 import { SessionProvider, useSession } from './session';
 import { TabBar } from './Tabs';
 import type { DayCustomer, MyRoute } from './store';
@@ -42,6 +45,12 @@ function Screens({ route }: { route: Route }) {
       return <Manager />;
     case 'Settings':
       return <Settings />;
+    case 'Terms':
+      return <Legal page="terms" />;
+    case 'Privacy':
+      return <Legal page="privacy" />;
+    case 'LineSheet':
+      return <LineSheet routeId={p.routeId as string | undefined} />;
     default:
       return <Home />;
   }
@@ -53,6 +62,7 @@ function Root() {
   if (!profile) return <Login />;
   // Keyed by user so a new login starts on a fresh home screen.
   return (
+    <AppLock>
     <NavProvider key={profile.id} initial="Home">
       {(top, depth) => (
         <MenuProvider>
@@ -66,6 +76,7 @@ function Root() {
         </MenuProvider>
       )}
     </NavProvider>
+    </AppLock>
   );
 }
 

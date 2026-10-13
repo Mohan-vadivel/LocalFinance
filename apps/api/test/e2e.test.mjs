@@ -622,6 +622,54 @@ describe('multi-tenancy', () => {
   });
 });
 
+describe('switch business', () => {
+  let twinId;
+
+  test('a phone in two businesses lists the other one and switches with that account\'s password', async () => {
+    // The demo owner's phone also owns a second business, with a different password.
+    twinId = (await ok(api('POST', '/platform/tenants', { token: superAdmin, body: { name: 'Twin Finance', ownerName: 'Twin Owner', ownerPhone: '9000000001', ownerPassword: 'Twin@1234' } }))).id;
+    const demo = (await ok(api('GET', '/auth/me', { token: owner }))).tenant.id;
+    const list = await ok(api('GET', '/auth/businesses', { token: owner }));
+    assert.deepEqual(list, [{ tenantId: twinId, name: 'Twin Finance' }]);
+    const r = await ok(api('POST', '/auth/switch', { token: owner, body: { tenantId: twinId, password: 'Twin@1234' } }));
+    assert.ok(r.accessToken && r.refreshToken);
+    assert.equal(r.profile.tenant.id, twinId);
+    // The new tokens belong to the other business only.
+    const me = await ok(api('GET', '/auth/me', { token: r.accessToken }));
+    assert.equal(me.tenant.name, 'Twin Finance');
+    assert.equal((await ok(api('GET', '/customers', { token: r.accessToken }))).total, 0);
+    const demoCustomer = (await ok(api('GET', '/customers', { token: owner }))).rows[0].id;
+    assert.equal((await api('GET', `/customers/${demoCustomer}`, { token: r.accessToken })).status, 404);
+    // And the way back is listed from the other side.
+    assert.deepEqual(await ok(api('GET', '/auth/businesses', { token: r.accessToken })), [{ tenantId: demo, name: 'Demo Finance' }]);
+    await ok(api('POST', '/auth/refresh', { body: { refreshToken: r.refreshToken } }));
+  });
+
+  test('a wrong password, or a business the phone has no account in, is refused the same way', async () => {
+    const wrong = await api('POST', '/auth/switch', { token: owner, body: { tenantId: twinId, password: 'Demo@1234' } });
+    assert.equal(wrong.status, 401);
+    assert.equal(wrong.data.code, 'auth.invalid');
+    assert.ok(!wrong.data.accessToken);
+    // "Other Finance" exists, but this phone has no account there: same answer, nothing about it is shown.
+    const others = await ok(api('GET', '/platform/tenants', { token: superAdmin }));
+    const stranger = others.find((t) => t.name === 'Other Finance');
+    const r = await api('POST', '/auth/switch', { token: owner, body: { tenantId: stranger.id, password: 'Other@1234' } });
+    assert.equal(r.status, 401);
+    assert.equal(r.data.code, 'auth.invalid');
+    assert.ok(!JSON.stringify(r.data).includes('Other Finance'));
+    // Login with the demo password still opens only the demo business.
+    const again = await ok(api('POST', '/auth/login', { body: { login: '9000000001', password: 'Demo@1234' } }));
+    assert.equal(again.profile.tenant.name, 'Demo Finance');
+  });
+
+  test('a phone with only one business sees no other business and cannot switch', async () => {
+    assert.deepEqual(await ok(api('GET', '/auth/businesses', { token: officer })), []);
+    const r = await api('POST', '/auth/switch', { token: officer, body: { tenantId: twinId, password: 'Twin@1234' } });
+    assert.equal(r.status, 401);
+    assert.deepEqual(await ok(api('GET', '/auth/businesses', { token: superAdmin })), []);
+  });
+});
+
 describe('staff', () => {
   test('force logout ends a session at once', async () => {
     const staff = await ok(api('GET', '/staff', { token: owner }));

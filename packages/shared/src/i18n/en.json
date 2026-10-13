@@ -546,6 +546,74 @@
       "daybook": "Day book",
       "reports": "Reports",
       "more": "More"
+    },
+    "settings": {
+      "title": "Settings",
+      "profile": "Profile",
+      "business": "Business",
+      "branches": "Branches",
+      "allBranches": "All branches",
+      "account": "Account",
+      "passwordHelp": "You will be logged out on every phone after changing it.",
+      "security": "Security",
+      "biometric": "Fingerprint / face unlock",
+      "biometricHelp": "Ask for your fingerprint, face or phone PIN when the app opens, or comes back after a few minutes.",
+      "biometricConfirm": "Confirm it is you to turn this on",
+      "app": "App",
+      "version": "App version",
+      "lastSynced": "Last synced {{time}}",
+      "help": "Help",
+      "support": "Support",
+      "supportHelp": "Ask a question or report a problem",
+      "plan": "Plan and renewal",
+      "planHelp": "Your plan, limits and renewal date",
+      "legal": "Legal",
+      "printer": "Receipt printer",
+      "printAsk": "Ask to print after each collection",
+      "printAskHelp": "Prints a 58 mm receipt through the phone's print dialog. Bluetooth receipt printers work once their print service app is installed.",
+      "switchBusiness": "Switch business",
+      "switchHelp": "Your phone number also has an account in these businesses. Each account has its own password.",
+      "switchPending": "Sync everything on this phone before switching business.",
+      "switchTo": "Switch to {{name}}",
+      "passwordFor": "Password for {{name}}"
+    },
+    "lock": {
+      "title": "LocalFinance is locked",
+      "help": "Use your fingerprint, face or phone PIN to continue.",
+      "prompt": "Unlock LocalFinance",
+      "unlock": "Unlock",
+      "failed": "Not recognised. Try again.",
+      "usePassword": "Log out and use password"
+    },
+    "printer": {
+      "askNow": "Print a receipt for the customer?",
+      "notNow": "Not now"
+    },
+    "sheet": {
+      "title": "Line sheet",
+      "button": "Line sheet PDF",
+      "help": "A printable list of one route's customers, made on this phone.",
+      "route": "Route",
+      "columns": "Columns",
+      "groupByArea": "Group by area",
+      "groupNone": "One list",
+      "layout": "Page",
+      "portrait": "Portrait",
+      "landscape": "Landscape",
+      "order": "Order",
+      "routeOrder": "Route order",
+      "byName": "Name",
+      "share": "Download or share PDF",
+      "print": "Print",
+      "preview": "Preview",
+      "customers": "{{count}} customers",
+      "failed": "Could not make the PDF. Try again.",
+      "noRoutes": "No routes to show",
+      "cols": {
+        "code": "Code",
+        "collected": "Collected",
+        "seq": "Route no."
+      }
     }
   },
   "fund": {
@@ -1374,6 +1442,98 @@
       "reminderOffline": "No connection. This message was made from the copy on the phone.",
       "cameraDenied": "Allow the camera to read the ID card.",
       "moreAlerts": "and {{count}} more"
+    }
+  },
+  "legal": {
+    "updated": "Last updated: 13 October 2026",
+    "seeAlso": "Questions about these pages: use Support in the app, or ask your business.",
+    "terms": {
+      "title": "Terms and conditions",
+      "intro": "These terms apply to everyone who uses LocalFinance: the finance businesses that subscribe to it, and their owners and staff. By using the app or the website you agree to them.",
+      "about": {
+        "title": "About the service",
+        "body": "LocalFinance is provided by WITS Technologies (\"WITS\", \"we\") to finance businesses that lend money and collect repayments. Each business decides who gets an account and what each person can do, and is responsible for its own loans, customers and staff."
+      },
+      "accounts": {
+        "title": "Your account",
+        "body": "Each account belongs to one person in one business. Keep your password secret and do not let anyone else use your login. Fingerprint or face unlock on a phone only reopens a session you already started with your password. If a phone is lost, tell your manager at once so the session can be ended."
+      },
+      "use": {
+        "title": "Using the app properly",
+        "body": "Record only real collections and visits, at the time and place they happen. Do not enter false records, try to see another business's information, share customers' details outside your work, or try to break, copy or overload the service."
+      },
+      "data": {
+        "title": "Each business's records",
+        "body": "Every business's records are kept separate. Staff of one business can never see the records of another. The business owns its records and its owner can download a full backup at any time."
+      },
+      "messages": {
+        "title": "SMS to customers",
+        "body": "The app can send receipts and reminders to customers by SMS on behalf of the business. The business must have its customers' consent to receive these messages and must follow the rules that apply to business SMS."
+      },
+      "ai": {
+        "title": "AI features",
+        "body": "AI features are off until the business owner turns them on. Their suggestions can be wrong and must be checked by a person. Decisions about loans and customers always remain the business's own."
+      },
+      "availability": {
+        "title": "Availability",
+        "body": "We work to keep the service running at all times but cannot promise it will never be interrupted. Entries saved on a phone without a connection stay on that phone until they are sent."
+      },
+      "plans": {
+        "title": "Plans and renewal",
+        "body": "The business pays for the plan it chose. If a plan is not renewed, the business may first be limited to viewing its records and later closed, after notice to the owner."
+      },
+      "responsibility": {
+        "title": "Responsibility",
+        "body": "WITS provides the software. Lending decisions, interest and charges, and following the laws on lending and money collection are the responsibility of the business. WITS is not liable for losses arising from how a business runs its lending."
+      },
+      "changes": {
+        "title": "Changes to these terms",
+        "body": "We may update these terms. The current version is always shown in the app and on the website, with the date it was last changed."
+      }
+    },
+    "privacy": {
+      "title": "Privacy policy",
+      "intro": "This policy explains what LocalFinance collects, why, and how it is protected. For customers' and staff's information, the finance business decides what is collected; WITS Technologies keeps and processes it on the business's behalf.",
+      "what": {
+        "title": "What we collect",
+        "body": "For staff: name, phone number, email, role, branch, a code identifying the phone used, and login times. For customers: name, phone number, address, identity document numbers, loans, payments and visit notes, entered by the business's staff."
+      },
+      "location": {
+        "title": "Location",
+        "body": "When a collection, visit or new customer is saved, the phone records where it happened, so the business can check where work was done. While a collection agent has the app open, their position is shared with their managers every few minutes. Location is not tracked when the app is closed."
+      },
+      "photos": {
+        "title": "Photos of ID cards",
+        "body": "Staff may photograph a customer's ID card to fill in the customer's details. The photo is kept only with that customer's record, inside that business."
+      },
+      "sms": {
+        "title": "SMS",
+        "body": "Customers' phone numbers are used to send payment receipts and reminders through an SMS provider. The messages contain the business's name, amounts, dates and the receipt number."
+      },
+      "ai": {
+        "title": "AI features",
+        "body": "AI features are off by default. If the business owner turns them on, only the information needed for the request (for example an ID card photo, or the day's figures) is sent to the AI provider to produce the answer. It is not used to train AI models. The owner can turn these features off at any time."
+      },
+      "storage": {
+        "title": "How it is kept",
+        "body": "Records are stored on secured servers, separately for each business. Access depends on each person's role and branch, and every change is recorded in the business's audit log. The phone keeps a copy of the day's routes so work continues without a connection."
+      },
+      "sharing": {
+        "title": "Sharing",
+        "body": "We do not sell personal information. It is shared only with the providers needed to run the service (hosting, SMS, and AI when turned on), or when the law requires it."
+      },
+      "deletion": {
+        "title": "Keeping and deleting",
+        "body": "Records are kept while the business uses LocalFinance, and for as long as the law requires for financial records. Customers and staff can ask the business to correct or delete their information. A business can ask WITS to delete all of its records; we do so within 30 days, except what the law requires us to keep."
+      },
+      "phone": {
+        "title": "Choices on your phone",
+        "body": "Fingerprint unlock and receipt printing are set on each phone and stay on that phone. Your fingerprint or face never leaves the phone; the app only learns whether the check passed."
+      },
+      "contact": {
+        "title": "Contact",
+        "body": "For questions or requests about your information, use Support in the app, or contact the business you deal with."
+      }
     }
   }
 }
