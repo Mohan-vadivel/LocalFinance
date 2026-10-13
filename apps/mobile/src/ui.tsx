@@ -272,14 +272,15 @@ const BTN: Record<BtnKind, { mode: 'contained' | 'contained-tonal' | 'outlined' 
  * wrap instead of being cut as a floating label would. `prefix` shows a fixed symbol (such as ₹) inside the box;
  * `large` is for amounts.
  */
-export function Field({ label, prefix, large, hint, style, multiline, ...props }: TextInputProps & { label: string; prefix?: string; large?: boolean; hint?: string }) {
+export function Field({ label, prefix, large, hint, style, multiline, error, ...props }: TextInputProps & { label: string; prefix?: string; large?: boolean; hint?: string; /** A problem with this box: a red outline and the message in red under it. */ error?: string }) {
   return (
     <View style={{ marginBottom: SP.lg }}>
       <Text variant="labelLarge" style={s.label}>{label}</Text>
       <PaperTextInput
         mode="outlined"
-        outlineColor={C.lineStrong}
-        activeOutlineColor={C.brand}
+        error={!!error}
+        outlineColor={error ? C.danger : C.lineStrong}
+        activeOutlineColor={error ? C.danger : C.brand}
         outlineStyle={{ borderRadius: R.md, borderWidth: 1.5 }}
         textColor={C.ink}
         placeholderTextColor="#8b9796"
@@ -288,7 +289,7 @@ export function Field({ label, prefix, large, hint, style, multiline, ...props }
         {...(props as ComponentProps<typeof PaperTextInput>)}
         style={[s.input, large && s.inputLargeText, multiline && { minHeight: 96, textAlignVertical: 'top' }, style as StyleProp<TextStyle>]}
       />
-      {hint ? <Text variant="bodyMedium" style={[s.muted, { marginTop: SP.xs, fontSize: 13 }]}>{hint}</Text> : null}
+      {error ? <Text variant="bodyMedium" accessibilityLiveRegion="polite" style={s.fieldError}>{error}</Text> : hint ? <Text variant="bodyMedium" style={[s.muted, { marginTop: SP.xs, fontSize: 13 }]}>{hint}</Text> : null}
     </View>
   );
 }
@@ -329,20 +330,6 @@ export function SearchBar({ value = '', onChangeText, onPress, placeholder, labe
       style={[s.search, style]}
       inputStyle={s.searchInput}
     />
-  );
-}
-
-/** A friendly empty or "nothing found" state: a soft round icon, a line of text and an optional action. */
-export function EmptyState({ icon, title, text, action }: { icon: IconName; title: string; text?: string; action?: ReactNode }) {
-  return (
-    <View style={s.empty}>
-      <View style={s.emptyIcon}>
-        <Icon name={icon} size={30} color={C.brand} />
-      </View>
-      <Text variant="titleMedium" style={s.emptyTitle}>{title}</Text>
-      {text ? <Text variant="bodyMedium" style={s.emptyText}>{text}</Text> : null}
-      {action}
-    </View>
   );
 }
 
@@ -545,10 +532,7 @@ export const s = StyleSheet.create({
   searchText: { flex: 1, minWidth: 0, fontSize: 16, color: C.ink },
   searchInput: { fontSize: 16, color: C.ink, minHeight: 50 },
   searchClear: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  empty: { alignItems: 'center', paddingVertical: SP.xl, paddingHorizontal: SP.lg, gap: SP.sm },
-  emptyIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: C.brandSoft, alignItems: 'center', justifyContent: 'center', marginBottom: SP.xs },
-  emptyTitle: { fontSize: 17, fontWeight: '800', color: C.ink, textAlign: 'center' },
-  emptyText: { fontSize: 15, color: C.muted, textAlign: 'center', lineHeight: 21 },
+  fieldError: { color: C.danger, fontSize: 14, fontWeight: '700', marginTop: SP.xs, lineHeight: 19 },
   btnTextSmall: { fontSize: 14 },
   btnTextBig: { fontSize: 18, fontWeight: '800' },
   label: { fontSize: 14, color: C.ink2, fontWeight: '600', marginBottom: 6 },

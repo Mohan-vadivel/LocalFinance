@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking, Pressable, Share, Text, View } from 'react-native';
 import { addDays } from '@localfinance/shared';
@@ -8,7 +8,8 @@ import { istStamp, printReceipt, type ReceiptData } from '../print';
 import { getPosition, useSession } from '../session';
 import { getVisitOrder, nextInOrder } from '../smart';
 import { cachedRouteDay, enqueue, getSynced, isUnsent, removeQueued, routeDay, subscribe, type DayCustomer, type DayLoan } from '../store';
-import { Amount, Avatar, Badge, Btn, C, Card, Chips, ErrorText, Field, Icon, Loading, Notice, PIN_COLORS, R, Row, SP, Screen, dateIN, money, s, toPaise, todayIST, useNav } from '../ui';
+import { Amount, Avatar, Badge, Btn, C, Card, Chips, Field, Icon, Notice, PIN_COLORS, R, Row, SP, Screen, dateIN, money, s, toPaise, todayIST, useNav } from '../ui';
+import { ActionError, FailureState, FormProblems, LoadingState, SuccessState, fieldError, useSlowLoad, type Problem } from '../states';
 import { Reminder } from './Reminder';
 import { navigateTo } from './RouteDay';
 
@@ -56,12 +57,18 @@ export default function Customer({ customer: initial, customerId, routeId, amoun
   const [c, setC] = useState<DayCustomer | null>(initial ?? null);
   const [error, setError] = useState<unknown>(null);
   const [mode, setMode] = useState<'none' | 'collect' | 'visit' | 'reminder'>(given && initial?.loans.length ? 'collect' : 'none');
+  // A saved collection shows the full-screen success state until the agent goes on or undoes it.
+  const [saved, setSaved] = useState<Saved | null>(null);
+  const [undone, setUndone] = useState(false);
 
+  const fetchCustomer = useCallback(() => {
+    if (!customerId) return;
+    setError(null);
+    get<ApiCustomer>(`/customers/${customerId}`).then((x) => setC(fromApi(x))).catch(setError);
+  }, [customerId]);
   useEffect(() => {
-    if (!initial && customerId) {
-      get<ApiCustomer>(`/customers/${customerId}`).then((x) => setC(fromApi(x))).catch(setError);
-    }
-  }, [initial, customerId]);
+    if (!initial) fetchCustomer();
+  }, [initial, fetchCustomer]);
   useEffect(() => {
     if (!routeId || !initial) return;
     // Keep the screen in step with the route copy after a save or sync.
@@ -71,14 +78,34 @@ export default function Customer({ customer: initial, customerId, routeId, amoun
     }));
   }, [routeId, initial]);
 
-  if (!c) return <Screen title={t('common.customer')}>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;
+  const slow = useSlowLoad(!c && !error);
+  if (!c) return <Screen title={t('common.customer')}>{error ? <FailureState error={error} onRetry={fetchCustomer} onBack={() => nav.pop()} /> : <LoadingState slow={slow.slow} onKeepWaiting={slow.keepWaiting} onCancel={() => nav.pop()} />}</Screen>;
+  if (saved) {
+    return (
+      <Screen title={c.name} subtitle={`${c.code}${c.routeSeq ? ` · #${c.routeSeq}` : ''}`} scroll={false}>
+        <CollectSuccess customer={c} routeId={routeId} saved={saved} onBack={() => nav.pop()} onUndone={() => { setSaved(null); setUndone(true); }} />
+      </Screen>
+    );
+  }
 
   const actions = mode === 'none' && can('collection.record') && c.loans.length > 0;
   return (
     <Screen title={c.name} subtitle={`${c.code}${c.routeSeq ? ` · #${c.routeSeq}` : ''}`}>
-      <ErrorText error={error} />
+      <ActionError error={error} />
       {/* While collecting or noting a visit, the form comes first so Save is in reach without scrolling. */}
-      {mode === 'collect' && <CollectForm customer={c} routeId={routeId} initialAmount={given ?? undefined} onDone={() => setMode('none')} />}
+      {mode === 'collect' && (
+        <CollectForm
+          customer={c}
+          routeId={routeId}
+          initialAmount={given ?? undefined}
+          info={undone ? t('mobile.undone') : undefined}
+          onSaved={(x) => {
+            setUndone(false);
+            setSaved(x);
+          }}
+          onDone={() => setMode('none')}
+        />
+      )}
       {mode === 'visit' && <VisitForm customer={c} routeId={routeId} onDone={() => setMode('none')} />}
       <Card>
         <View style={{ flexDirection: 'row', gap: SP.md, alignItems: 'flex-start' }}>
@@ -202,37 +229,26 @@ function NextCustomer({ routeId, currentId }: { routeId: string; currentId: stri
   return <Btn big title={`${t('mobile.nextCustomer')}: ${next.routeSeq ? `${next.routeSeq}. ` : ''}${next.name}`} onPress={() => nav.replace('Customer', { customer: next, routeId })} />;
 }
 
-interface Saved { clientRef: string; at: string; amount: number; mode: 'CASH' | 'UPI'; upiRef: string | null; loanNumber: string; balance: number; message: string }
+interface Saved { clientRef: string; at: string; amount: number; mode: 'CASH' | 'UPI'; upiRef: string | null; loanNumber: string; balance: number; offline: boolean }
 
-function CollectForm({ customer, routeId, initialAmount, onDone }: { customer: DayCustomer; routeId?: string; initialAmount?: number; onDone: () => void }) {
+/**
+ * Full-screen confirmation after a collection is saved: the amount, the receipt number once the office has it, the
+ * next actions, and Undo while the entry is still only on the phone.
+ */
+function CollectSuccess({ customer, routeId, saved, onUndone, onBack }: { customer: DayCustomer; routeId?: string; saved: Saved; onUndone: () => void; onBack: () => void }) {
   const { t } = useTranslation();
   const { profile } = useSession();
-  const [loanId, setLoanId] = useState(customer.loans.find((l) => l.dueNow > 0)?.id ?? customer.loans[0].id);
-  const loan = customer.loans.find((l) => l.id === loanId)!;
-  const [amount, setAmount] = useState(String((initialAmount || loan.dueNow || loan.instalmentAmount) / 100));
-  const [payMode, setPayMode] = useState<'CASH' | 'UPI'>('CASH');
-  const [upiRef, setUpiRef] = useState('');
-  const [note, setNote] = useState('');
-  const [noteOpen, setNoteOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const [saved, setSaved] = useState<Saved | null>(null);
+  const [unsent, setUnsent] = useState(false);
+  const [receiptNo, setReceiptNo] = useState<string | null>(null);
+  const [now, setNow] = useState(Date.now());
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
-  const paise = toPaise(amount);
   // "Ask to print after each collection" (a setting on this phone) and the print in progress.
   const [askPrint, setAskPrint] = useState(false);
   const [printing, setPrinting] = useState(false);
   useEffect(() => {
     void getPrintAsk().then(setAskPrint);
   }, []);
-
-  // After saving: is it still only on the phone (so it can be undone), and its receipt number once the office has it.
-  const [unsent, setUnsent] = useState(false);
-  const [receiptNo, setReceiptNo] = useState<string | null>(null);
-  const [now, setNow] = useState(Date.now());
   useEffect(() => {
-    if (!saved) return;
     const check = () => {
       void isUnsent(saved.clientRef).then(setUnsent);
       void getSynced().then((list) => setReceiptNo(list.find((x) => x.clientRef === saved.clientRef)?.receiptNo ?? null));
@@ -247,6 +263,109 @@ function CollectForm({ customer, routeId, initialAmount, onDone }: { customer: D
       clearTimeout(stop);
     };
   }, [saved]);
+  const left = Math.max(0, Math.ceil((Date.parse(saved.at) + UNDO_MS - now) / 1000));
+
+  const undo = async () => {
+    if (!(await removeQueued(saved.clientRef))) {
+      setUnsent(false);
+      return setError(t('mobile.undoTooLate'));
+    }
+    onUndone();
+  };
+
+  const share = () => {
+    const lines = [
+      profile?.tenant?.name ?? t('common.appName'),
+      t('receipt.title'),
+      `${t('common.customer')}: ${customer.name} (${customer.code})`,
+      `${t('common.loan')}: ${saved.loanNumber}`,
+      `${t('common.amount')}: ${money(saved.amount)}`,
+      `${t('common.mode')}: ${t(`common.modes.${saved.mode}`)}${saved.upiRef ? ` · ${saved.upiRef}` : ''}`,
+      `${t('common.date')}: ${istStamp(saved.at)}`,
+      `${t('collection.receiptNo')}: ${receiptNo ?? t('mobile.receiptPending')}`,
+      t('receipt.thanks'),
+    ];
+    void Share.share({ message: lines.join('\n') }).catch(() => undefined);
+  };
+
+  const print = async () => {
+    setPrinting(true);
+    setAskPrint(false);
+    await printReceipt(
+      {
+        business: profile?.tenant?.name ?? t('common.appName'),
+        receiptNo,
+        customer: customer.name,
+        customerCode: customer.code,
+        loanNumber: saved.loanNumber,
+        amount: saved.amount,
+        mode: saved.mode,
+        upiRef: saved.upiRef,
+        at: saved.at,
+        balance: saved.balance,
+        agent: profile?.name ?? '',
+        footer: profile?.tenant?.settings?.receiptFooter,
+      },
+      t,
+    );
+    setPrinting(false);
+  };
+
+  return (
+    <SuccessState
+      title={t('collection.saved')}
+      text={
+        <View style={{ gap: SP.xs }}>
+          <Text style={{ fontSize: 34, fontWeight: '800', color: C.ink, textAlign: 'center', fontVariant: ['tabular-nums'] }} numberOfLines={1} adjustsFontSizeToFit>{money(saved.amount)}</Text>
+          <Text style={[s.muted, { textAlign: 'center' }]}>{customer.name} · {saved.loanNumber} · {t(`common.modes.${saved.mode}`)}</Text>
+          <Text style={[s.muted, { textAlign: 'center' }]}>{t('collection.receiptNo')}: {receiptNo ?? t('mobile.receiptPending')}</Text>
+          {saved.offline ? <Text style={{ color: C.warn, fontWeight: '700', textAlign: 'center' }}>{t('collection.savedOffline')}</Text> : null}
+        </View>
+      }
+    >
+      {error ? <Notice tone="danger" text={error} /> : null}
+      {askPrint && (
+        <View style={{ backgroundColor: C.brandSoft, borderRadius: R.md, padding: SP.md, gap: SP.sm }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.sm }}>
+            <Icon name="print-outline" size={22} color={C.brandInk} />
+            <Text style={{ flex: 1, color: C.brandInk, fontWeight: '700', fontSize: 15 }}>{t('mobile.printer.askNow')}</Text>
+          </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm }}>
+            <Btn small title={t('print.receipt')} onPress={() => void print()} busy={printing} style={{ flexGrow: 1, flexBasis: 120 }} />
+            <Btn small kind="outline" title={t('mobile.printer.notNow')} onPress={() => setAskPrint(false)} style={{ flexGrow: 1, flexBasis: 120 }} />
+          </View>
+        </View>
+      )}
+      {routeId ? <NextCustomer routeId={routeId} currentId={customer.id} /> : null}
+      <Btn kind="outline" title={routeId ? t('states.actions.backToRoute') : t('common.back')} onPress={onBack} style={{ marginBottom: 0 }} />
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, marginTop: SP.sm }}>
+        <Btn small kind="tonal" title={t('mobile.shareReceipt')} onPress={share} style={{ flexGrow: 1, flexBasis: 140 }} />
+        {!askPrint && <Btn small kind="tonal" title={t('print.receipt')} onPress={() => void print()} busy={printing} style={{ flexGrow: 1, flexBasis: 140 }} />}
+        {unsent && left > 0 ? <Btn small kind="outline" title={`${t('mobile.undo')} (${left})`} onPress={() => void undo()} style={{ flexGrow: 1, flexBasis: 140 }} /> : null}
+      </View>
+    </SuccessState>
+  );
+}
+
+function CollectForm({ customer, routeId, initialAmount, info, onSaved, onDone }: { customer: DayCustomer; routeId?: string; initialAmount?: number; info?: string; onSaved: (x: Saved) => void; onDone: () => void }) {
+  const { t } = useTranslation();
+  const [loanId, setLoanId] = useState(customer.loans.find((l) => l.dueNow > 0)?.id ?? customer.loans[0].id);
+  const loan = customer.loans.find((l) => l.id === loanId)!;
+  const [amount, setAmount] = useState(String((initialAmount || loan.dueNow || loan.instalmentAmount) / 100));
+  const [payMode, setPayMode] = useState<'CASH' | 'UPI'>('CASH');
+  const [upiRef, setUpiRef] = useState('');
+  const [note, setNote] = useState('');
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  // Problems are listed once the agent has tried to save, and then update as the amount changes.
+  const [tried, setTried] = useState(false);
+  const paise = toPaise(amount);
+
+  const problems: Problem[] = [];
+  if (paise <= 0) problems.push({ field: 'amount', text: t('mobile.enterAmount') });
+  else if (paise > loan.outstanding) problems.push({ field: 'amount', text: t('collection.tooMuch') });
+  const shownProblems = tried ? problems : [];
 
   // Quick amounts for the chosen loan; the chip whose amount is in the box shows as selected.
   const quick = [
@@ -257,10 +376,8 @@ function CollectForm({ customer, routeId, initialAmount, onDone }: { customer: D
   const quickOn = quick.find((q) => q.value === paise)?.key ?? '';
 
   const review = () => {
-    setError(null);
-    setInfo(null);
-    if (paise <= 0) return setError(t('mobile.enterAmount'));
-    if (paise > loan.outstanding) return setError(t('collection.tooMuch'));
+    setTried(true);
+    if (problems.length) return;
     setConfirming(true);
   };
 
@@ -285,94 +402,9 @@ function CollectForm({ customer, routeId, initialAmount, onDone }: { customer: D
     const r = await enqueue(item);
     setBusy(false);
     setConfirming(false);
-    setNow(Date.now());
-    setSaved({ clientRef: item.clientRef, at: item.collectedAt, amount: paise, mode: payMode, upiRef: item.upiRef, loanNumber: loan.number, balance: Math.max(0, loan.outstanding - paise), message: r.offline || r.sent === 0 ? t('collection.savedOffline') : t('collection.saved') });
+    onSaved({ clientRef: item.clientRef, at: item.collectedAt, amount: paise, mode: payMode, upiRef: item.upiRef, loanNumber: loan.number, balance: Math.max(0, loan.outstanding - paise), offline: !!(r.offline || r.sent === 0) });
   };
 
-  const undo = async () => {
-    if (!saved) return;
-    if (!(await removeQueued(saved.clientRef))) {
-      setUnsent(false);
-      return setError(t('mobile.undoTooLate'));
-    }
-    setSaved(null);
-    setError(null);
-    setInfo(t('mobile.undone'));
-  };
-
-  const share = () => {
-    if (!saved) return;
-    const lines = [
-      profile?.tenant?.name ?? t('common.appName'),
-      t('receipt.title'),
-      `${t('common.customer')}: ${customer.name} (${customer.code})`,
-      `${t('common.loan')}: ${saved.loanNumber}`,
-      `${t('common.amount')}: ${money(saved.amount)}`,
-      `${t('common.mode')}: ${t(`common.modes.${saved.mode}`)}${saved.upiRef ? ` · ${saved.upiRef}` : ''}`,
-      `${t('common.date')}: ${istStamp(saved.at)}`,
-      `${t('collection.receiptNo')}: ${receiptNo ?? t('mobile.receiptPending')}`,
-      t('receipt.thanks'),
-    ];
-    void Share.share({ message: lines.join('\n') }).catch(() => undefined);
-  };
-
-  const print = async () => {
-    if (!saved) return;
-    setPrinting(true);
-    setAskPrint(false);
-    await printReceipt(
-      {
-        business: profile?.tenant?.name ?? t('common.appName'),
-        receiptNo,
-        customer: customer.name,
-        customerCode: customer.code,
-        loanNumber: saved.loanNumber,
-        amount: saved.amount,
-        mode: saved.mode,
-        upiRef: saved.upiRef,
-        at: saved.at,
-        balance: saved.balance,
-        agent: profile?.name ?? '',
-        footer: profile?.tenant?.settings?.receiptFooter,
-      },
-      t,
-    );
-    setPrinting(false);
-  };
-
-  if (saved) {
-    const left = Math.max(0, Math.ceil((Date.parse(saved.at) + UNDO_MS - now) / 1000));
-    return (
-      <Card style={{ borderColor: C.ok, borderWidth: 1.5 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.sm, marginBottom: SP.md }}>
-          <Icon name="checkmark-circle" size={28} color={C.ok} />
-          <Text style={[s.h2, { color: C.ok, marginBottom: 0, flex: 1, minWidth: 0 }]}>{receiptNo ? t('collection.saved') : saved.message}</Text>
-        </View>
-        <Text style={[s.big, { fontSize: 34, marginBottom: SP.xs }]} numberOfLines={1} adjustsFontSizeToFit>{money(saved.amount)}</Text>
-        <Text style={[s.muted, { marginBottom: SP.lg }]}>{saved.loanNumber} · {t(`common.modes.${saved.mode}`)} · {t('collection.receiptNo')}: {receiptNo ?? t('mobile.receiptPending')}</Text>
-        {error && <Notice tone="danger" text={error} />}
-        {askPrint && (
-          <View style={{ backgroundColor: C.brandSoft, borderRadius: R.md, padding: SP.md, marginBottom: SP.md, gap: SP.sm }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.sm }}>
-              <Icon name="print-outline" size={22} color={C.brandInk} />
-              <Text style={{ flex: 1, color: C.brandInk, fontWeight: '700', fontSize: 15 }}>{t('mobile.printer.askNow')}</Text>
-            </View>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm }}>
-              <Btn small title={t('print.receipt')} onPress={() => void print()} busy={printing} style={{ flexGrow: 1, flexBasis: 120 }} />
-              <Btn small kind="outline" title={t('mobile.printer.notNow')} onPress={() => setAskPrint(false)} style={{ flexGrow: 1, flexBasis: 120 }} />
-            </View>
-          </View>
-        )}
-        {routeId && <NextCustomer routeId={routeId} currentId={customer.id} />}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, marginBottom: SP.sm }}>
-          <Btn small kind="tonal" title={t('mobile.shareReceipt')} onPress={share} style={{ flexGrow: 1, flexBasis: 140 }} />
-          {!askPrint && <Btn small kind="tonal" title={t('print.receipt')} onPress={() => void print()} busy={printing} style={{ flexGrow: 1, flexBasis: 140 }} />}
-          {unsent && left > 0 && <Btn small kind="outline" title={`${t('mobile.undo')} (${left})`} onPress={() => void undo()} style={{ flexGrow: 1, flexBasis: 140 }} />}
-        </View>
-        <Btn kind="ghost" title={t('common.close')} onPress={onDone} style={{ marginBottom: 0 }} />
-      </Card>
-    );
-  }
   if (confirming) {
     return (
       <Card style={{ borderColor: C.brand, borderWidth: 1.5 }}>
@@ -392,9 +424,10 @@ function CollectForm({ customer, routeId, initialAmount, onDone }: { customer: D
   return (
     <Card style={{ borderColor: C.brand, borderWidth: 1.5 }}>
       <Text style={s.h2}>{t('collection.record')}</Text>
+      <FormProblems problems={shownProblems} />
       {info && <Notice tone="info" text={info} />}
       {customer.loans.length > 1 && <Chips value={loanId} onChange={(v) => { setLoanId(v); const l = customer.loans.find((x) => x.id === v)!; setAmount(String((l.dueNow || l.instalmentAmount) / 100)); }} items={customer.loans.map((l) => ({ key: l.id, label: l.number }))} />}
-      <Field label={t('collection.amountCollected')} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" prefix="₹" large />
+      <Field label={t('collection.amountCollected')} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" prefix="₹" large error={fieldError(shownProblems, 'amount')} />
       {quick.length > 0 && (
         <Chips value={quickOn} onChange={(k) => setAmount(String(quick.find((q) => q.key === k)!.value / 100))} items={quick.map((q) => ({ key: q.key, label: `${q.label} ${money(q.value)}` }))} />
       )}
@@ -408,7 +441,6 @@ function CollectForm({ customer, routeId, initialAmount, onDone }: { customer: D
       )}
       {/* A note is rarely needed at the door: one tap shows the box. */}
       {noteOpen || note ? <Field label={t('common.notes')} value={note} onChangeText={setNote} autoFocus={noteOpen && !note} /> : <Btn small kind="ghost" icon="create-outline" title={t('mobile.addNote')} onPress={() => setNoteOpen(true)} style={{ alignSelf: 'flex-start', marginBottom: SP.md, paddingHorizontal: SP.sm }} />}
-      {error && <Notice tone="danger" text={error} />}
       <Btn big icon="checkmark-circle" title={`${t('common.save')} ${money(paise)}`} onPress={review} />
       <Btn kind="ghost" title={t('common.cancel')} onPress={onDone} style={{ marginBottom: 0 }} />
     </Card>

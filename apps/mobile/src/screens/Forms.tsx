@@ -6,7 +6,8 @@ import { LANGUAGES } from '@localfinance/shared';
 import { ApiError, get, newRef, post, put } from '../api';
 import { getPosition } from '../session';
 import { cachedRouteDay, cachedRoutes, myRoutes, type DayCustomer, type MyRoute } from '../store';
-import { Amount, Avatar, Badge, Btn, C, Card, Chevron, Chips, EmptyState, ErrorText, Field, Icon, Loading, Notice, Row, SP, Screen, SearchBar, dateIN, money, s, toPaise, useLayout, useNav } from '../ui';
+import { Amount, Avatar, Badge, Btn, C, Card, Chevron, Chips, ErrorText, Field, Icon, Notice, Row, SP, Screen, SearchBar, dateIN, money, s, toPaise, useLayout, useNav } from '../ui';
+import { ActionError, EmptyState, FailureState, FormProblems, LoadingState, NoSearchResults, SkeletonList, SuccessState, fieldError, useRequired, useSlowLoad, type Problem } from '../states';
 
 // =====================================================================
 // Add customer (with GPS pin)
@@ -31,8 +32,20 @@ export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
   const [error, setError] = useState<unknown>(null);
   const [duplicate, setDuplicate] = useState(false);
   const [ref] = useState(newRef);
+  // The customer just added, shown on the full-screen success state.
+  const [added, setAdded] = useState<{ id: string; name: string } | null>(null);
+  // Problems are listed once Save has been tried, then update as the boxes change.
+  const [tried, setTried] = useState(false);
+  const req = useRequired();
   const set = (k: keyof typeof f) => (v: string) => setF({ ...f, [k]: v });
   const route = routes.find((r) => r.id === routeId);
+  const problems: Problem[] = [];
+  if (!route) problems.push({ text: t('mobile.chooseRoute') });
+  if (!f.name) problems.push({ field: 'name', text: req(t('common.name')) });
+  if (!f.phone) problems.push({ field: 'phone', text: req(t('common.phone')) });
+  if (!f.address) problems.push({ field: 'address', text: req(t('common.address')) });
+  if (!gps) problems.push({ text: t('mobile.locationNeeded') });
+  const shownProblems = tried ? problems : [];
 
   const capture = async () => {
     setLocating(true);
@@ -45,8 +58,8 @@ export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
 
   const save = async () => {
     setError(null);
-    if (!route) return setError(new Error(t('mobile.chooseRoute')));
-    if (!gps) return setError(new Error(t('mobile.locationNeeded')));
+    setTried(true);
+    if (problems.length || !route || !gps) return;
     setBusy(true);
     try {
       const c = await post<{ id: string; name: string }>(`/customers${duplicate ? '?allowDuplicate=true' : ''}`, {
@@ -68,7 +81,7 @@ export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
         guarantorPhone: f.guarantorPhone || null,
         clientRef: ref,
       });
-      nav.replace('Customer', { customerId: c.id });
+      setAdded({ id: c.id, name: c.name });
     } catch (e) {
       if (e instanceof ApiError && e.code === 'customerMod.duplicate') setDuplicate(true);
       setError(e);
@@ -77,17 +90,29 @@ export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
     }
   };
 
+  if (added) {
+    return (
+      <Screen title={t('mobile.addCustomer')} scroll={false}>
+        <SuccessState title={t('states.success.customerTitle')} text={<Text style={[s.muted, { textAlign: 'center', fontSize: 16 }]}>{t('states.success.customerHelp', { name: added.name })}</Text>}>
+          <Btn big title={t('states.actions.openCustomer')} onPress={() => nav.replace('Customer', { customerId: added.id })} />
+          <Btn kind="outline" title={t('states.actions.backToRoute')} onPress={() => nav.pop()} style={{ marginBottom: 0 }} />
+        </SuccessState>
+      </Screen>
+    );
+  }
+
   return (
     <Screen title={t('mobile.addCustomer')}>
+      <FormProblems problems={shownProblems} />
       <ReadIdCard onRead={(x) => setF((cur) => ({ ...cur, name: x.name || cur.name, idType: x.idType && ID_TYPES.includes(x.idType) ? x.idType : cur.idType, idNumber: x.idNumber || cur.idNumber, address: x.address || cur.address }))} />
       <Card>
         <Text style={s.h2}>{t('common.route')}</Text>
         <Chips value={routeId} onChange={setRouteId} items={routes.map((r) => ({ key: r.id, label: r.name }))} />
         <View style={{ height: 1, backgroundColor: C.line, marginBottom: SP.lg }} />
-        <Field label={t('common.name')} value={f.name} onChangeText={set('name')} />
-        <Field label={t('common.phone')} value={f.phone} onChangeText={set('phone')} keyboardType="phone-pad" />
+        <Field label={t('common.name')} value={f.name} onChangeText={set('name')} error={fieldError(shownProblems, 'name')} />
+        <Field label={t('common.phone')} value={f.phone} onChangeText={set('phone')} keyboardType="phone-pad" error={fieldError(shownProblems, 'phone')} />
         <Field label={t('customerMod.altPhone')} value={f.altPhone} onChangeText={set('altPhone')} keyboardType="phone-pad" />
-        <Field label={t('common.address')} value={f.address} onChangeText={set('address')} multiline />
+        <Field label={t('common.address')} value={f.address} onChangeText={set('address')} multiline error={fieldError(shownProblems, 'address')} />
         <Field label={t('customerMod.landmark')} value={f.landmark} onChangeText={set('landmark')} />
         <Text style={s.label}>{t('customerMod.idType')}</Text>
         <Chips value={f.idType} onChange={set('idType')} items={ID_TYPES.map((x) => ({ key: x, label: t(`customerMod.idTypes.${x}`) }))} />
@@ -109,8 +134,8 @@ export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
         <Btn kind="tonal" title={t('customerMod.captureLocation')} onPress={() => void capture()} busy={locating} />
         <Text style={s.muted}>{t('mobile.gpsHelp')}</Text>
       </Card>
-      <ErrorText error={error} />
-      <Btn big title={duplicate ? t('customerMod.saveAnyway') : t('common.save')} onPress={() => void save()} busy={busy} disabled={!f.name || !f.phone || !f.address} />
+      <ActionError error={error} />
+      <Btn big title={duplicate ? t('customerMod.saveAnyway') : t('common.save')} onPress={() => void save()} busy={busy} />
     </Screen>
   );
 }
@@ -298,10 +323,11 @@ export function Search({ forLoan }: { forLoan?: boolean }) {
       {/* Customers on this phone show as you type; the button also asks the office. */}
       <SearchBar value={q} onChangeText={setQ} onSubmit={() => void run()} placeholder={compact ? t('common.search') : t('customerMod.searchHint')} label={t('customerMod.searchHint')} autoFocus />
       <Btn icon="search" title={t('common.search')} onPress={() => void run()} busy={busy} disabled={term.length < 2} style={{ marginBottom: SP.md }} />
-      <ErrorText error={error} />
+      {error ? <FailureState error={error} onRetry={() => void run()} /> : null}
       {offline && searched && <Notice tone="warn" text={t('mobile.searchOffline')} />}
-      {term.length < 2 && <EmptyState icon="people-outline" title={forLoan ? t('mobile.requestLoan') : t('mobile.search')} text={t('mobile.searchStart')} />}
-      {term.length >= 2 && rows.length === 0 && !busy && <EmptyState icon="search" title={t('mobile.noMatch')} text={searched ? undefined : t('mobile.noMatchOnPhone')} />}
+      {term.length < 2 && <EmptyState icon="people-outline" title={forLoan ? t('mobile.requestLoan') : t('mobile.search')} help={t('mobile.searchStart')} />}
+      {term.length >= 2 && rows.length === 0 && !busy &&
+        (searched && !offline ? <NoSearchResults query={q.trim()} onClear={() => { setQ(''); setServer(null); }} /> : <Notice tone="warn" text={t('mobile.noMatchOnPhone')} />)}
       {rows.map((r) => (
         <Card key={r.id} onPress={() => open(r)} accessibilityLabel={r.name} style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md }}>
           <Avatar name={r.name} size={44} color={r.status !== 'ACTIVE' ? C.danger : C.brand} />
@@ -341,11 +367,16 @@ export function LoanRequest({ customerId, customerName }: { customerId: string; 
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [ref] = useState(newRef);
-  useEffect(() => {
+  const slow = useSlowLoad(!products && !error);
+  const loadProducts = () => {
+    setError(null);
     get<Product[]>('/products').then((p) => {
       setProducts(p);
       if (p[0]) setProductId(p[0].id);
     }).catch(setError);
+  };
+  useEffect(() => {
+    loadProducts();
   }, [customerId]);
   // Risk score from the customer's own history; with the amount typed, it also compares it with past loans.
   const asked = toPaise(amount);
@@ -376,7 +407,7 @@ export function LoanRequest({ customerId, customerName }: { customerId: string; 
       setBusy(false);
     }
   };
-  if (!products) return <Screen title={t('mobile.requestLoan')}>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;
+  if (!products) return <Screen title={t('mobile.requestLoan')}>{error ? <FailureState error={error} onRetry={loadProducts} onBack={() => nav.pop()} /> : <LoadingState slow={slow.slow} onKeepWaiting={slow.keepWaiting} onCancel={() => nav.pop()} />}</Screen>;
   return (
     <Screen title={t('mobile.requestLoan')}>
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md }}>
@@ -417,7 +448,7 @@ export function LoanRequest({ customerId, customerName }: { customerId: string; 
           <Row label={t('loanMod.lastDue')} value={dateIN(preview.schedule[preview.schedule.length - 1]?.dueDate)} />
         </Card>
       )}
-      <ErrorText error={error} />
+      <ActionError error={error} />
       <Btn big title={t('common.submit')} onPress={() => void submit()} busy={busy} disabled={!preview} />
     </Screen>
   );
@@ -439,6 +470,7 @@ export function MyRequests() {
   const load = useCallback(() => {
     get<{ rows: MyLoanRow[] }>('/loans', { queue: 'mine' })
       .then((r) => {
+        setError(null);
         setRows(r.rows);
         for (const l of r.rows.filter((x) => ['SENT_BACK', 'REJECTED', 'APPROVED'].includes(x.status) || (x.status === 'REQUESTED' && x.stage === 'ADMIN'))) {
           get<{ approvals: Approval[] }>(`/loans/${l.id}`)
@@ -457,9 +489,9 @@ export function MyRequests() {
   const tone: Record<string, string> = { REQUESTED: C.warn, SENT_BACK: C.warn, APPROVED: C.brand, ACTIVE: C.ok, REJECTED: C.danger };
   return (
     <Screen title={t('mobile.myRequests')}>
-      <ErrorText error={error} />
-      {!rows && !error && <Loading />}
-      {rows?.length === 0 && <Notice tone="warn" text={t('common.noData')} />}
+      {error ? <FailureState error={error} onRetry={load} /> : null}
+      {!rows && !error && <SkeletonList rows={3} />}
+      {rows?.length === 0 && <EmptyState icon="document-text-outline" title={t('common.noData')} help={t('states.empty.requestsHelp')} />}
       {(rows ?? []).map((l) => (
         <Card key={l.id}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: SP.sm }}>
@@ -516,7 +548,7 @@ function Resubmit({ loan, onCancel, onDone }: { loan: MyLoanRow; onCancel: () =>
     <View style={{ marginTop: SP.md, borderTopWidth: 1, borderColor: C.line, paddingTop: SP.md }}>
       <Field label={t('loanMod.principal')} value={principal} onChangeText={setPrincipal} keyboardType="numeric" prefix="₹" large />
       <Field label={t('loanMod.purpose')} value={purpose} onChangeText={setPurpose} />
-      <ErrorText error={error} />
+      <ActionError error={error} />
       <Btn title={t('loanMod.resubmit')} onPress={() => void submit()} busy={busy} disabled={toPaise(principal) <= 0} />
       <Btn kind="ghost" title={t('common.cancel')} onPress={onCancel} style={{ marginBottom: 0 }} />
     </View>

@@ -17,6 +17,14 @@ interface Session {
 const Ctx = createContext<Session>(null as unknown as Session);
 export const useSession = () => useContext(Ctx);
 
+/** Set when the server ends the session (the refresh failed). Login reads it once to explain why it is shown. */
+let sessionEnded = false;
+export function takeSessionEnded() {
+  const v = sessionEnded;
+  sessionEnded = false;
+  return v;
+}
+
 /** Current GPS position, or null when permission is refused or no fix comes in time. */
 export async function getPosition(): Promise<{ lat: number; lng: number; accuracy: number | null } | null> {
   try {
@@ -42,6 +50,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setOnLoggedOut(() => {
+      sessionEnded = true;
       setProfile(null);
       void saveProfile(null);
     });

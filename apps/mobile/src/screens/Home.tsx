@@ -6,7 +6,8 @@ import { Appbar, Text } from 'react-native-paper';
 import { get } from '../api';
 import { useSession } from '../session';
 import { cachedRouteDay, getFailed, getLastSync, getQueue, myRoutes, subscribe, sync, type MyRoute } from '../store';
-import { AmountPair, Avatar, Badge, Btn, C, Card, Chevron, EmptyState, ErrorText, Icon, MAX_W, MAX_W_WIDE, MenuCtx, Notice, Progress, R, SP, SearchBar, Section, dateIN, money, s, todayIST, useLayout, useNav, useScreenEdges, type IconName } from '../ui';
+import { AmountPair, Avatar, Badge, Btn, C, Card, Chevron, Icon, MAX_W, MAX_W_WIDE, MenuCtx, Notice, Progress, R, SP, SearchBar, Section, dateIN, money, s, todayIST, useLayout, useNav, useScreenEdges, type IconName } from '../ui';
+import { EmptyState, FailureState, SkeletonList } from '../states';
 
 /** Pending, failed and last-sync state, kept current as the queue changes. */
 export function useSyncState() {
@@ -257,11 +258,13 @@ export default function Home() {
       {canSearch && <SearchBar placeholder={t('mobile.search')} onPress={() => nav.push('Search')} />}
       {todayCard}
       <SyncBar />
-      {offline && <Notice tone="warn" text={t('mobile.offlineCopy')} />}
-      <ErrorText error={error} />
+      {/* No connection and nothing downloaded yet, or a failed load: say so in place of the route list. */}
+      {error || (offline && !routes?.length) ? <FailureState error={error} offline={offline} onRetry={() => void load()} /> : null}
+      {offline && !!routes?.length && <Notice tone="warn" text={t('mobile.offlineCopy')} />}
       {/* A manager or owner without routes of their own sees no empty "My routes" section. */}
       {!(isManager && routes?.length === 0) && <Section title={t('mobile.myRoutes')} />}
-      {routes && routes.length === 0 && !isManager && <EmptyState icon="map-outline" title={t('mobile.noRoutes')} />}
+      {routes === null && !error ? <SkeletonList rows={2} /> : null}
+      {routes && routes.length === 0 && !isManager && !error && !offline && <EmptyState icon="map-outline" title={t('mobile.noRoutes')} help={t('states.empty.routesHelp')} />}
       {routeCards}
     </>
   );
@@ -293,6 +296,8 @@ export default function Home() {
             {actionList}
           </>
         )}
+        {/* Development builds only: a preview of the standard screen states (not in the menu or tabs). */}
+        {__DEV__ && <Btn kind="ghost" title={t('states.gallery.open')} onPress={() => nav.push('StatesGallery')} style={{ marginTop: SP.md }} />}
       </ScrollView>
     </SafeAreaView>
   );

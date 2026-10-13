@@ -5,7 +5,8 @@ import { MapPins } from '../MapPins';
 import { getPosition, useSession } from '../session';
 import { getVisitOrder, lastKnownHere, onVisitOrder, orderDay, setVisitOrder, type VisitOrder } from '../smart';
 import { routeDay, subscribe, type DayCustomer, type RouteDay as Day } from '../store';
-import { AmountPair, Badge, Btn, C, Card, Chevron, Chips, EmptyState, ErrorText, Icon, IconButton, Loading, Notice, PIN_COLORS, Progress, R, SP, Screen, SearchBar, dateIN, money, s, useLayout, useNav } from '../ui';
+import { AmountPair, Badge, Btn, C, Card, Chevron, Chips, Icon, IconButton, Notice, PIN_COLORS, Progress, R, SP, Screen, SearchBar, dateIN, money, s, useLayout, useNav } from '../ui';
+import { EmptyState, FailureState, LoadingState, NoSearchResults, useSlowLoad } from '../states';
 import { SyncBar } from './Home';
 import { VoiceSheet } from './Voice';
 
@@ -54,8 +55,10 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
     // Re-read after each saved collection or sync.
     return subscribe(() => void routeDay(routeId).then((r) => r.data && setDay(r.data)));
   }, [load, routeId]);
+  // Waiting for the day's list: after 8 seconds the screen says it is taking longer than usual.
+  const slow = useSlowLoad(!day && !error && !offline);
 
-  if (!day) return <Screen title={name}>{error ? <ErrorText error={error} /> : <Loading />}</Screen>;
+  if (!day) return <Screen title={name}>{error || offline ? <FailureState error={error} offline={offline} onRetry={() => void load()} onBack={() => nav.pop()} /> : <LoadingState slow={slow.slow} onKeepWaiting={slow.keepWaiting} onCancel={() => nav.pop()} />}</Screen>;
   const list = day.customers;
   const ordered = orderDay(day, order, here);
   const next = ordered.list.find((c) => c.pin === 'PENDING') ?? null;
@@ -93,7 +96,7 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
       <VoiceSheet visible={speaking} customers={list} onClose={() => setSpeaking(false)} onCollect={(c, amount) => { setSpeaking(false); nav.push('Customer', { customer: c, routeId, amount }); }} />
       <ScrollView contentContainerStyle={s.body} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} colors={[C.brand]} />}>
         {offline && <Notice tone="warn" text={t('mobile.offlineCopy')} />}
-        <ErrorText error={error} />
+        {error ? <FailureState error={error} onRetry={() => void load()} onBack={() => nav.pop()} /> : null}
         <Card tone="brand" style={{ padding: SP.lg }}>
           <AmountPair onBrand main={{ label: t('report.collected'), value: money(collected) }} side={{ label: t('report.due'), value: money(due) }} />
           <View style={{ marginTop: SP.md }}>
@@ -141,7 +144,14 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
             ))}
           </View>
         )}
-        {shown.length === 0 && <EmptyState icon={show === 'pending' && !needle ? 'checkmark-done' : 'search'} title={show === 'pending' && !needle ? t('mobile.routeDone') : t('mobile.noMatch')} />}
+        {shown.length === 0 &&
+          (needle ? (
+            <NoSearchResults query={q.trim()} onClear={() => setQ('')} />
+          ) : show === 'pending' ? (
+            <EmptyState icon="checkmark-done" title={t('mobile.routeDone')} />
+          ) : (
+            <EmptyState icon="people-outline" title={t('common.noData')} help={t('states.empty.help')} />
+          ))}
         {view === 'map' ? (
           <MapPins
             me={me}

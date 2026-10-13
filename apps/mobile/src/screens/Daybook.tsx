@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { ApiError, get, post } from '../api';
 import { useSession } from '../session';
-import { Badge, Btn, C, Card, Chips, EmptyState, ErrorText, Field, Loading, Notice, Row, SP, Screen, Section, dateIN, money, s, toPaise, todayIST } from '../ui';
+import { Badge, Btn, C, Card, Chips, ErrorText, Field, Notice, Row, SP, Screen, Section, dateIN, money, s, toPaise, todayIST } from '../ui';
+import { ActionError, EmptyState, FailureState, FormProblems, LoadingState, SkeletonList, fieldError, useRequired, type Problem } from '../states';
 
 interface Category { id: string; name: string; kind: string; active: boolean }
 type Status = 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -72,9 +73,9 @@ export default function Daybook() {
           <Btn big icon="add-circle-outline" title={t('daybook.newEntry')} onPress={() => { setMsg(''); setAdding(true); }} style={{ marginBottom: SP.md }} />
         )}
         <Chips segmented value={tab} onChange={setTab} items={(['PENDING', 'APPROVED', 'REJECTED'] as const).map((k) => ({ key: k, label: t(`daybook.statuses.${k}`) }))} />
-        <ErrorText error={error} />
-        {!rows && !error && <Loading />}
-        {rows?.length === 0 && <EmptyState icon={tab === 'PENDING' ? 'checkmark-done-circle-outline' : 'document-text-outline'} title={tab === 'PENDING' ? t('daybook.nothingWaiting') : t('common.noData')} />}
+        {error ? <FailureState error={error} onRetry={() => void load()} /> : null}
+        {!rows && !error && <SkeletonList rows={3} />}
+        {rows?.length === 0 && <EmptyState icon={tab === 'PENDING' ? 'checkmark-done-circle-outline' : 'document-text-outline'} title={tab === 'PENDING' ? t('daybook.nothingWaiting') : t('common.noData')} help={t('states.empty.entriesHelp')} />}
         {tab === 'REJECTED' && rows && rows.length > 0 && <RejectedTotals rows={rows} />}
         {(rows ?? []).map((r) => (
           <RequestCard key={r.id} r={r} canDecide={approver && r.status === 'PENDING' && r.requestedById !== profile?.id} onDecided={() => void load()} />
@@ -191,8 +192,18 @@ function EntryForm({ approver, branches, onCancel, onDone }: { approver: boolean
   }, []);
   const kinds = direction === 'IN' ? ['INCOME'] : ['EXPENSE'];
   const options = (cats ?? []).filter((c) => c.active && kinds.includes(c.kind));
-  const ok = !!branchId && !!categoryId && toPaise(amount) > 0 && particulars.trim().length >= 2;
+  // The same rules as before (branch, category, an amount, and at least 2 letters in particulars), shown once Save is tried.
+  const req = useRequired();
+  const [tried, setTried] = useState(false);
+  const problems: Problem[] = [];
+  if (!branchId) problems.push({ text: req(t('common.branch')) });
+  if (!categoryId) problems.push({ field: 'category', text: req(t('daybook.category')) });
+  if (toPaise(amount) <= 0) problems.push({ field: 'amount', text: req(t('common.amount')) });
+  if (particulars.trim().length < 2) problems.push({ field: 'particulars', text: t('states.form.tooShort', { field: t('daybook.particulars'), min: 2 }) });
+  const shownProblems = tried ? problems : [];
   const save = async () => {
+    setTried(true);
+    if (problems.length) return;
     setBusy(true);
     setError(null);
     try {
@@ -207,6 +218,7 @@ function EntryForm({ approver, branches, onCancel, onDone }: { approver: boolean
   return (
     <Card>
       <Text style={s.h2}>{t('daybook.newEntry')}</Text>
+      <FormProblems problems={shownProblems} />
       {!approver && <Notice tone="info" text={t('daybook.needsApproval')} />}
       {branches.length > 1 && (
         <>
@@ -216,13 +228,13 @@ function EntryForm({ approver, branches, onCancel, onDone }: { approver: boolean
       )}
       <Chips segmented value={direction} onChange={(v) => { setDirection(v); setCategoryId(''); }} items={[{ key: 'OUT', label: t('daybook.out') }, { key: 'IN', label: t('daybook.in') }]} />
       <Section title={t('daybook.category')} />
-      {!cats && !error ? <Loading /> : <Chips value={categoryId} onChange={setCategoryId} items={options.map((c) => ({ key: c.id, label: c.name }))} />}
-      <Field label={t('common.amount')} prefix="₹" large keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
+      {!cats && !error ? <LoadingState /> : <Chips value={categoryId} onChange={setCategoryId} items={options.map((c) => ({ key: c.id, label: c.name }))} />}
+      <Field label={t('common.amount')} prefix="₹" large keyboardType="decimal-pad" value={amount} onChangeText={setAmount} error={fieldError(shownProblems, 'amount')} />
       <Chips segmented value={mode} onChange={setMode} items={[{ key: 'CASH', label: t('common.modes.CASH') }, { key: 'UPI', label: t('common.modes.UPI') }]} />
-      <Field label={t('daybook.particulars')} value={particulars} onChangeText={setParticulars} />
-      <ErrorText error={error} />
+      <Field label={t('daybook.particulars')} value={particulars} onChangeText={setParticulars} error={fieldError(shownProblems, 'particulars')} />
+      <ActionError error={error} />
       <View style={{ flexDirection: 'row', gap: SP.sm }}>
-        <Btn title={approver ? t('common.save') : t('daybook.send')} onPress={() => void save()} busy={busy} disabled={!ok} style={{ flexGrow: 1 }} />
+        <Btn title={approver ? t('common.save') : t('daybook.send')} onPress={() => void save()} busy={busy} style={{ flexGrow: 1 }} />
         <Btn kind="outline" title={t('common.cancel')} onPress={onCancel} style={{ flexGrow: 1 }} />
       </View>
     </Card>

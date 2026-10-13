@@ -1641,5 +1641,74 @@
     "search": "Search in this table",
     "sort": "Sort by this column",
     "noMatch": "Nothing matches \"{{q}}\""
+  },
+  "states": {
+    "actions": {
+      "tryAgain": "Try again",
+      "goBack": "Go back",
+      "clearSearch": "Clear search",
+      "backToRoute": "Back to route",
+      "keepWaiting": "Keep waiting",
+      "openCustomer": "Open customer"
+    },
+    "empty": {
+      "help": "There is nothing to show here yet.",
+      "routesHelp": "Your office has not given you a route for today. Pull down to check again.",
+      "entriesHelp": "Entries you add will show here.",
+      "requestsHelp": "Loan requests you send will show here."
+    },
+    "loading": {
+      "skeleton": "Loading list"
+    },
+    "error": {
+      "title": "Something went wrong",
+      "generic": "We could not complete this. Please try again."
+    },
+    "offline": {
+      "title": "No internet connection",
+      "safe": "Your data is safe on this phone. Saved collections will sync when the connection comes back.",
+      "pending": "Entries waiting to sync: {{count}}",
+      "nonePending": "Nothing is waiting to sync."
+    },
+    "slow": {
+      "title": "This is taking longer than usual",
+      "help": "The network may be weak. You can keep waiting or cancel."
+    },
+    "noResults": {
+      "title": "No customer matches \"{{query}}\"",
+      "tip": "Check the spelling, or search by phone number."
+    },
+    "denied": {
+      "advice": "Ask your administrator to give your role this right."
+    },
+    "session": {
+      "notice": "Your session has ended. Sign in again to continue.",
+      "unsent": "{{count}} entries saved on this phone are not sent yet. They stay on the phone and will sync after you sign in."
+    },
+    "form": {
+      "required": "{{field}} is required",
+      "tooShort": "{{field}} needs at least {{min}} letters"
+    },
+    "success": {
+      "customerTitle": "Customer added",
+      "customerHelp": "{{name}} is saved and can be visited on your route."
+    },
+    "gallery": {
+      "open": "States preview",
+      "title": "Screen states",
+      "subtitle": "Preview only, in development builds",
+      "names": {
+        "empty": "Empty",
+        "loading": "Loading",
+        "error": "Error",
+        "offline": "No internet",
+        "slow": "Slow network",
+        "noResults": "No search results",
+        "denied": "Permission denied",
+        "session": "Session expired",
+        "form": "Form validation",
+        "success": "Success"
+      }
+    }
   }
 }
