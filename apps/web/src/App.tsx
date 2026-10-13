@@ -21,12 +21,15 @@ import Funds from './pages/Funds';
 import Investors, { InvestorDetail } from './pages/Investors';
 import Loans, { Approvals, LoanDetail } from './pages/Loans';
 import Login from './pages/Login';
+import Plan from './pages/Plan';
 import Products from './pages/Products';
 import ProfitLoss from './pages/ProfitLoss';
 import Reports from './pages/Reports';
 import Routes, { RouteDetail } from './pages/Routes';
+import Salaries from './pages/Salaries';
 import Settings, { Audit } from './pages/Settings';
 import Staff, { Roles } from './pages/Staff';
+import Support, { PlatformSettingsPage } from './pages/Support';
 import Tenants from './pages/Tenants';
 
 /** The main page for a user without reports, in order of how often each role works there. */
@@ -39,6 +42,7 @@ const LANDING: { to: string; key: string; perms: Permission[] }[] = [
   { to: '/daybook', key: 'nav.daybook', perms: ['daybook.view', 'daybook.manage', 'daybook.request', 'daybook.approve'] },
   { to: '/funds', key: 'nav.funds', perms: ['fund.manage'] },
   { to: '/investors', key: 'nav.investors', perms: ['investor.manage'] },
+  { to: '/salaries', key: 'nav.salaries', perms: ['salary.manage'] },
   { to: '/staff', key: 'nav.staff', perms: ['staff.manage'] },
   { to: '/profit-loss', key: 'nav.profitLoss', perms: ['pl.view'] },
   { to: '/audit', key: 'nav.audit', perms: ['audit.view'] },
@@ -54,10 +58,10 @@ function Home() {
 }
 
 /** Shows the page only when the user has one of the rights; the API enforces the same rules. */
-function Need({ perms, superOnly, children }: { perms?: Permission[]; superOnly?: boolean; children: ReactNode }) {
+function Need({ perms, superOnly, roles, children }: { perms?: Permission[]; superOnly?: boolean; roles?: string[]; children: ReactNode }) {
   const { t } = useTranslation();
   const { profile, can } = useAuth();
-  const ok = superOnly ? profile?.role === 'SUPER_ADMIN' : !perms || can(...perms);
+  const ok = superOnly ? profile?.role === 'SUPER_ADMIN' : roles ? !!profile && roles.includes(profile.role) : !perms || can(...perms);
   return ok ? <>{children}</> : <div className="error-box">{t('errors.forbidden')}</div>;
 }
 
@@ -70,6 +74,10 @@ function Guarded() {
       <Route element={<Layout />}>
         <Route index element={<Home />} />
         <Route path="tenants" element={<Need superOnly><Tenants /></Need>} />
+        <Route path="platform-settings" element={<Need superOnly><PlatformSettingsPage /></Need>} />
+        <Route path="support" element={<Support />} />
+        {/* The plan and its price are for the owner only; agents and other staff never see it. */}
+        <Route path="plan" element={<Need roles={['TENANT_ADMIN']}><Plan /></Need>} />
         <Route path="branches" element={<Need perms={['branch.manage', 'route.manage']}><Branches /></Need>} />
         <Route path="routes" element={<Need perms={['route.manage', 'report.view']}><Routes /></Need>} />
         <Route path="routes/:id" element={<Need perms={['route.manage', 'report.view']}><RouteDetail /></Need>} />
@@ -89,6 +97,7 @@ function Guarded() {
         <Route path="funds" element={<Need perms={['fund.manage']}><Funds /></Need>} />
         <Route path="investors" element={<Need perms={['investor.manage']}><Investors /></Need>} />
         <Route path="investors/:id" element={<Need perms={['investor.manage']}><InvestorDetail /></Need>} />
+        <Route path="salaries" element={<Need perms={['salary.manage']}><Salaries /></Need>} />
         <Route path="daybook" element={<Need perms={['daybook.view', 'daybook.manage', 'daybook.request', 'daybook.approve']}><Daybook /></Need>} />
         <Route path="handovers" element={<Need perms={['handover.verify']}><Handovers /></Need>} />
         <Route path="ask" element={<Need perms={['report.view']}><Ask /></Need>} />

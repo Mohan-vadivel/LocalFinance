@@ -11,9 +11,11 @@ import Login from './screens/Login';
 import { AppLock } from './Lock';
 import { Manager, Summary } from './screens/More';
 import LineSheet from './screens/LineSheet';
+import Plan from './screens/Plan';
 import CollectionReport from './screens/Report';
 import RouteDay from './screens/RouteDay';
 import Settings, { Legal } from './screens/Settings';
+import Support from './screens/Support';
 import { SessionProvider, useSession } from './session';
 import { TabBar } from './Tabs';
 import type { DayCustomer, MyRoute } from './store';
@@ -51,6 +53,11 @@ function Screens({ route }: { route: Route }) {
       return <Legal page="privacy" />;
     case 'LineSheet':
       return <LineSheet routeId={p.routeId as string | undefined} />;
+    // Opened from Settings; not in the side menu or tabs.
+    case 'Support':
+      return <Support />;
+    case 'Plan':
+      return <Plan />;
     default:
       return <Home />;
   }

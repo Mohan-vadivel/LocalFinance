@@ -14,6 +14,7 @@ export const PERMISSIONS = [
   'loan.manage',
   'fund.manage',
   'investor.manage',
+  'salary.manage',
   'route.manage',
   'collection.record',
   'collection.reverse',
@@ -59,6 +60,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
     'loan.disburse',
     'fund.manage',
     'investor.manage',
+    'salary.manage',
     'handover.verify',
     'daybook.manage',
     'daybook.view',
@@ -76,5 +78,6 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
  */
 export const PERMISSIONS_ADDED: Record<number, Permission[]> = {
   1: ['daybook.request', 'daybook.approve'],
+  2: ['salary.manage'],
 };
 export const ROLE_PERMS_VERSION = Math.max(...Object.keys(PERMISSIONS_ADDED).map(Number));

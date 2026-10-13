@@ -122,6 +122,9 @@ importers:
       react-native-webview:
         specifier: 13.16.1
         version: 13.16.1(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
+      toqr:
+        specifier: 0.1.1
+        version: 0.1.1
     devDependencies:
       '@types/react':
         specifier: 19.2.18
@@ -159,6 +162,9 @@ importers:
       react-router-dom:
         specifier: 7.18.4
         version: 7.18.4(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      toqr:
+        specifier: 0.1.1
+        version: 0.1.1
       xlsx:
         specifier: 0.18.5
         version: 0.18.5

@@ -103,7 +103,11 @@
     "lineAbstract": "Monthly abstract",
     "lineList": "Line list",
     "import": "Import from old software",
-    "ask": "Ask AI"
+    "ask": "Ask AI",
+    "salaries": "Salaries",
+    "support": "Help and support",
+    "plan": "Plan and renewal",
+    "platformSettings": "Platform settings"
   },
   "roles": {
     "SUPER_ADMIN": "Super Admin",
@@ -133,7 +137,9 @@
       "CLOSED": "Closed"
     },
     "suspend": "Suspend",
-    "activate": "Activate"
+    "activate": "Activate",
+    "planExpiresOn": "Plan valid till",
+    "planExpiresHelp": "Move this date forward when a renewal payment is received. The owner is warned 15 days before it."
   },
   "dashboard": {
     "dueToday": "Due today",
@@ -231,7 +237,8 @@
     "pl.view": "View profit and loss",
     "audit.view": "View audit log",
     "daybook.request": "Enter day book items for approval",
-    "daybook.approve": "Approve day book entries"
+    "daybook.approve": "Approve day book entries",
+    "salary.manage": "Manage staff salaries and advances"
   },
   "customerMod": {
     "title": "Customers",
@@ -875,7 +882,10 @@
     "revokeSupport": "Turn off",
     "backup": "Backup",
     "backupHelp": "Download every record of your business as one file and keep it safe. Passwords are not included.",
-    "downloadBackup": "Download backup"
+    "downloadBackup": "Download backup",
+    "smsShowArrears": "Show arrears in the collection receipt SMS",
+    "smsShowBalance": "Show the remaining balance in the receipt SMS",
+    "smsOptionsHelp": "Arrears are shown only when the customer has some. In your own template, use {{arrears}} and {{balance}}; they stay empty when switched off."
   },
   "receipt": {
     "title": "Payment receipt",
@@ -883,9 +893,11 @@
     "thanks": "Thank you"
   },
   "sms": {
-    "collection": "{{business}}: Received {{amount}} for loan {{loan}} on {{date}}. Balance {{balance}}. Receipt {{receipt}}.",
+    "collection": "{{business}}: Received {{amount}} for loan {{loan}} on {{date}}.{{details}} Receipt {{receipt}}.",
     "disbursement": "{{business}}: Loan {{loan}} of {{amount}} disbursed on {{date}}. Instalment {{instalment}} {{frequency}}.",
-    "reminder": "{{business}}: Instalment of {{amount}} for loan {{loan}} is due on {{date}}."
+    "reminder": "{{business}}: Instalment of {{amount}} for loan {{loan}} is due on {{date}}.",
+    "arrearsPart": "Arrears {{amount}}.",
+    "balancePart": "Balance {{amount}}."
   },
   "errors": {
     "forbidden": "You do not have permission for this",
@@ -1535,5 +1547,80 @@
         "body": "For questions or requests about your information, use Support in the app, or contact the business you deal with."
       }
     }
+  },
+  "salary": {
+    "title": "Staff salaries",
+    "month": "Month",
+    "monthlySalary": "Monthly salary",
+    "setSalary": "Set salary",
+    "giveAdvance": "Give advance",
+    "advancesThisMonth": "Advances this month",
+    "advanceOutstanding": "Advances outstanding",
+    "advances": "Advances",
+    "pay": "Pay salary",
+    "payments": "Salary payments",
+    "gross": "Salary",
+    "deduct": "Advance to take back",
+    "deducted": "Advance taken back",
+    "net": "Paid out",
+    "paidOn": "Paid on",
+    "history": "History",
+    "totalSalary": "Salaries this month",
+    "totalPaid": "Paid out",
+    "totalUnpaid": "Still to pay",
+    "advanceHelp": "The advance is paid out now and entered in the day book. It is taken back from a later salary.",
+    "deductHelp": "Outstanding advances are taken back from the salary. Only the rest is paid out and entered in the day book under Salary.",
+    "statuses": {
+      "PAID": "Paid",
+      "UNPAID": "Not paid",
+      "NO_SALARY": "No salary set"
+    },
+    "netColumn": "Net: paid or to pay"
+  },
+  "plan": {
+    "title": "Plan and renewal",
+    "plan": "Plan",
+    "expiresOn": "Valid till",
+    "daysLeft": "Days left",
+    "expired": "Expired",
+    "notSet": "Not set",
+    "price": "Renewal for one year",
+    "howToPay": "How to pay",
+    "payHelp": "Scan the QR code with any UPI app, or pay to the UPI ID above. Then send the UPI reference number to support. Your plan is extended once the payment is checked.",
+    "upiId": "UPI ID",
+    "payByUpi": "Pay with a UPI app",
+    "noUpiApp": "No UPI app found on this phone. Pay to the UPI ID shown here.",
+    "noUpi": "Payment details are not set up yet. Please contact support.",
+    "expiringBanner": "Your plan ends in {{days}} days, on {{date}}. Renew now to keep working without a break.",
+    "expiredBanner": "Your plan ended on {{date}}. Please renew it.",
+    "renew": "Renew",
+    "copy": "Copy",
+    "copied": "Copied",
+    "settingsHelp": "See when your plan ends and how to pay for a renewal."
+  },
+  "support": {
+    "title": "Help and support",
+    "intro": "Call or email us for help with LocalFinance.",
+    "call": "Call",
+    "email": "Email",
+    "hours": "Support hours",
+    "videos": "Help videos",
+    "otherLanguages": "In other languages",
+    "noVideos": "No help videos in this language yet.",
+    "notSet": "Support contacts are not set up yet.",
+    "watch": "Watch on YouTube"
+  },
+  "platform": {
+    "title": "Platform settings",
+    "supportPhone": "Support phone",
+    "supportEmail": "Support email",
+    "supportHours": "Support hours",
+    "supportHoursHint": "For example: Monday to Saturday, 9 am to 6 pm",
+    "renewal": "Plan renewal by UPI",
+    "upiName": "Payee name",
+    "yearlyPrice": "Yearly price",
+    "addVideo": "Add video",
+    "videoTitle": "Title",
+    "videoUrl": "YouTube link"
   }
 }

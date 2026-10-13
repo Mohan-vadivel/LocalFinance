@@ -24,7 +24,9 @@ import {
   InvestorsController,
   InvestorsService,
 } from './modules/money';
+import { PlanController, PlatformService, PlatformSettingsController, SupportController } from './modules/platform';
 import { DashboardService, ProfitLossService, ReportsController, ReportsService } from './modules/reports';
+import { SalaryController, SalaryService } from './modules/salary';
 import { StaffController, StaffService } from './modules/staff';
 import { StructureController, StructureService } from './modules/structure';
 import { SettingsController, TenantsController, TenantsService } from './modules/tenants';
@@ -51,10 +53,14 @@ if (!secret || secret.length < 16) {
     InvestorsController,
     DaybookController,
     HandoverController,
+    SalaryController,
     ReportsController,
     FilesController,
     ImportsController,
     AiController,
+    PlatformSettingsController,
+    SupportController,
+    PlanController,
   ],
   providers: [
     PrismaService,
@@ -73,12 +79,14 @@ if (!secret || secret.length < 16) {
     InvestorsService,
     DaybookService,
     HandoverService,
+    SalaryService,
     ProfitLossService,
     ReportsService,
     DashboardService,
     ImportsService,
     ClaudeService,
     AiService,
+    PlatformService,
   ],
 })
 export class AppModule {}

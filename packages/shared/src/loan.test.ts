@@ -11,7 +11,7 @@ import {
   type InstalmentState,
 } from './loan';
 import { periodRange } from './dates';
-import { formatINR } from './money';
+import { formatINR, upiPayLink } from './money';
 import { LANGUAGES, flattenKeys, missingKeys, resources, translate } from './i18n';
 
 const st = (rows: ReturnType<typeof generateSchedule>): InstalmentState[] =>
@@ -135,5 +135,14 @@ describe('periodRange', () => {
     expect(periodRange('WEEK', '2026-10-11')).toEqual({ from: '2026-10-05', to: '2026-10-11' }); // Sunday
     expect(periodRange('MONTH', '2026-02-14')).toEqual({ from: '2026-02-01', to: '2026-02-28' });
     expect(periodRange('MONTH', '2028-02-29')).toEqual({ from: '2028-02-01', to: '2028-02-29' });
+  });
+});
+
+describe('upiPayLink', () => {
+  it('fills payee, amount in rupees and note for UPI apps', () => {
+    expect(upiPayLink({ upiId: 'wits@okaxis', name: 'WITS Software', amount: 499_900, note: 'Renewal Demo & Co' })).toBe(
+      'upi://pay?pa=wits@okaxis&pn=WITS%20Software&am=4999.00&cu=INR&tn=Renewal%20Demo%20%26%20Co',
+    );
+    expect(upiPayLink({ upiId: 'wits@okaxis', name: 'WITS' })).toBe('upi://pay?pa=wits@okaxis&pn=WITS&cu=INR');
   });
 });

@@ -16,6 +16,8 @@ model Tenant {
   name               String
   businessId         String?
   plan               String    @default("STANDARD")
+  /// Last day the plan is paid for ('YYYY-MM-DD'), set by the Super Admin when a renewal is received.
+  planExpiresOn      String?
   status             String    @default("ACTIVE") // ACTIVE | SUSPENDED | CLOSED
   maxBranches        Int       @default(10)
   maxStaff           Int       @default(100)
@@ -581,6 +583,55 @@ model DaybookRequest {
   @@index([tenantId, requestedById])
 }
 
+/// A staff member's monthly salary. It applies to every month until it is changed.
+model StaffSalary {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  amount    Int
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, userId])
+}
+
+/// Money paid to a staff member ahead of salary. It stays outstanding until taken back from a salary payment.
+model SalaryAdvance {
+  id             String   @id @default(cuid())
+  tenantId       String
+  branchId       String
+  userId         String
+  date           String
+  amount         Int
+  mode           String
+  note           String?
+  daybookEntryId String?
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId, userId])
+}
+
+/// One month's salary paid to a staff member: the salary, the advances taken back from it, and what was paid out.
+model SalaryPayment {
+  id              String   @id @default(cuid())
+  tenantId        String
+  branchId        String
+  userId          String
+  month           String // 'YYYY-MM'
+  date            String
+  gross           Int
+  advanceDeducted Int      @default(0)
+  net             Int
+  mode            String
+  note            String?
+  daybookEntryId  String?
+  createdById     String?
+  createdAt       DateTime @default(now())
+
+  @@unique([tenantId, userId, month])
+  @@index([tenantId, month])
+}
+
 model DayClose {
   id          String   @id @default(cuid())
   tenantId    String
@@ -624,4 +675,19 @@ model AuditLog {
 
   @@index([tenantId, createdAt])
   @@index([entity, entityId])
+}
+
+/// Settings for the whole platform, edited only by the Super Admin. There is a single row, id "platform".
+model PlatformSettings {
+  id           String   @id @default("platform")
+  supportPhone String?
+  supportEmail String?
+  supportHours String?
+  /// [{ title, language: 'en' | 'ta', url }] — YouTube links shown on the Support screens.
+  helpVideos   Json     @default("[]")
+  /// Where businesses pay for a renewal, and the yearly price in paise.
+  upiId        String?
+  upiName      String   @default("WITS")
+  yearlyPrice  Int      @default(0)
+  updatedAt    DateTime @updatedAt
 }

@@ -28,6 +28,7 @@ import { AlertsCard, BriefingCard, ForecastCard } from '../components/AiDashboar
 import { BranchPicker } from '../components/pickers';
 import { Badge, DataTable, ErrorBox, Loading, Stat } from '../components/ui';
 import { MapView } from '../components/MapView';
+import { PlanBanner } from './Plan';
 import { get } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { dateIN, money, pct } from '../lib/format';
@@ -216,6 +217,7 @@ export default function Dashboard() {
         <h1>{t('nav.dashboard')}</h1>
         <BranchPicker value={branchId} onChange={setBranchId} allowAll />
       </div>
+      {profile?.role === 'TENANT_ADMIN' && !profile.readOnly && <PlanBanner />}
       {can('settings.manage') && !profile?.readOnly && <GetStarted />}
       <BriefingCard branchId={branchId} />
       {actions.data && <ActionStrip data={actions.data} />}
