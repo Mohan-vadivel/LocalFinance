@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { get } from '../api';
 import { useSession } from '../session';
-import { AmountPair, C, Card, Chevron, ErrorText, Loading, Notice, Row, SP, Screen, Section, money, s, useNav } from '../ui';
+import { AmountPair, C, Card, Chevron, Chips, ErrorText, Loading, Notice, Row, SP, Screen, Section, money, s, useNav } from '../ui';
 
 // =====================================================================
 // Area tracking for managers: each area with its routes, customers and today's money
@@ -95,6 +95,8 @@ export function AreaDetail({ areaId, name }: { areaId: string; name: string }) {
   const nav = useNav();
   const [routes, setRoutes] = useState<AreaRoute[] | null>(null);
   const [customers, setCustomers] = useState<{ total: number; rows: AreaCustomer[] } | null>(null);
+  // Which route's customers to show; 'all' shows every customer in the area.
+  const [route, setRoute] = useState<'all' | string>('all');
   const [error, setError] = useState<unknown>(null);
   const [refreshing, setRefreshing] = useState(false);
   const load = useCallback(async () => {
@@ -136,9 +138,12 @@ export function AreaDetail({ areaId, name }: { areaId: string; name: string }) {
         {customers && (
           <>
             <Section title={t('areas.customers')} />
+            {(routes?.length ?? 0) > 1 && (
+              <Chips value={route} onChange={setRoute} items={[{ key: 'all', label: t('common.all') }, ...(routes ?? []).map((r) => ({ key: r.name, label: r.name }))]} />
+            )}
             {!customers.rows.length && <Notice tone="warn" text={t('areas.noCustomers')} />}
             {customers.total > customers.rows.length && <Text style={s.muted}>{t('areas.showing', { count: customers.rows.length, total: customers.total })}</Text>}
-            {customers.rows.map((c) => (
+            {customers.rows.filter((c) => route === 'all' || c.routeName === route).map((c) => (
               <Card key={c.id} onPress={() => nav.open('Customer', { customerId: c.id })} accessibilityLabel={c.name}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md }}>
                   <Text style={{ fontWeight: '700', fontSize: 16, color: C.ink, flex: 1, minWidth: 0 }}>{c.name}</Text>

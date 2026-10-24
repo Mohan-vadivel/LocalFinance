@@ -1728,7 +1728,7 @@
     "counts": "{{areas}} areas · {{routes}} routes · {{customers}} customers",
     "noRoute": "No route covers this area yet",
     "noCustomers": "No customers on this route yet",
-    "warnings": "{{areas}} active areas have no route. {{routes}} active routes have no customers.",
+    "warnings": "Active areas with no route: {{areas}}. Active routes with no customers: {{routes}}.",
     "noWarnings": "Nothing needs attention.",
     "inactive": "Inactive",
     "inactiveHint": "Inactive areas are hidden when adding customers and routes. Their history stays.",
