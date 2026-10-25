@@ -90,11 +90,13 @@ export class StructureService {
       if (input.branchId !== l.branchId) {
         // Moving a location moves its routes and customers to the new branch; history goes with them.
         const mainRoutes = (await tx.route.findMany({ where: { locationId: id }, select: { id: true } })).map((r) => r.id);
+        // Refuse rather than drop: an area on another area's route, or a route that moves with it and covers other areas.
+        const linked = await tx.routeLocation.count({
+          where: { OR: [{ locationId: id, routeId: { notIn: mainRoutes } }, { routeId: { in: mainRoutes }, locationId: { not: id } }] },
+        });
+        if (linked > 0) throw bad('This area is on routes it does not own, or its routes cover other areas. Take it off those routes first, then move it.');
         await tx.route.updateMany({ where: { locationId: id }, data: { branchId: input.branchId } });
         await tx.customer.updateMany({ where: { locationId: id }, data: { branchId: input.branchId } });
-        // Routes of the old branch lose this area; routes that moved with it lose their areas of the old branch.
-        await tx.routeLocation.deleteMany({ where: { locationId: id, route: { branchId: { not: input.branchId } } } });
-        await tx.routeLocation.deleteMany({ where: { routeId: { in: mainRoutes }, location: { branchId: { not: input.branchId } } } });
       }
       return loc;
     });

@@ -1188,11 +1188,16 @@ describe('routes with several areas', () => {
     await ok(api('PUT', `/routes/${twoRoute}`, { token: owner, body: { locationIds: [kk.id, anna.id], name: 'Two Areas Route', collectionDays: [1, 3, 5] } }));
   });
 
-  test('moving an area to another branch takes it off the routes of the old branch', async () => {
+  test('an area on another route cannot move branch until it is taken off that route', async () => {
     const demoBranch = (await ok(api('GET', '/branches', { token: owner }))).find((b) => b.code === 'MDU');
     const trichy = (await ok(api('GET', '/branches', { token: owner }))).find((b) => b.code === 'TRY');
     const ponmalai = await ok(api('POST', '/locations', { token: owner, body: { branchId: demoBranch.id, name: 'Ponmalai' } }));
     await ok(api('PUT', `/routes/${twoRoute}`, { token: owner, body: { locationIds: [kk.id, anna.id, ponmalai.id], name: 'Two Areas Route', collectionDays: [1, 3, 5] } }));
+    const refused = await api('PUT', `/locations/${ponmalai.id}`, { token: owner, body: { branchId: trichy.id, name: 'Ponmalai' } });
+    assert.equal(refused.status, 400);
+    const still = (await ok(api('GET', '/locations', { token: owner }))).find((x) => x.id === ponmalai.id);
+    assert.equal(still.branchId, demoBranch.id, 'a refused move changes nothing');
+    await ok(api('PUT', `/routes/${twoRoute}`, { token: owner, body: { locationIds: [kk.id, anna.id], name: 'Two Areas Route', collectionDays: [1, 3, 5] } }));
     const moved = await api('PUT', `/locations/${ponmalai.id}`, { token: owner, body: { branchId: trichy.id, name: 'Ponmalai' } });
     assert.equal(moved.status, 200);
     const row = (await ok(api('GET', '/routes', { token: owner }))).find((x) => x.id === twoRoute);
