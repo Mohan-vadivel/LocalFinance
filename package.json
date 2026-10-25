@@ -11,6 +11,7 @@
     "test": "pnpm -r test",
     "dev:api": "pnpm --filter @localfinance/api dev",
     "dev:web": "pnpm --filter @localfinance/web dev",
-    "dev:mobile": "pnpm --filter @localfinance/mobile start"
+    "dev:mobile": "pnpm --filter @localfinance/mobile start",
+    "bundle:api": "node scripts/bundle-api.mjs"
   }
 }

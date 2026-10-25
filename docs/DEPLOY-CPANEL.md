@@ -12,6 +12,19 @@ Two rules that avoid most problems:
 
 The examples use `app.witsapps.com` (web admin) and `api.witsapps.com` (API).
 
+## Shortcut: API only, with plain npm
+
+If the server should only run the API, build a standalone copy on your own computer (or anywhere with the repo):
+
+```bash
+pnpm install
+pnpm bundle:api          # writes release/smartfinora-api
+```
+
+Upload that folder to the server (outside `public_html`, e.g. `/opt/smartfinora-api`) and follow its `README.txt`:
+`npm install`, `npm run setup`, `pm2 start ecosystem.config.cjs`. No pnpm or repo clone is needed on the server.
+Then continue with step 6 (API subdomain) below.
+
 ## 1. Node.js 22 and pnpm
 
 ```bash

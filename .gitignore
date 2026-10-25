@@ -11,3 +11,4 @@ android/
 ios/
 *.test-uploads
 dist-check/
+release/
