@@ -80,7 +80,7 @@ export class PlanController {
       yearlyPrice: s.yearlyPrice,
       upiId: s.upiId,
       upiName: s.upiName,
-      upiLink: s.upiId ? upiPayLink({ upiId: s.upiId, name: s.upiName, amount: s.yearlyPrice, note: `LocalFinance renewal ${t.name}` }) : null,
+      upiLink: s.upiId ? upiPayLink({ upiId: s.upiId, name: s.upiName, amount: s.yearlyPrice, note: `SmartFinora renewal ${t.name}` }) : null,
       supportPhone: s.supportPhone,
       supportEmail: s.supportEmail,
     };
