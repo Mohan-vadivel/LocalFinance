@@ -1019,3 +1019,10 @@ th.num .th-sort { flex-direction: row-reverse; }
 }
 .dt-filter { height: 32px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--panel); color: var(--ink); font: inherit; font-size: 13px; max-width: 220px; }
 .dt-filter:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+
+/* SmartFinora branding */
+.side .brand img.brand-mark, .login .brand-top img.brand-mark { width: 38px; height: 38px; object-fit: contain; border: 0; border-radius: 0; background: transparent; }
+.login-logo-card { background: #fff; border-radius: 14px; padding: 12px 18px; display: inline-block; margin: 8px 0 18px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
+.login-logo-card img { display: block; height: 64px; width: auto; }
+.powered { font-size: 12px; opacity: 0.75; padding: 10px 14px; margin: 0; }
+.powered a { color: inherit; text-decoration: underline; }

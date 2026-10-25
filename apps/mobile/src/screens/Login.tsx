@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LANGUAGES } from '@localfinance/shared';
 import { BASE } from '../api';
@@ -45,10 +45,8 @@ export default function Login() {
         {/* Centred at phone width on tablets; a little less padding on small phones. */}
         <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: compact ? SP.lg : SP.xl, width: '100%', maxWidth: 480, alignSelf: 'center' }} keyboardShouldPersistTaps="handled">
           <View style={{ alignItems: 'center', marginBottom: SP.xl }}>
-            <View style={{ width: 72, height: 72, borderRadius: 22, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center', marginBottom: SP.lg, boxShadow: '0px 6px 16px rgba(15, 118, 110, 0.3)' }}>
-              <Text style={{ color: '#fff', fontSize: 36, fontWeight: '800' }}>₹</Text>
-            </View>
-            <Text style={{ color: C.ink, fontSize: 28, fontWeight: '800', textAlign: 'center' }}>{t('common.appName')}</Text>
+            <Image source={require('../../assets/logo.png')} accessibilityLabel={t('common.appName')} resizeMode="contain" style={{ width: 240, height: 80, marginBottom: SP.sm }} />
+            <Text style={{ color: C.ink, fontSize: 22, fontWeight: '800', textAlign: 'center' }}>{t('common.appName')}</Text>
           </View>
           <View style={{ marginBottom: SP.lg }}>
             <Chips value={i18n.language} onChange={(v) => void setLanguage(v)} items={LANGUAGES.map((l) => ({ key: l.code, label: l.nativeName }))} />
@@ -73,7 +71,8 @@ export default function Login() {
               </View>
             )}
           </Card>
-        </ScrollView>
+                    <Text style={[s.muted, { textAlign: 'center', marginTop: SP.lg }]}>Powered by WITS Technologies · witsapps.com</Text>
+          </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

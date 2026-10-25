@@ -206,7 +206,7 @@ export function Layout() {
       <div className="side-backdrop no-print" onClick={() => setNavOpen(false)} />
       <nav className="side no-print" aria-label="Main" id="main-nav">
         <div className="brand">
-          {profile.tenant?.logoUrl ? <img src={profile.tenant.logoUrl} alt="" /> : <span className="logo-mark">₹</span>}
+          {profile.tenant?.logoUrl ? <img src={profile.tenant.logoUrl} alt="" /> : <img src="/smartfinora-mark.png" alt="" />}
           <span className="name" title={brandName}>
             {brandName}
           </span>
@@ -261,6 +261,9 @@ export function Layout() {
             <LogOut />
           </button>
         </div>
+        <p className="powered">
+          Powered by WITS Technologies · <a href="https://witsapps.com" target="_blank" rel="noreferrer">witsapps.com</a>
+        </p>
       </nav>
       <main className="main">
         <header className="topbar no-print">

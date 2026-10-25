@@ -33,8 +33,11 @@ export default function Login() {
     <div className="login">
       <aside className="brand-panel" aria-hidden>
         <div className="brand-top">
-          <span className="logo-mark">₹</span>
+          <img src="/smartfinora-mark.png" alt="" className="brand-mark" />
           {t('common.appName')}
+        </div>
+        <div className="login-logo-card">
+          <img src="/smartfinora-logo.png" alt="SmartFinora" />
         </div>
         <div className="hero">
           <h1>
@@ -71,6 +74,9 @@ export default function Login() {
             <path d="M0 92 C40 84 60 70 100 74 S160 52 200 56 S260 30 300 36 S360 14 400 10" fill="none" stroke="#5eead4" strokeWidth="2.5" />
           </svg>
         </div>
+        <p className="powered">
+          Powered by WITS Technologies · <a href="https://witsapps.com" target="_blank" rel="noreferrer">witsapps.com</a>
+        </p>
       </aside>
       <div className="form-side">
         <form

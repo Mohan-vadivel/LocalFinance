@@ -1,22 +1,50 @@
 {
   "expo": {
-    "name": "LocalFinance Collect",
+    "name": "SmartFinora",
     "slug": "localfinance-collect",
     "version": "0.1.0",
     "orientation": "default",
     "userInterfaceStyle": "light",
-    "platforms": ["android"],
+    "platforms": [
+      "android"
+    ],
     "android": {
       "package": "com.witstech.localfinance",
       "versionCode": 1,
-      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "CAMERA"],
-      "usesCleartextTraffic": true
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA"
+      ],
+      "usesCleartextTraffic": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#ffffff"
+      }
     },
     "plugins": [
-      ["expo-location", { "locationWhenInUsePermission": "Location is saved with each collection and new customer." }],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Location is saved with each collection and new customer."
+        }
+      ],
       "expo-secure-store",
       "expo-local-authentication",
-      ["expo-image-picker", { "cameraPermission": "The camera is used to read a customer's ID card when you add them.", "photosPermission": "Photos are used to read a customer's ID card when you add them.", "microphonePermission": false }]
-    ]
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "The camera is used to read a customer's ID card when you add them.",
+          "photosPermission": "Photos are used to read a customer's ID card when you add them.",
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    }
   }
 }

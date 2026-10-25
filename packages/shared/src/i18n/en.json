@@ -3,7 +3,7 @@
     "menu": "Menu",
     "darkMode": "Dark mode",
     "lightMode": "Light mode",
-    "appName": "LocalFinance",
+    "appName": "SmartFinora",
     "save": "Save",
     "cancel": "Cancel",
     "create": "Create",
@@ -591,9 +591,9 @@
       "passwordFor": "Password for {{name}}"
     },
     "lock": {
-      "title": "LocalFinance is locked",
+      "title": "SmartFinora is locked",
       "help": "Use your fingerprint, face or phone PIN to continue.",
-      "prompt": "Unlock LocalFinance",
+      "prompt": "Unlock SmartFinora",
       "unlock": "Unlock",
       "failed": "Not recognised. Try again.",
       "usePassword": "Log out and use password"
@@ -1475,10 +1475,10 @@
     "seeAlso": "Questions about these pages: use Support in the app, or ask your business.",
     "terms": {
       "title": "Terms and conditions",
-      "intro": "These terms apply to everyone who uses LocalFinance: the finance businesses that subscribe to it, and their owners and staff. By using the app or the website you agree to them.",
+      "intro": "These terms apply to everyone who uses SmartFinora: the finance businesses that subscribe to it, and their owners and staff. By using the app or the website you agree to them.",
       "about": {
         "title": "About the service",
-        "body": "LocalFinance is provided by WITS Technologies (\"WITS\", \"we\") to finance businesses that lend money and collect repayments. Each business decides who gets an account and what each person can do, and is responsible for its own loans, customers and staff."
+        "body": "SmartFinora is provided by WITS Technologies (\"WITS\", \"we\") to finance businesses that lend money and collect repayments. Each business decides who gets an account and what each person can do, and is responsible for its own loans, customers and staff."
       },
       "accounts": {
         "title": "Your account",
@@ -1519,7 +1519,7 @@
     },
     "privacy": {
       "title": "Privacy policy",
-      "intro": "This policy explains what LocalFinance collects, why, and how it is protected. For customers' and staff's information, the finance business decides what is collected; WITS Technologies keeps and processes it on the business's behalf.",
+      "intro": "This policy explains what SmartFinora collects, why, and how it is protected. For customers' and staff's information, the finance business decides what is collected; WITS Technologies keeps and processes it on the business's behalf.",
       "what": {
         "title": "What we collect",
         "body": "For staff: name, phone number, email, role, branch, a code identifying the phone used, and login times. For customers: name, phone number, address, identity document numbers, loans, payments and visit notes, entered by the business's staff."
@@ -1550,7 +1550,7 @@
       },
       "deletion": {
         "title": "Keeping and deleting",
-        "body": "Records are kept while the business uses LocalFinance, and for as long as the law requires for financial records. Customers and staff can ask the business to correct or delete their information. A business can ask WITS to delete all of its records; we do so within 30 days, except what the law requires us to keep."
+        "body": "Records are kept while the business uses SmartFinora, and for as long as the law requires for financial records. Customers and staff can ask the business to correct or delete their information. A business can ask WITS to delete all of its records; we do so within 30 days, except what the law requires us to keep."
       },
       "phone": {
         "title": "Choices on your phone",
@@ -1614,7 +1614,7 @@
   },
   "support": {
     "title": "Help and support",
-    "intro": "Call or email us for help with LocalFinance.",
+    "intro": "Call or email us for help with SmartFinora.",
     "call": "Call",
     "email": "Email",
     "hours": "Support hours",
