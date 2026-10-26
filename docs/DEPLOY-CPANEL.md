@@ -12,18 +12,24 @@ Two rules that avoid most problems:
 
 The examples use `app.witsapps.com` (web admin) and `api.witsapps.com` (API).
 
-## Shortcut: API only, with plain npm
+## Shortcut: API only, with git pull and plain npm
 
-If the server should only run the API, build a standalone copy on your own computer (or anywhere with the repo):
+The `server/` folder in the repo is the API, already compiled, with a `package.json` that plain `npm` installs.
+No pnpm, Docker or PM2 is needed on the server:
 
 ```bash
-pnpm install
-pnpm bundle:api          # writes release/smartfinora-api
+git clone https://github.com/Mohan-vadivel/LocalFinance.git /home/teamworkappz/smartfinora
+cd /home/teamworkappz/smartfinora/server
+cp .env.example .env      # fill in DATABASE_URL, JWT_SECRET, CORS_ORIGIN
+npm install
+npm run build             # prepares the database
+npm run service           # runs the API as a systemd service (starts on boot)
+npm run check             # says what is wrong, if anything
+cp .htaccess /home/teamworkappz/public_html/finance/.htaccess
 ```
 
-Upload that folder to the server (outside `public_html`, e.g. `/opt/smartfinora-api`) and follow its `README.txt`:
-`npm install`, `npm run build` (prepares the database; the code is already compiled), `npm run pm2`, and `npm run check` to see what is wrong if it does not work. No pnpm or repo clone is needed on the server.
-Then continue with step 6 (API subdomain) below.
+To update: `git pull && npm install && npm run build && npm run restart` in `server/`.
+Developers: after changing `apps/api` or `packages/shared`, run `pnpm bundle:api` and commit `server/`.
 
 ## 1. Node.js 22 and pnpm
 
