@@ -36,13 +36,14 @@ writeJson('package.json', {
   version: api.version,
   private: true,
   main: 'dist/main.js',
-  engines: { node: '>=20.6' },
+  engines: { node: '>=18.18' },
   scripts: {
-    postinstall: 'prisma generate',
-    'db:push': 'prisma db push',
-    seed: 'node --env-file=.env dist/seed.js',
-    setup: 'npm run db:push && npm run seed',
-    start: 'node --env-file=.env dist/main.js',
+    // The code is already compiled; build only prepares the database
+    build: 'prisma generate && prisma db push && node dist/seed.js',
+    start: 'node dist/main.js',
+    pm2: 'pm2 startOrRestart ecosystem.config.cjs && pm2 save',
+    check: 'node check.cjs',
+    setup: 'npm run build',
   },
   dependencies: {
     ...api.dependencies,
@@ -52,6 +53,9 @@ writeJson('package.json', {
   },
 });
 
+for (const f of ['check.cjs', 'app.js']) cpSync(join(root, 'scripts/api-bundle', f), join(out, f));
+cpSync(join(root, 'scripts/api-bundle/htaccess.txt'), join(out, '.htaccess'));
+
 // Copy the shared package into node_modules instead of linking it, so the folder can be moved or zipped
 writeFileSync(join(out, '.npmrc'), 'install-links=true\n');
 
@@ -59,7 +63,7 @@ writeFileSync(
   join(out, 'ecosystem.config.cjs'),
   `// pm2 start ecosystem.config.cjs
 module.exports = {
-  apps: [{ name: 'smartfinora-api', script: 'dist/main.js', node_args: '--env-file=.env', max_memory_restart: '500M' }],
+  apps: [{ name: 'smartfinora-api', script: 'dist/main.js', cwd: __dirname, max_memory_restart: '500M' }],
 };
 `,
 );
@@ -88,17 +92,24 @@ AI_MODEL=claude-opus-5-5
 
 writeFileSync(
   join(out, 'README.txt'),
-  `SmartFinora API, standalone (Node.js 20.6 or newer, PostgreSQL)
+  `SmartFinora API, ready to run (Node.js 20 or 22, PostgreSQL). The code is already compiled.
 
+First time:
   cp .env.example .env      # fill in DATABASE_URL, JWT_SECRET, CORS_ORIGIN
   npm install
-  npm run setup             # creates the tables and the Super Admin
+  npm run build             # creates or updates the tables and the Super Admin
   npm install -g pm2
-  pm2 start ecosystem.config.cjs && pm2 save && pm2 startup
-  curl http://127.0.0.1:4000/health
+  npm run pm2               # starts the API in the background (restarts it if running)
+  pm2 startup               # once: start it again after a server reboot
+  npm run check             # says what is wrong, if anything
 
-Updating: replace dist/, prisma/ and vendor/ with the new bundle, then
-  npm install && npm run db:push && pm2 restart smartfinora-api
+Without pm2, "npm start" runs it in this window.
+On cPanel "Setup Node.js App", use app.js as the startup file.
+If this folder is inside public_html, keep the .htaccess: it sends every request to the API,
+so no file here (.env included) can be downloaded.
+
+Updating: copy the new files over this folder (keep .env and uploads), then
+  npm install && npm run build && npm run pm2
 `,
 );
 

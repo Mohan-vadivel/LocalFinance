@@ -22,7 +22,7 @@ pnpm bundle:api          # writes release/smartfinora-api
 ```
 
 Upload that folder to the server (outside `public_html`, e.g. `/opt/smartfinora-api`) and follow its `README.txt`:
-`npm install`, `npm run setup`, `pm2 start ecosystem.config.cjs`. No pnpm or repo clone is needed on the server.
+`npm install`, `npm run build` (prepares the database; the code is already compiled), `npm run pm2`, and `npm run check` to see what is wrong if it does not work. No pnpm or repo clone is needed on the server.
 Then continue with step 6 (API subdomain) below.
 
 ## 1. Node.js 22 and pnpm
