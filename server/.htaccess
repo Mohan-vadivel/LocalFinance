@@ -1,9 +1,13 @@
-# .htaccess for the domain's folder (e.g. public_html for finance.witsapps.in).
+# .htaccess for the domain's folder (e.g. public_html/finance for finance.witsapps.in).
 # /api/... goes to the API on port 4000 (change it if PORT in .env is different); everything else is the web admin.
 RewriteEngine On
 
 RewriteCond %{HTTPS} off
 RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+
+# If the API's own files sit in this folder, never let anyone download them (.env has your passwords)
+RewriteRule ^(\.env.*|\.npmrc|package(-lock)?\.json|app\.js|check\.cjs|install-service\.cjs|README\.md)$ - [F,L]
+RewriteRule ^(dist|prisma|vendor|node_modules|uploads)(/|$) - [F,L]
 
 RewriteRule ^api/?(.*)$ http://127.0.0.1:4000/$1 [P,L,QSA]
 
