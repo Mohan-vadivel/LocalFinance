@@ -1,0 +1,7 @@
+# Put this folder's .htaccess in place when the API folder is inside public_html (e.g. public_html/finance).
+# Every request goes to the API running on port 4000 (change it if PORT in .env is different),
+# so no file here, .env included, can be downloaded.
+RewriteEngine On
+RewriteCond %{HTTPS} off
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+RewriteRule ^(.*)$ http://127.0.0.1:4000/$1 [P,L,QSA]

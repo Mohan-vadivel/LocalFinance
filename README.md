@@ -81,7 +81,7 @@ cp deploy/.env.example deploy/.env           # set both domains, passwords and J
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
 ```
 
-`deploy/backup.sh` backs up the database and uploaded files.
+`deploy/backup.sh` backs up the database and uploaded files, `deploy/restore.sh` puts a backup back, and `deploy/update.sh` backs up, pulls and rebuilds. The full step-by-step VPS guide is in [docs/DEPLOY.md](docs/DEPLOY.md), and [docs/DEPLOY-CPANEL.md](docs/DEPLOY-CPANEL.md) covers cPanel servers without Docker.
 
 ## Production notes
 
