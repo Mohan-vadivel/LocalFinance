@@ -511,6 +511,12 @@ export declare const loanRequestSchema: z.ZodObject<{
     customerId: z.ZodString;
     productId: z.ZodString;
     principal: z.ZodNumber;
+    /**
+     * Documentation or processing fee for this loan, in paise, in place of the product's fee. It is kept from the cash
+     * paid out (a 10,000 loan with a 100 fee pays out 9,900) and the customer still repays the full principal. Left
+     * out, the product's fee applies.
+     */
+    processingFee: z.ZodNullable<z.ZodOptional<z.ZodNumber>>;
     purpose: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     notes: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     clientRef: z.ZodOptional<z.ZodString>;
@@ -520,6 +526,7 @@ export declare const loanRequestSchema: z.ZodObject<{
     customerId: string;
     notes?: string | null | undefined;
     purpose?: string | null | undefined;
+    processingFee?: number | null | undefined;
     clientRef?: string | undefined;
 }, {
     principal: number;
@@ -527,6 +534,7 @@ export declare const loanRequestSchema: z.ZodObject<{
     customerId: string;
     notes?: string | null | undefined;
     purpose?: string | null | undefined;
+    processingFee?: number | null | undefined;
     clientRef?: string | undefined;
 }>;
 export declare const loanDecisionSchema: z.ZodObject<{

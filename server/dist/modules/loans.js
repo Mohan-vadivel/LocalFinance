@@ -136,8 +136,19 @@ let LoansService = class LoansService {
     }
     /** Shows the schedule and cash to customer before a request is raised. */
     async preview(ctx, input) {
-        const product = await this.product(ctx, input.productId);
-        const terms = { ...termsOf({ ...product, principal: input.principal }) };
+        let terms;
+        if (input.loanId) {
+            // A loan already requested: its own terms, including a processing fee typed for it.
+            const l = await this.prisma.loan.findFirst({ where: { id: input.loanId, tenantId: ctx.tenantId } });
+            if (!l)
+                throw (0, errors_1.notFound)('Loan');
+            (0, scope_1.assertBranch)(ctx, l.branchId);
+            terms = termsOf(l);
+        }
+        else {
+            const product = await this.product(ctx, input.productId);
+            terms = termsOf({ ...product, principal: input.principal, ...(0, shared_1.feeTerms)(product, input.processingFee) });
+        }
         const start = input.disbursedOn ?? (0, shared_1.todayIST)();
         return (0, errors_1.rule)(() => ({
             summary: (0, shared_1.summarize)(terms),
@@ -169,7 +180,8 @@ let LoansService = class LoansService {
         if (input.principal < product.minAmount || input.principal > product.maxAmount) {
             throw (0, errors_1.bad)(`Amount must be between ${(0, shared_1.formatINR)(product.minAmount)} and ${(0, shared_1.formatINR)(product.maxAmount)}`);
         }
-        (0, errors_1.rule)(() => (0, shared_1.summarize)(termsOf({ ...product, principal: input.principal })));
+        const fee = (0, shared_1.feeTerms)(product, input.processingFee);
+        (0, errors_1.rule)(() => (0, shared_1.summarize)(termsOf({ ...product, principal: input.principal, ...fee })));
         const t = await this.prisma.tenant.findUniqueOrThrow({ where: { id: ctx.tenantId } });
         if ((await this.prisma.loan.count({ where: { tenantId: ctx.tenantId, status: 'ACTIVE' } })) >= t.maxActiveLoans) {
             throw (0, errors_1.bad)(`Your plan allows ${t.maxActiveLoans} active loans`);
@@ -189,8 +201,7 @@ let LoansService = class LoansService {
                     tenure: product.tenure,
                     interestMethod: product.interestMethod,
                     interestRate: product.interestRate,
-                    feePercent: product.feePercent,
-                    feeFlat: product.feeFlat,
+                    ...fee,
                     penaltyType: product.penaltyType,
                     penaltyValue: product.penaltyValue,
                     graceDays: product.graceDays,
@@ -217,6 +228,9 @@ let LoansService = class LoansService {
         const product = await this.product(ctx, input.productId);
         if (input.principal < product.minAmount || input.principal > product.maxAmount)
             throw (0, errors_1.bad)('Amount is outside the product range');
+        // Left out, a fee typed for this loan before stays (same product); a new product brings its own fee.
+        const fee = input.processingFee !== undefined || product.id !== l.productId ? (0, shared_1.feeTerms)(product, input.processingFee) : { feePercent: l.feePercent, feeFlat: l.feeFlat };
+        (0, errors_1.rule)(() => (0, shared_1.summarize)(termsOf({ ...product, principal: input.principal, ...fee })));
         const u = await this.prisma.tx(async (tx) => {
             const loan = await tx.loan.update({
                 where: { id },
@@ -227,8 +241,7 @@ let LoansService = class LoansService {
                     tenure: product.tenure,
                     interestMethod: product.interestMethod,
                     interestRate: product.interestRate,
-                    feePercent: product.feePercent,
-                    feeFlat: product.feeFlat,
+                    ...fee,
                     penaltyType: product.penaltyType,
                     penaltyValue: product.penaltyValue,
                     graceDays: product.graceDays,
@@ -418,7 +431,15 @@ const listQuery = zod_1.z.object({
     queue: zod_1.z.enum(['approvals', 'mine']).optional(),
     page: zod_1.z.coerce.number().int().positive().optional(),
 });
-const previewSchema = zod_1.z.object({ productId: zod_1.z.string(), principal: zod_1.z.number().int().positive(), disbursedOn: zod_1.z.string().optional() });
+const previewSchema = zod_1.z.object({
+    productId: zod_1.z.string(),
+    principal: zod_1.z.number().int().positive(),
+    disbursedOn: zod_1.z.string().optional(),
+    /** A processing fee typed for this loan (paise), in place of the product's fee. */
+    processingFee: zod_1.z.number().int().nonnegative().optional().nullable(),
+    /** Preview a loan already requested, with its own terms (used before disbursing). */
+    loanId: zod_1.z.string().optional(),
+});
 let LoansController = class LoansController {
     svc;
     constructor(svc) {

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Divider, List, Text } from 'react-native-paper';
 import { LANGUAGES } from '@localfinance/shared';
 import { BASE, post } from './api';
+import { useDialog } from './Dialog';
 import { setLanguage } from './i18n';
 import { useSyncState } from './screens/Home';
 import { useSession } from './session';
@@ -64,6 +65,11 @@ function Drawer({ anim, close }: { anim: Animated.Value; close: () => void }) {
   const changeLang = async (code: string) => {
     await setLanguage(code);
     await post('/auth/language', { language: code }).catch(() => undefined);
+  };
+  const dialog = useDialog();
+  const askLogout = async () => {
+    close();
+    if (await dialog.confirm({ tone: 'warning', icon: 'log-out-outline', title: t('mobile.confirm.logoutTitle'), text: t('mobile.confirm.logoutText'), confirmText: t('common.logout') })) await logout();
   };
   const runSync = async () => {
     setSyncing(true);
@@ -156,7 +162,7 @@ function Drawer({ anim, close }: { anim: Animated.Value; close: () => void }) {
           <Divider style={{ marginHorizontal: SP.lg, marginVertical: SP.sm }} />
           {st.pending > 0 && <Text style={{ color: C.danger, fontSize: 13, fontWeight: '600', paddingHorizontal: SP.lg, marginBottom: SP.xs }}>{t('mobile.logoutPending', { count: st.pending })}</Text>}
           <MenuRow
-            item={{ key: 'logout', icon: 'log-out-outline', label: t('common.logout'), onPress: () => { close(); void logout(); } }}
+            item={{ key: 'logout', icon: 'log-out-outline', label: t('common.logout'), onPress: () => void askLogout() }}
             danger
             disabled={st.pending > 0}
           />

@@ -1,9 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { createContext, useContext, useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BackHandler, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
+import { BackHandler, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ActivityIndicator, Appbar, Button, Card as PaperCard, Chip, IconButton as PaperIconButton, SegmentedButtons, Searchbar, Surface, Text, TextInput as PaperTextInput, TouchableRipple } from 'react-native-paper';
+import { ActivityIndicator, Appbar, Button, Chip, IconButton as PaperIconButton, SegmentedButtons, Searchbar, Surface, Text, TextInput as PaperTextInput, TouchableRipple } from 'react-native-paper';
 import { formatINR } from '@localfinance/shared';
 import { ApiError } from './api';
 import type { PinStatus } from './store';
@@ -183,15 +183,34 @@ export function Screen({ title, children, right, scroll = true, back = true, sub
   );
 }
 
+/** Card style keys that belong to the outer box (size, place, border and shadow); the rest lay out the content. */
+const OUTER = /^(margin|width|maxWidth|minWidth|height|maxHeight|flex$|flexGrow|flexShrink|flexBasis|alignSelf|backgroundColor|border|boxShadow|position|top|left|right|bottom|opacity|zIndex)/;
+
 /**
- * A rounded surface (Paper Card, elevation 1). With `onPress` it becomes a tappable list item with the Paper ripple.
+ * A rounded surface. With `onPress` it becomes a tappable list item with a ripple. Layout styles (`flexDirection`,
+ * `gap`, `padding`, `alignItems`…) apply to the children, so a card can lay its content out in a row.
+ *
+ * Not Paper's Card: that one copies `index` and other props onto each child, which React warns about for fragments.
  */
 export function Card({ children, style, onPress, tone, accessibilityLabel }: { children: ReactNode; style?: StyleProp<ViewStyle>; onPress?: () => void; tone?: 'default' | 'brand' | 'soft'; accessibilityLabel?: string }) {
   const toneStyle = tone === 'brand' ? s.cardBrand : tone === 'soft' ? s.cardSoft : null;
+  const flat = StyleSheet.flatten([s.card, toneStyle, style]) as Record<string, unknown>;
+  const outer: Record<string, unknown> = {};
+  const inner: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(flat)) (OUTER.test(k) ? outer : inner)[k] = v;
+  if (!onPress) return <View style={[outer, inner] as StyleProp<ViewStyle>}>{children}</View>;
   return (
-    <PaperCard mode="elevated" elevation={1} onPress={onPress} accessibilityLabel={accessibilityLabel} style={[s.card, toneStyle, style]}>
-      {children}
-    </PaperCard>
+    <View style={[outer, { overflow: 'hidden' }] as StyleProp<ViewStyle>}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        android_ripple={{ color: tone === 'brand' ? 'rgba(255,255,255,0.18)' : 'rgba(15,26,26,0.06)' }}
+        style={({ pressed }) => [{ flexGrow: 1 }, inner as ViewStyle, pressed && { opacity: 0.92 }]}
+      >
+        {children}
+      </Pressable>
+    </View>
   );
 }
 
@@ -386,6 +405,160 @@ export function Chips<T extends string>({ value, onChange, items, segmented }: {
   );
 }
 
+/**
+ * A search box and a filter button in one row (an input group), so finding and filtering take one line. The filter
+ * button shows a dot while a filter is on. `extra` adds more round buttons at the end (such as list or map).
+ */
+export function SearchFilter({ value, onChangeText, placeholder, label, onFilter, filtered, extra }: { value: string; onChangeText: (v: string) => void; placeholder: string; label?: string; onFilter?: () => void; filtered?: boolean; extra?: ReactNode }) {
+  const { t } = useTranslation();
+  return (
+    <View style={s.searchRow}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <SearchBar value={value} onChangeText={onChangeText} placeholder={placeholder} label={label} style={{ marginBottom: 0, borderTopRightRadius: onFilter ? 0 : R.pill, borderBottomRightRadius: onFilter ? 0 : R.pill, borderRightWidth: onFilter ? 0 : 1.5 }} />
+      </View>
+      {onFilter ? (
+        <Pressable
+          onPress={onFilter}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.filter')}
+          accessibilityState={{ selected: !!filtered }}
+          android_ripple={{ color: C.brandSoft }}
+          style={({ pressed }) => [s.filterBtn, filtered && { backgroundColor: C.brand, borderColor: C.brand }, pressed && { opacity: 0.85 }]}
+        >
+          <Icon name="options-outline" size={22} color={filtered ? C.onBrand : C.brandInk} />
+          {filtered ? <View style={s.filterDot} /> : null}
+        </Pressable>
+      ) : null}
+      {extra}
+    </View>
+  );
+}
+
+/** A small square-ish toggle button for a toolbar row (list or map, and the like). */
+export function ToolButton({ icon, label, onPress, on }: { icon: IconName; label: string; onPress: () => void; on?: boolean }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: !!on }} android_ripple={{ color: C.brandSoft, borderless: true }} style={({ pressed }) => [s.toolBtn, on && { backgroundColor: C.brandSoft, borderColor: C.brand }, pressed && { opacity: 0.85 }]}>
+      <Icon name={icon} size={22} color={on ? C.brandInk : C.ink2} />
+    </Pressable>
+  );
+}
+
+/**
+ * A round icon button with a short label under it, for a row of actions (call, directions, reminder; WhatsApp, SMS,
+ * share). Put several in an `ActionRow`.
+ */
+export function RoundAction({ icon, label, onPress, color = C.brand, disabled, busy }: { icon: IconName; label: string; onPress: () => void; color?: string; disabled?: boolean; busy?: boolean }) {
+  const off = disabled || busy;
+  return (
+    <Pressable onPress={onPress} disabled={off} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: !!off, busy: !!busy }} style={({ pressed }) => [{ alignItems: 'center', gap: 6, flex: 1, minWidth: 64, maxWidth: 110, opacity: disabled ? 0.45 : 1 }, pressed && { opacity: 0.7 }]}>
+      <View style={{ width: 54, height: 54, borderRadius: 27, backgroundColor: tint(color, 0.12), borderWidth: 1, borderColor: tint(color, 0.28), alignItems: 'center', justifyContent: 'center' }}>
+        {busy ? <ActivityIndicator color={color} size={20} /> : <Icon name={icon} size={24} color={color} />}
+      </View>
+      <Text numberOfLines={2} style={{ fontSize: 12.5, lineHeight: 16, fontWeight: '700', color: C.ink2, textAlign: 'center' }}>{label}</Text>
+    </Pressable>
+  );
+}
+
+/** A row of `RoundAction`s, evenly spread. */
+export function ActionRow({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+  return <View style={[{ flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-start', gap: SP.xs }, style]}>{children}</View>;
+}
+
+/**
+ * A panel that slides up from the bottom over a dimmed backdrop (filters, choosing from a list, a short note). It
+ * moves up with the keyboard, so a text box in it stays in view without the page behind scrolling.
+ */
+export function Sheet({ visible, onClose, title, children, footer }: { visible: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode }) {
+  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(7, 30, 28, 0.45)' }}>
+        <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.close')} />
+        <View style={s.sheet}>
+          <View style={s.sheetGrip} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.sm, paddingHorizontal: SP.lg, paddingBottom: SP.sm }}>
+            <Text accessibilityRole="header" style={[s.h2, { flex: 1, minWidth: 0, marginBottom: 0 }]}>{title}</Text>
+            <IconButton icon="close" label={t('common.close')} onPress={onClose} color={C.ink2} />
+          </View>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: SP.lg, paddingBottom: footer ? SP.sm : SP.lg + insets.bottom }} keyboardShouldPersistTaps="handled">
+            {children}
+          </ScrollView>
+          {footer ? <View style={{ paddingHorizontal: SP.lg, paddingTop: SP.sm, paddingBottom: SP.md + insets.bottom, borderTopWidth: 1, borderTopColor: C.line }}>{footer}</View> : null}
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+/** One choice in a `Sheet`: a full-width row with a tick on the chosen one. */
+export function SheetOption({ label, sub, on, onPress, icon }: { label: string; sub?: string; on: boolean; onPress: () => void; icon?: IconName }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="radio" accessibilityState={{ selected: on }} android_ripple={{ color: C.surface }} style={({ pressed }) => [s.option, on && { backgroundColor: C.brandSoft, borderColor: C.brand }, pressed && { opacity: 0.85 }]}>
+      {icon ? <Icon name={icon} size={20} color={on ? C.brandInk : C.ink2} /> : null}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontSize: 16, fontWeight: on ? '800' : '600', color: on ? C.brandInk : C.ink }}>{label}</Text>
+        {sub ? <Text style={[s.muted, { fontSize: 13, marginTop: 1 }]}>{sub}</Text> : null}
+      </View>
+      <Icon name={on ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={on ? C.brand : C.lineStrong} />
+    </Pressable>
+  );
+}
+
+/**
+ * A drop-down: a box showing the chosen option that opens a list to pick from. For longer lists (languages, ID
+ * types) where a row of chips would take too much room.
+ */
+export function Select<T extends string>({ label, value, items, onChange, style }: { label?: string; value: T; items: { key: T; label: string; sub?: string }[]; onChange: (v: T) => void; style?: StyleProp<ViewStyle> }) {
+  const [open, setOpen] = useState(false);
+  const chosen = items.find((i) => i.key === value);
+  return (
+    <View style={[{ marginBottom: SP.lg }, style]}>
+      {label ? <Text variant="labelLarge" style={s.label}>{label}</Text> : null}
+      <Pressable onPress={() => setOpen(true)} accessibilityRole="button" accessibilityLabel={`${label ?? ''} ${chosen?.label ?? ''}`.trim()} android_ripple={{ color: C.surface }} style={({ pressed }) => [s.select, pressed && { borderColor: C.brand }]}>
+        <Text style={{ flex: 1, minWidth: 0, fontSize: 17, color: chosen ? C.ink : C.muted, fontWeight: '600' }} numberOfLines={1}>{chosen?.label ?? '-'}</Text>
+        <Icon name="chevron-down" size={20} color={C.muted} />
+      </Pressable>
+      <Sheet visible={open} onClose={() => setOpen(false)} title={label ?? ''}>
+        {items.map((i) => (
+          <SheetOption key={i.key} label={i.label} sub={i.sub} on={i.key === value} onPress={() => { setOpen(false); onChange(i.key); }} />
+        ))}
+      </Sheet>
+    </View>
+  );
+}
+
+/**
+ * A card with a heading that opens and closes its content, so a long form shows one part at a time. `summary` is a
+ * short line shown under the heading while closed.
+ */
+export function Collapsible({ title, icon, summary, open: given, onToggle, children, right, defaultOpen = false }: { title: string; icon?: IconName; summary?: string; open?: boolean; onToggle?: (open: boolean) => void; children: ReactNode; right?: ReactNode; defaultOpen?: boolean }) {
+  const [mine, setMine] = useState(defaultOpen);
+  const open = given ?? mine;
+  const toggle = () => {
+    setMine(!open);
+    onToggle?.(!open);
+  };
+  return (
+    <View style={[s.card, { padding: 0 }]}>
+      <Pressable onPress={toggle} accessibilityRole="button" accessibilityState={{ expanded: open }} android_ripple={{ color: C.surface }} style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md, padding: SP.lg, minHeight: 60 }}>
+        {icon ? (
+          <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: C.brandSoft, alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name={icon} size={21} color={C.brand} />
+          </View>
+        ) : null}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ fontSize: 17, fontWeight: '800', color: C.ink }}>{title}</Text>
+          {summary && !open ? <Text style={[s.muted, { marginTop: 2 }]} numberOfLines={2}>{summary}</Text> : null}
+        </View>
+        {right}
+        <Icon name={open ? 'chevron-up' : 'chevron-down'} size={22} color={C.muted} />
+      </Pressable>
+      {open ? <View style={{ paddingHorizontal: SP.lg, paddingBottom: SP.lg }}>{children}</View> : null}
+    </View>
+  );
+}
+
 /** Label on the left, value on the right; long Tamil labels wrap instead of being cut. */
 export function Row({ label, value, strong, divider, tone }: { label: string; value: ReactNode; strong?: boolean; divider?: boolean; tone?: string }) {
   return (
@@ -573,4 +746,12 @@ export const s = StyleSheet.create({
   stat: { flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 104, backgroundColor: C.panel, borderRadius: R.md, borderWidth: 1, borderColor: C.line, paddingVertical: SP.md, paddingHorizontal: SP.md },
   statValue: { fontSize: 20, fontWeight: '800', color: C.ink, fontVariant: ['tabular-nums'] },
   statLabel: { fontSize: 13, color: C.muted, fontWeight: '600', marginTop: 2 },
+  searchRow: { flexDirection: 'row', alignItems: 'stretch', gap: 0, marginBottom: SP.md },
+  filterBtn: { width: 56, minHeight: 54, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: C.lineStrong, backgroundColor: C.brandSoft, borderTopRightRadius: R.pill, borderBottomRightRadius: R.pill, marginRight: 0 },
+  filterDot: { position: 'absolute', top: 10, right: 14, width: 9, height: 9, borderRadius: 5, backgroundColor: '#fbbf24', borderWidth: 1.5, borderColor: C.brand },
+  toolBtn: { width: 54, minHeight: 54, marginLeft: SP.sm, borderRadius: 27, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: C.lineStrong, backgroundColor: C.panel },
+  sheet: { backgroundColor: C.panel, borderTopLeftRadius: R.lg + 6, borderTopRightRadius: R.lg + 6, maxHeight: '88%', width: '100%', maxWidth: MAX_W, alignSelf: 'center', boxShadow: '0px -4px 24px rgba(7, 30, 28, 0.2)' },
+  sheetGrip: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: C.lineStrong, marginTop: SP.sm, marginBottom: SP.sm },
+  option: { flexDirection: 'row', alignItems: 'center', gap: SP.md, minHeight: 56, paddingHorizontal: SP.md, paddingVertical: SP.sm, borderRadius: R.md, borderWidth: 1.5, borderColor: C.line, marginBottom: SP.sm, backgroundColor: C.panel },
+  select: { flexDirection: 'row', alignItems: 'center', gap: SP.sm, minHeight: 56, paddingHorizontal: SP.md, borderRadius: R.md, borderWidth: 1.5, borderColor: C.lineStrong, backgroundColor: C.panel },
 });

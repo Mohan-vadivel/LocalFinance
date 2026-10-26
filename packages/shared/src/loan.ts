@@ -81,6 +81,14 @@ function split(total: number, n: number): number[] {
 
 const periodsPerYear: Record<Frequency, number> = { DAILY: 365, WEEKLY: 52, MONTHLY: 12 };
 
+/**
+ * The fee part of a loan's terms. A documentation or processing fee typed for the loan (paise) replaces the product's
+ * percentage and flat fee; left out, the product's fee applies.
+ */
+export function feeTerms(product: { feePercent: number; feeFlat: number }, processingFee?: number | null): { feePercent: number; feeFlat: number } {
+  return processingFee == null ? { feePercent: product.feePercent, feeFlat: product.feeFlat } : { feePercent: 0, feeFlat: processingFee };
+}
+
 export function summarize(terms: LoanTerms): DisbursementSummary {
   const fee = Math.round((terms.principal * (terms.feePercent ?? 0)) / 100) + (terms.feeFlat ?? 0);
   let totalInterest = 0;

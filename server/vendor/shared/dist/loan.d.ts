@@ -34,6 +34,17 @@ export interface DisbursementSummary {
 }
 /** Due dates for each instalment. Daily loans skip off days; weekly and monthly move to the next working day. */
 export declare function dueDates(firstDue: string, frequency: Frequency, count: number, cal?: Calendar): string[];
+/**
+ * The fee part of a loan's terms. A documentation or processing fee typed for the loan (paise) replaces the product's
+ * percentage and flat fee; left out, the product's fee applies.
+ */
+export declare function feeTerms(product: {
+    feePercent: number;
+    feeFlat: number;
+}, processingFee?: number | null): {
+    feePercent: number;
+    feeFlat: number;
+};
 export declare function summarize(terms: LoanTerms): DisbursementSummary;
 export declare function generateSchedule(terms: LoanTerms, firstDue: string, cal?: Calendar): ScheduleRow[];
 /** First due date: one period after disbursement. */

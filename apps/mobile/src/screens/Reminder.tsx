@@ -6,7 +6,7 @@ import { ApiError, post } from '../api';
 import { useSession } from '../session';
 import { mobile10 } from '../smart';
 import type { DayCustomer } from '../store';
-import { Badge, Btn, C, Card, Chips, ErrorText, Field, Loading, Notice, SP, dateIN, s, todayIST } from '../ui';
+import { ActionRow, Badge, C, Card, ErrorText, Field, IconButton, Loading, Notice, RoundAction, SP, Select, dateIN, s, todayIST } from '../ui';
 
 interface Draft { text: string; phone: string; language: LanguageCode; source: 'ai' | 'rules' }
 type Tone = 'gentle' | 'firm';
@@ -32,7 +32,9 @@ function localDraft(c: DayCustomer, lang: LanguageCode, business: string): Draft
 export function Reminder({ customer, onDone }: { customer: DayCustomer; onDone: () => void }) {
   const { t, i18n } = useTranslation();
   const { profile } = useSession();
-  const [tone, setTone] = useState<Tone>('gentle');
+  // Firm when a payment is late, gentle otherwise; the agent can change it in the Tone list.
+  const late = customer.loans.some((l) => l.arrears + l.penalty > 0);
+  const [tone, setTone] = useState<Tone>(late ? 'firm' : 'gentle');
   // Unset until the first draft: the office uses the customer's own language.
   const [lang, setLang] = useState<LanguageCode | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -66,8 +68,8 @@ export function Reminder({ customer, onDone }: { customer: DayCustomer; onDone: 
     [customer, i18n.language, profile?.tenant?.name, t],
   );
   useEffect(() => {
-    void load(null, 'gentle');
-    // Only once on open; later changes come from the switches.
+    void load(null, tone);
+    // Only once on open; later changes come from the lists.
   }, []);
 
   const phone = mobile10(draft?.phone || customer.phone);
@@ -75,32 +77,42 @@ export function Reminder({ customer, onDone }: { customer: DayCustomer; onDone: 
   const whatsapp = () => void Linking.openURL(`whatsapp://send?phone=91${phone}&text=${body}`).catch(() => Linking.openURL(`https://wa.me/91${phone}?text=${body}`).catch(() => undefined));
   const sms = () => void Linking.openURL(`sms:+91${phone}?body=${body}`).catch(() => undefined);
   const share = () => void Share.share({ message: text }).catch(() => undefined);
+  const empty = !text.trim() || busy;
 
   return (
     <Card style={{ borderColor: C.brand, borderWidth: 1.5 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.sm, marginBottom: SP.xs, flexWrap: 'wrap' }}>
-        <Text style={[s.h2, { marginBottom: 0, flexShrink: 1 }]}>{t('ai.reminder.title')}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.sm, marginBottom: SP.xs }}>
+        <Text style={[s.h2, { marginBottom: 0, flex: 1, minWidth: 0 }]}>{t('ai.reminder.title')}</Text>
         {draft?.source === 'ai' && <Badge text={t('ai.reminder.byAi')} color={C.brand} />}
+        <IconButton icon="close" label={t('common.close')} onPress={onDone} color={C.ink2} />
       </View>
       <Text style={[s.muted, { marginBottom: SP.md }]}>{t('ai.reminder.intro')}</Text>
-      <Text style={s.label}>{t('ai.reminder.language')}</Text>
-      <Chips
-        segmented
-        value={lang ?? ''}
-        onChange={(l) => void load(l as LanguageCode, tone)}
-        items={LANGUAGES.map((l) => ({ key: l.code, label: l.nativeName }))}
-      />
-      {!offline && (
-        <Chips
-          segmented
-          value={tone}
-          onChange={(tn) => {
-            setTone(tn);
-            void load(lang, tn);
-          }}
-          items={[{ key: 'gentle', label: t('ai.reminder.gentle') }, { key: 'firm', label: t('ai.reminder.firm') }]}
+      {/* Language and tone as two drop-downs side by side (stacked on a small phone). */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: SP.sm }}>
+        <Select
+          label={t('ai.reminder.language')}
+          value={(lang ?? '') as LanguageCode}
+          onChange={(l) => void load(l, tone)}
+          items={LANGUAGES.map((l) => ({ key: l.code, label: l.nativeName, sub: l.name }))}
+          style={{ flexGrow: 1, flexBasis: 140 }}
         />
-      )}
+        {!offline && (
+          <Select
+            label={t('ai.reminder.tone')}
+            value={tone}
+            onChange={(tn) => {
+              setTone(tn);
+              void load(lang, tn);
+            }}
+            items={[
+              { key: 'gentle', label: t('ai.reminder.gentle'), sub: t('ai.reminder.gentleHelp') },
+              { key: 'firm', label: t('ai.reminder.firm'), sub: t('ai.reminder.firmHelp') },
+            ]}
+            style={{ flexGrow: 1, flexBasis: 140 }}
+          />
+        )}
+      </View>
+      {!offline && <Text style={[s.muted, { fontSize: 13, marginTop: -SP.sm, marginBottom: SP.md }]}>{t('ai.reminder.toneAuto')}</Text>}
       {offline && <Notice tone="warn" text={t('ai.mobile.reminderOffline')} />}
       <ErrorText error={error} />
       {busy && !draft ? (
@@ -108,13 +120,13 @@ export function Reminder({ customer, onDone }: { customer: DayCustomer; onDone: 
       ) : (
         <Field label={t('ai.mobile.message')} value={text} onChangeText={setText} multiline editable={!busy} style={{ minHeight: 130, fontSize: 16, lineHeight: 22 }} />
       )}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, marginBottom: SP.sm }}>
-        <Btn title={t('ai.reminder.whatsapp')} onPress={whatsapp} disabled={!text.trim() || busy} style={{ flexGrow: 1, flexBasis: 130, marginBottom: 0, backgroundColor: '#128c4a', borderColor: '#128c4a' }} />
-        <Btn kind="tonal" title={t('ai.reminder.sms')} onPress={sms} disabled={!text.trim() || busy} style={{ flexGrow: 1, flexBasis: 90, marginBottom: 0 }} />
-        <Btn kind="tonal" title={t('ai.mobile.share')} onPress={share} disabled={!text.trim() || busy} style={{ flexGrow: 1, flexBasis: 90, marginBottom: 0 }} />
-      </View>
-      {!offline && <Btn kind="outline" title={t('ai.reminder.regenerate')} onPress={() => void load(lang, tone)} busy={busy} style={{ marginBottom: 0, marginTop: SP.xs }} />}
-      <Btn kind="ghost" title={t('common.close')} onPress={onDone} style={{ marginBottom: 0 }} />
+      {/* Send or redo, as one row of round buttons. */}
+      <ActionRow>
+        <RoundAction icon="logo-whatsapp" label={t('ai.reminder.whatsapp')} color="#128c4a" onPress={whatsapp} disabled={empty} />
+        <RoundAction icon="chatbox-ellipses" label={t('ai.reminder.sms')} color="#2563eb" onPress={sms} disabled={empty} />
+        <RoundAction icon="share-social" label={t('ai.mobile.share')} color="#7c3aed" onPress={share} disabled={empty} />
+        {!offline && <RoundAction icon="refresh" label={t('ai.reminder.regenerate')} color={C.brand} onPress={() => void load(lang, tone)} busy={busy} />}
+      </ActionRow>
     </Card>
   );
 }
