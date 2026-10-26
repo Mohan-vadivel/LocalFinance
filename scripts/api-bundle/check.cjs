@@ -56,9 +56,9 @@ async function main() {
   try {
     const res = await fetch(`http://127.0.0.1:${port}/api/health`, { signal: AbortSignal.timeout(3000) });
     if (res.ok) ok(`API is running on port ${port}`);
-    else bad(`port ${port} answers with ${res.status}, it may be an old version or another app`, 'pm2 restart smartfinora-api');
+    else bad(`port ${port} answers with ${res.status}, it may be an old version or another app`, 'npm run restart');
   } catch {
-    bad(`nothing is running on port ${port}`, 'npm run pm2 (or check: pm2 logs smartfinora-api)');
+    bad(`nothing is running on port ${port}`, 'npm run service (first time) or npm run restart; see why with: npm run logs');
   }
   console.log(process.exitCode ? '\nFix the FAIL lines above and run npm run check again.' : '\nAll good.');
 }

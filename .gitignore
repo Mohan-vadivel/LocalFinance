@@ -11,4 +11,8 @@ android/
 ios/
 *.test-uploads
 dist-check/
-release/
+
+# The ready-to-run API in server/ ships its compiled code
+!server/dist/
+!server/vendor/shared/dist/
+server/uploads/
