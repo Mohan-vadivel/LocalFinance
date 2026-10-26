@@ -6,7 +6,7 @@ Multi-tenant loans and collections platform for daily, weekly and monthly lendin
 | --- | --- | --- |
 | API | `apps/api` | NestJS 11, Prisma 6, PostgreSQL 16 |
 | Web admin | `apps/web` | React 19, Vite 6, Leaflet (OpenStreetMap) |
-| Android collection app | `apps/mobile` | Expo SDK 57 (React Native) |
+| Android collection app | `apps/mobile` | Expo SDK 58 (React Native) |
 | Shared code | `packages/shared` | Validation, loan maths, language files |
 
 Languages live in `packages/shared/src/i18n/*.json` (English `en.json`, Tamil `ta.json`). To add a language, copy `en.json`, translate the values and add it to `LANGUAGES` in `packages/shared/src/i18n/index.ts`. `pnpm test` fails if a key is missing.
