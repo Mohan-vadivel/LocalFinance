@@ -55,10 +55,10 @@ writeJson('package.json', {
   },
 });
 
-for (const f of ['check.cjs', 'app.js', 'install-service.cjs']) cpSync(join(root, 'scripts/api-bundle', f), join(out, f));
-cpSync(join(root, 'scripts/api-bundle/htaccess.txt'), join(out, '.htaccess'));
+for (const f of ['check.cjs', 'app.js', 'install-service.cjs']) cpSync(join(root, 'apps/api/bundle', f), join(out, f));
+cpSync(join(root, 'apps/api/bundle/htaccess.txt'), join(out, '.htaccess'));
 
-// Copy the shared package into node_modules instead of linking it, so the folder can be moved or zipped
+// Copy the shared package into node_modules instead of linking it, so the folder can be moved
 writeFileSync(join(out, '.npmrc'), 'install-links=true\n');
 
 writeFileSync(
@@ -112,8 +112,8 @@ npm run restart
 \`npm run logs\` shows the last 50 log lines. \`npm start\` runs the API in the current window instead (stops when you log out).
 On cPanel's "Setup Node.js App", use \`app.js\` as the startup file instead of \`npm run service\`.
 
-Copy \`.htaccess\` into the web folder for the API (for example \`public_html/finance\`). It sends every request
-to the API on port 4000, so no file there can be downloaded.
+Copy \`.htaccess\` into the domain's web folder: it sends /api/... to the API on port 4000 and everything else
+to the web admin. Keep this folder outside public_html, so .env cannot be downloaded. Full guide: DEPLOY.md in the repo root.
 `,
 );
 

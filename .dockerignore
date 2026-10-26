@@ -1,7 +1,0 @@
-**/node_modules
-**/dist
-**/dist-check
-**/.expo
-**/.env
-**/uploads
-.git

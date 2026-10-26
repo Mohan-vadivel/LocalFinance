@@ -12,6 +12,6 @@
     "dev:api": "pnpm --filter @localfinance/api dev",
     "dev:web": "pnpm --filter @localfinance/web dev",
     "dev:mobile": "pnpm --filter @localfinance/mobile start",
-    "bundle:api": "node scripts/bundle-api.mjs"
+    "bundle:api": "node apps/api/bundle/bundle-api.mjs"
   }
 }

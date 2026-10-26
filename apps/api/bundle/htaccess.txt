@@ -1,0 +1,12 @@
+# .htaccess for the domain's folder (e.g. public_html for finance.witsapps.in).
+# /api/... goes to the API on port 4000 (change it if PORT in .env is different); everything else is the web admin.
+RewriteEngine On
+
+RewriteCond %{HTTPS} off
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+
+RewriteRule ^api/?(.*)$ http://127.0.0.1:4000/$1 [P,L,QSA]
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.html [L]
