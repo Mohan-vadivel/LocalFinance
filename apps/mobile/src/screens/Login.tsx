@@ -8,7 +8,7 @@ import { setLanguage } from '../i18n';
 import { takeSessionEnded, useSession } from '../session';
 import { getQueue } from '../store';
 import { SessionEndedNotice } from '../states';
-import { Btn, C, Card, Chips, ErrorText, Field, SP, s, useLayout } from '../ui';
+import { Btn, C, Card, ErrorText, Field, SP, Select, s, useLayout } from '../ui';
 
 export default function Login() {
   const { t, i18n } = useTranslation();
@@ -49,7 +49,7 @@ export default function Login() {
             <Text style={{ color: C.ink, fontSize: 22, fontWeight: '800', textAlign: 'center' }}>{t('common.appName')}</Text>
           </View>
           <View style={{ marginBottom: SP.lg }}>
-            <Chips value={i18n.language} onChange={(v) => void setLanguage(v)} items={LANGUAGES.map((l) => ({ key: l.code, label: l.nativeName }))} />
+            <Select label={t('common.language')} value={i18n.language} onChange={(v) => void setLanguage(v)} items={LANGUAGES.map((l) => ({ key: l.code, label: l.nativeName, sub: l.name }))} style={{ marginBottom: 0 }} />
           </View>
           <Card style={{ padding: compact ? SP.lg : SP.xl }}>
             {ended && <SessionEndedNotice unsent={unsent} />}

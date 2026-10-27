@@ -3,10 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { Animated, BackHandler, Easing, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Divider, List, Text } from 'react-native-paper';
-import { LANGUAGES } from '@localfinance/shared';
-import { BASE, post } from './api';
+import { BASE } from './api';
 import { useDialog } from './Dialog';
-import { setLanguage } from './i18n';
 import { useSyncState } from './screens/Home';
 import { useSession } from './session';
 import { sync } from './store';
@@ -45,7 +43,7 @@ export function MenuProvider({ children }: { children: ReactNode }) {
 }
 
 function Drawer({ anim, close }: { anim: Animated.Value; close: () => void }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const nav = useNav();
   const insets = useSafeAreaInsets();
   const { width } = useLayout();
@@ -61,10 +59,6 @@ function Drawer({ anim, close }: { anim: Animated.Value; close: () => void }) {
     close();
     if (name === 'Home') nav.reset('Home');
     else nav.open(name, params);
-  };
-  const changeLang = async (code: string) => {
-    await setLanguage(code);
-    await post('/auth/language', { language: code }).catch(() => undefined);
   };
   const dialog = useDialog();
   const askLogout = async () => {
@@ -146,18 +140,6 @@ function Drawer({ anim, close }: { anim: Animated.Value; close: () => void }) {
           <Group title={t('mobile.menuWork')} items={work} isActive={isActive} />
           <Group title={t('nav.reports')} items={reports} isActive={isActive} />
           <Group title={t('mobile.menuAccount')} items={account} isActive={isActive} />
-
-          <Text style={groupTitle}>{t('common.language')}</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, paddingHorizontal: SP.lg, marginBottom: SP.md }}>
-            {LANGUAGES.map((l) => {
-              const on = i18n.language === l.code;
-              return (
-                <Pressable key={l.code} onPress={() => void changeLang(l.code)} accessibilityRole="radio" accessibilityState={{ selected: on }} style={({ pressed }) => [{ flexBasis: '30%', flexGrow: 1, minHeight: 48, borderRadius: R.md, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: on ? C.brand : C.lineStrong, backgroundColor: on ? C.brandSoft : C.panel }, pressed && { opacity: 0.8 }]}>
-                  <Text style={{ fontWeight: '700', fontSize: 15, color: on ? C.brandInk : C.ink2 }}>{l.nativeName}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
 
           <Divider style={{ marginHorizontal: SP.lg, marginVertical: SP.sm }} />
           {st.pending > 0 && <Text style={{ color: C.danger, fontSize: 13, fontWeight: '600', paddingHorizontal: SP.lg, marginBottom: SP.xs }}>{t('mobile.logoutPending', { count: st.pending })}</Text>}

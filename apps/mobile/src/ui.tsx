@@ -227,8 +227,8 @@ type BtnKind = 'primary' | 'plain' | 'danger' | 'tonal' | 'outline' | 'ghost' | 
 export function Btn({ title, onPress, kind = 'primary', disabled, busy, small, style, big, textStyle, accessibilityLabel, icon }: { title: string; onPress: () => void; kind?: BtnKind; disabled?: boolean; busy?: boolean; small?: boolean; style?: StyleProp<ViewStyle>; big?: boolean; textStyle?: StyleProp<TextStyle>; accessibilityLabel?: string; icon?: IconName }) {
   const v = BTN[kind];
   const off = disabled || busy;
-  const minH = big ? 60 : small ? 48 : 52;
-  const fontSize = big ? 18 : small ? 14 : 16;
+  const minH = big ? 48 : small ? 36 : 42;
+  const fontSize = big ? 16 : small ? 13 : 15;
   const weight: TextStyle['fontWeight'] = big ? '800' : '700';
   const iconEl = icon ? ({ size, color }: { size: number; color: string }) => <Icon name={icon} size={size} color={color} /> : undefined;
   const label: TextStyle = { fontSize, fontWeight: weight, color: v.fg, textAlign: 'center' };
@@ -246,7 +246,7 @@ export function Btn({ title, onPress, kind = 'primary', disabled, busy, small, s
         buttonColor={v.bg}
         textColor={v.fg}
         theme={{ colors: { surfaceDisabled: v.bg, onSurfaceDisabled: v.fg } }}
-        contentStyle={{ minHeight: minH, paddingHorizontal: 8 }}
+        contentStyle={{ minHeight: minH, paddingHorizontal: 6 }}
         labelStyle={[label, textStyle]}
         accessibilityLabel={accessibilityLabel}
         style={[s.btn, big && s.btnBig, small && s.btnSmall, v.mode === 'outlined' && { borderColor: v.border }, dim, style]}
@@ -266,10 +266,10 @@ export function Btn({ title, onPress, kind = 'primary', disabled, busy, small, s
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
         accessibilityState={{ disabled: !!off, busy: !!busy }}
-        style={{ flex: 1, minHeight: minH, justifyContent: 'center', paddingVertical: 12, paddingHorizontal: SP.lg, borderRadius: big ? R.lg : R.md }}
+        style={{ flex: 1, minHeight: minH, justifyContent: 'center', paddingVertical: small ? 6 : 8, paddingHorizontal: small ? SP.md : SP.lg, borderRadius: R.pill }}
       >
         <View style={s.btnRow}>
-          {busy ? <ActivityIndicator color={v.fg} /> : iconEl ? iconEl({ size: big ? 24 : small ? 19 : 21, color: v.fg }) : null}
+          {busy ? <ActivityIndicator color={v.fg} /> : iconEl ? iconEl({ size: big ? 20 : small ? 16 : 18, color: v.fg }) : null}
           <Text style={[label, { flexShrink: 1 }, textStyle]}>{title}</Text>
         </View>
       </TouchableRipple>
@@ -293,20 +293,21 @@ const BTN: Record<BtnKind, { mode: 'contained' | 'contained-tonal' | 'outlined' 
  */
 export function Field({ label, prefix, large, hint, style, multiline, error, ...props }: TextInputProps & { label: string; prefix?: string; large?: boolean; hint?: string; /** A problem with this box: a red outline and the message in red under it. */ error?: string }) {
   return (
-    <View style={{ marginBottom: SP.lg }}>
+    <View style={{ marginBottom: SP.md }}>
       <Text variant="labelLarge" style={s.label}>{label}</Text>
       <PaperTextInput
         mode="outlined"
+        dense
         error={!!error}
         outlineColor={error ? C.danger : C.lineStrong}
         activeOutlineColor={error ? C.danger : C.brand}
         outlineStyle={{ borderRadius: R.md, borderWidth: 1.5 }}
         textColor={C.ink}
         placeholderTextColor="#8b9796"
-        left={prefix ? <PaperTextInput.Affix text={prefix} textStyle={[s.prefix, large && { fontSize: 28, fontWeight: '800' }]} /> : undefined}
+        left={prefix ? <PaperTextInput.Affix text={prefix} textStyle={[s.prefix, large && { fontSize: 22, fontWeight: '800' }]} /> : undefined}
         multiline={multiline}
         {...(props as ComponentProps<typeof PaperTextInput>)}
-        style={[s.input, large && s.inputLargeText, multiline && { minHeight: 96, textAlignVertical: 'top' }, style as StyleProp<TextStyle>]}
+        style={[s.input, large && s.inputLargeText, multiline && { height: undefined, minHeight: 80, textAlignVertical: 'top' }, style as StyleProp<TextStyle>]}
       />
       {error ? <Text variant="bodyMedium" accessibilityLiveRegion="polite" style={s.fieldError}>{error}</Text> : hint ? <Text variant="bodyMedium" style={[s.muted, { marginTop: SP.xs, fontSize: 13 }]}>{hint}</Text> : null}
     </View>
@@ -513,10 +514,10 @@ export function Select<T extends string>({ label, value, items, onChange, style 
   const [open, setOpen] = useState(false);
   const chosen = items.find((i) => i.key === value);
   return (
-    <View style={[{ marginBottom: SP.lg }, style]}>
+    <View style={[{ marginBottom: SP.md }, style]}>
       {label ? <Text variant="labelLarge" style={s.label}>{label}</Text> : null}
       <Pressable onPress={() => setOpen(true)} accessibilityRole="button" accessibilityLabel={`${label ?? ''} ${chosen?.label ?? ''}`.trim()} android_ripple={{ color: C.surface }} style={({ pressed }) => [s.select, pressed && { borderColor: C.brand }]}>
-        <Text style={{ flex: 1, minWidth: 0, fontSize: 17, color: chosen ? C.ink : C.muted, fontWeight: '600' }} numberOfLines={1}>{chosen?.label ?? '-'}</Text>
+        <Text style={{ flex: 1, minWidth: 0, fontSize: 15, color: chosen ? C.ink : C.muted, fontWeight: '600' }} numberOfLines={1}>{chosen?.label ?? '-'}</Text>
         <Icon name="chevron-down" size={20} color={C.muted} />
       </Pressable>
       <Sheet visible={open} onClose={() => setOpen(false)} title={label ?? ''}>
@@ -695,32 +696,32 @@ export const s = StyleSheet.create({
   card: { backgroundColor: C.panel, borderRadius: R.lg, borderWidth: 1, borderColor: C.line, padding: SP.lg, marginBottom: SP.md, boxShadow: shadow },
   cardBrand: { backgroundColor: C.brand, borderColor: C.brand, boxShadow: '0px 4px 14px rgba(15, 118, 110, 0.25)' },
   cardSoft: { backgroundColor: C.surface, borderColor: C.surface, boxShadow: 'none' },
-  btn: { minHeight: 52, borderRadius: R.md, marginBottom: SP.sm },
-  btnSmall: { minHeight: 48, marginBottom: 0, borderRadius: R.md },
-  btnBig: { minHeight: 60, borderRadius: R.lg },
+  btn: { minHeight: 42, borderRadius: R.pill, marginBottom: SP.sm },
+  btnSmall: { minHeight: 36, marginBottom: 0, borderRadius: R.pill },
+  btnBig: { minHeight: 48, borderRadius: R.pill },
   btnText: { fontSize: 16, fontWeight: '700', textAlign: 'center' },
   btnRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SP.sm, maxWidth: '100%' },
-  search: { minHeight: 54, borderRadius: R.pill, borderWidth: 1.5, borderColor: C.lineStrong, backgroundColor: C.panel, marginBottom: SP.md },
+  search: { minHeight: 44, height: 44, borderRadius: R.pill, borderWidth: 1.5, borderColor: C.lineStrong, backgroundColor: C.panel, marginBottom: SP.md },
   searchPress: { marginBottom: 0 },
   searchText: { flex: 1, minWidth: 0, fontSize: 16, color: C.ink },
-  searchInput: { fontSize: 16, color: C.ink, minHeight: 50 },
+  searchInput: { fontSize: 15, color: C.ink, minHeight: 0, alignSelf: 'center' },
   searchClear: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   fieldError: { color: C.danger, fontSize: 14, fontWeight: '700', marginTop: SP.xs, lineHeight: 19 },
   btnTextSmall: { fontSize: 14 },
   btnTextBig: { fontSize: 18, fontWeight: '800' },
-  label: { fontSize: 14, color: C.ink2, fontWeight: '600', marginBottom: 6 },
-  input: { backgroundColor: C.panel, fontSize: 17, color: C.ink, minHeight: 56 },
+  label: { fontSize: 13, color: C.ink2, fontWeight: '600', marginBottom: 4 },
+  input: { backgroundColor: C.panel, fontSize: 15, color: C.ink, height: 44 },
   inputFocus: { borderColor: C.brand },
-  inputLargeText: { fontSize: 28, fontWeight: '800', color: C.ink },
-  prefix: { fontSize: 17, color: C.muted, fontWeight: '700' },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, marginBottom: SP.lg },
-  chip: { height: 48, flexDirection: 'column', justifyContent: 'center', borderWidth: 1.5, borderColor: C.lineStrong, borderRadius: R.pill, backgroundColor: C.panel },
+  inputLargeText: { fontSize: 22, fontWeight: '800', color: C.ink, height: 52 },
+  prefix: { fontSize: 15, color: C.muted, fontWeight: '700' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, marginBottom: SP.md },
+  chip: { height: 38, flexDirection: 'column', justifyContent: 'center', borderWidth: 1.5, borderColor: C.lineStrong, borderRadius: R.pill, backgroundColor: C.panel },
   chipOn: { backgroundColor: C.brand, borderColor: C.brand },
-  chipText: { fontSize: 15, color: C.ink, fontWeight: '600', lineHeight: 20, marginVertical: 0, textAlignVertical: 'center' },
-  segment: { backgroundColor: C.surface, borderRadius: R.md, marginBottom: SP.lg },
-  segmentItem: { flex: 1, minHeight: 46, borderRadius: R.sm, borderWidth: 0 },
+  chipText: { fontSize: 14, color: C.ink, fontWeight: '600', lineHeight: 20, marginVertical: 0, textAlignVertical: 'center' },
+  segment: { backgroundColor: C.surface, borderRadius: R.pill, marginBottom: SP.md },
+  segmentItem: { flex: 1, minHeight: 38, borderRadius: R.pill, borderWidth: 0 },
   segmentOn: { backgroundColor: C.panel },
-  segmentText: { fontSize: 15, fontWeight: '700', color: C.muted, textAlign: 'center' },
+  segmentText: { fontSize: 14, fontWeight: '700', color: C.muted, textAlign: 'center' },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 7, gap: SP.md },
   rowDivider: { borderTopWidth: 1, borderTopColor: C.line, marginTop: SP.xs, paddingTop: SP.md },
   rowLabel: { color: C.muted, fontSize: 15, flexShrink: 1, flexGrow: 1, flexBasis: 0, minWidth: 0 },
@@ -747,11 +748,11 @@ export const s = StyleSheet.create({
   statValue: { fontSize: 20, fontWeight: '800', color: C.ink, fontVariant: ['tabular-nums'] },
   statLabel: { fontSize: 13, color: C.muted, fontWeight: '600', marginTop: 2 },
   searchRow: { flexDirection: 'row', alignItems: 'stretch', gap: 0, marginBottom: SP.md },
-  filterBtn: { width: 56, minHeight: 54, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: C.lineStrong, backgroundColor: C.brandSoft, borderTopRightRadius: R.pill, borderBottomRightRadius: R.pill, marginRight: 0 },
+  filterBtn: { width: 48, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: C.lineStrong, backgroundColor: C.brandSoft, borderTopRightRadius: R.pill, borderBottomRightRadius: R.pill, marginRight: 0 },
   filterDot: { position: 'absolute', top: 10, right: 14, width: 9, height: 9, borderRadius: 5, backgroundColor: '#fbbf24', borderWidth: 1.5, borderColor: C.brand },
-  toolBtn: { width: 54, minHeight: 54, marginLeft: SP.sm, borderRadius: 27, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: C.lineStrong, backgroundColor: C.panel },
+  toolBtn: { width: 44, minHeight: 44, marginLeft: SP.sm, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: C.lineStrong, backgroundColor: C.panel },
   sheet: { backgroundColor: C.panel, borderTopLeftRadius: R.lg + 6, borderTopRightRadius: R.lg + 6, maxHeight: '88%', width: '100%', maxWidth: MAX_W, alignSelf: 'center', boxShadow: '0px -4px 24px rgba(7, 30, 28, 0.2)' },
   sheetGrip: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: C.lineStrong, marginTop: SP.sm, marginBottom: SP.sm },
-  option: { flexDirection: 'row', alignItems: 'center', gap: SP.md, minHeight: 56, paddingHorizontal: SP.md, paddingVertical: SP.sm, borderRadius: R.md, borderWidth: 1.5, borderColor: C.line, marginBottom: SP.sm, backgroundColor: C.panel },
-  select: { flexDirection: 'row', alignItems: 'center', gap: SP.sm, minHeight: 56, paddingHorizontal: SP.md, borderRadius: R.md, borderWidth: 1.5, borderColor: C.lineStrong, backgroundColor: C.panel },
+  option: { flexDirection: 'row', alignItems: 'center', gap: SP.md, minHeight: 48, paddingHorizontal: SP.md, paddingVertical: SP.sm, borderRadius: R.md, borderWidth: 1.5, borderColor: C.line, marginBottom: SP.sm, backgroundColor: C.panel },
+  select: { flexDirection: 'row', alignItems: 'center', gap: SP.sm, minHeight: 44, paddingHorizontal: SP.md, borderRadius: R.md, borderWidth: 1.5, borderColor: C.lineStrong, backgroundColor: C.panel },
 });

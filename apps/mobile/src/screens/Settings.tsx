@@ -9,7 +9,7 @@ import { askBiometric, biometricReady, getBiometricLock, getPrintAsk, onDevicePr
 import { setLanguage } from '../i18n';
 import { useSession } from '../session';
 import { getFailed, sync } from '../store';
-import { Avatar, Btn, C, Chips, ErrorText, Field, Icon, Notice, R, SP, Screen, s, useNav, type IconName } from '../ui';
+import { Avatar, Btn, C, Chips, ErrorText, Field, Icon, Notice, R, SP, Screen, Sheet, SheetOption, s, useNav, type IconName } from '../ui';
 import { useSyncState } from './Home';
 
 // =====================================================================
@@ -46,9 +46,17 @@ export default function Settings() {
     if (on && !(await askBiometric(t('mobile.settings.biometricConfirm'), t('common.cancel')))) return setLockError(t('mobile.lock.failed'));
     await setBiometricLock(on);
   };
-  const changeLang = async (code: string) => {
-    await setLanguage(code);
-    await post('/auth/language', { language: code }).catch(() => undefined);
+  const [langOpen, setLangOpen] = useState(false);
+  const [langDraft, setLangDraft] = useState(i18n.language);
+  const [langBusy, setLangBusy] = useState(false);
+  // Saved on the phone and on the account, so the web and the next login use it too.
+  const saveLang = async () => {
+    setLangBusy(true);
+    await setLanguage(langDraft);
+    await post('/auth/language', { language: langDraft }).catch(() => undefined);
+    setLangBusy(false);
+    setLangOpen(false);
+    void dialog.alert({ tone: 'success', title: t('common.saved'), timer: 1400 });
   };
   const dialog = useDialog();
   const askLogout = async () => {
@@ -81,6 +89,8 @@ export default function Settings() {
       </Group>
 
       <Group title={t('mobile.settings.account')}>
+        {/* Language: one row showing the current language; it opens a list, and Save applies the choice. */}
+        <Item icon="language-outline" title={t('common.language')} subtitle={LANGUAGES.find((l) => l.code === i18n.language)?.nativeName ?? i18n.language} onPress={() => { setLangDraft(i18n.language); setLangOpen(true); }} />
         <Item icon="key-outline" title={t('auth.changePassword')} onPress={() => setOpen(open === 'password' ? null : 'password')} expanded={open === 'password'} />
         {open === 'password' && <ChangePassword />}
         {others.length > 0 && (
@@ -98,11 +108,16 @@ export default function Settings() {
         </Group>
       )}
 
-      <Group title={t('common.language')}>
-        <View style={{ paddingHorizontal: SP.lg, paddingTop: SP.md }}>
-          <Chips value={i18n.language} onChange={(c) => void changeLang(c)} items={LANGUAGES.map((l) => ({ key: l.code, label: l.nativeName }))} />
-        </View>
-      </Group>
+      <Sheet
+        visible={langOpen}
+        onClose={() => setLangOpen(false)}
+        title={t('common.language')}
+        footer={<Btn title={t('common.save')} onPress={() => void saveLang()} busy={langBusy} style={{ marginBottom: 0 }} />}
+      >
+        {LANGUAGES.map((l) => (
+          <SheetOption key={l.code} label={l.nativeName} sub={l.name} on={langDraft === l.code} onPress={() => setLangDraft(l.code)} />
+        ))}
+      </Sheet>
 
       <Group title={t('mobile.settings.printer')}>
         <Item icon="print-outline" title={t('mobile.settings.printAsk')} subtitle={t('mobile.settings.printAskHelp')} toggle={{ value: printAsk, onChange: (v) => void setPrintAsk(v) }} />
