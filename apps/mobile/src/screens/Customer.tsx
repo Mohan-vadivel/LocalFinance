@@ -9,7 +9,7 @@ import { istStamp, printReceipt, type ReceiptData } from '../print';
 import { getPosition, useSession } from '../session';
 import { getVisitOrder, nextInOrder } from '../smart';
 import { cachedRouteDay, enqueue, getSynced, isUnsent, removeQueued, routeDay, subscribe, type DayCustomer, type DayLoan } from '../store';
-import { ActionRow, Amount, Avatar, Badge, Btn, C, Card, Chips, Field, Icon, Notice, PIN_COLORS, R, RoundAction, Row, SP, Screen, Sheet, dateIN, money, s, toPaise, todayIST, useNav } from '../ui';
+import { ActionRow, Amount, Avatar, Badge, Btn, C, Card, Chips, Field, Icon, Notice, PIN_COLORS, R, RoundAction, Row, SP, Screen, dateIN, money, s, toPaise, todayIST, useNav } from '../ui';
 import { ActionError, FailureState, FormProblems, LoadingState, SuccessState, fieldError, useSlowLoad, type Problem } from '../states';
 import { Reminder } from './Reminder';
 import { navigateTo } from './RouteDay';
@@ -359,8 +359,6 @@ function CollectForm({ customer, routeId, initialAmount, info, onSaved, onDone }
   const [payMode, setPayMode] = useState<'CASH' | 'UPI'>('CASH');
   const [upiRef, setUpiRef] = useState('');
   const [note, setNote] = useState('');
-  const [noteOpen, setNoteOpen] = useState(false);
-  const [noteDraft, setNoteDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const dialog = useDialog();
   // Problems are listed once the agent has tried to save, and then update as the amount changes.
@@ -394,7 +392,7 @@ function CollectForm({ customer, routeId, initialAmount, info, onSaved, onDone }
         { label: t('common.customer'), value: customer.name },
         { label: t('common.loan'), value: loan.number },
         { label: t('common.mode'), value: `${t(`common.modes.${payMode}`)}${payMode === 'UPI' && upiRef ? ` · ${upiRef}` : ''}` },
-        ...(note ? [{ label: t('common.notes'), value: note }] : []),
+        ...(note.trim() ? [{ label: t('common.notes'), value: note.trim() }] : []),
       ],
       confirmText: `${t('common.confirm')} ${money(paise)}`,
       cancelText: t('common.edit'),
@@ -412,7 +410,7 @@ function CollectForm({ customer, routeId, initialAmount, info, onSaved, onDone }
       amount: paise,
       mode: payMode,
       upiRef: payMode === 'UPI' ? upiRef || null : null,
-      note: note || null,
+      note: note.trim() || null,
       collectedAt: new Date().toISOString(),
       lat: pos?.lat ?? null,
       lng: pos?.lng ?? null,
@@ -443,24 +441,7 @@ function CollectForm({ customer, routeId, initialAmount, info, onSaved, onDone }
           <Text style={[s.muted, { marginTop: -SP.sm, marginBottom: SP.lg }]}>{t('collection.upiNote')}</Text>
         </>
       )}
-      {/* A note is rarely needed at the door. It is typed in a panel that rises with the keyboard, so the page does not jump. */}
-      {note ? (
-        <Pressable onPress={() => { setNoteDraft(note); setNoteOpen(true); }} accessibilityRole="button" accessibilityLabel={t('mobile.editNote')} style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'flex-start', gap: SP.sm, backgroundColor: C.bg, borderRadius: R.md, padding: SP.md, marginBottom: SP.md }, pressed && { opacity: 0.8 }]}>
-          <Icon name="document-text-outline" size={18} color={C.muted} />
-          <Text style={{ flex: 1, color: C.ink, fontSize: 15 }}>{note}</Text>
-          <Icon name="create-outline" size={18} color={C.brand} />
-        </Pressable>
-      ) : (
-        <Btn small kind="ghost" icon="create-outline" title={t('mobile.addNote')} onPress={() => { setNoteDraft(''); setNoteOpen(true); }} style={{ alignSelf: 'flex-start', marginBottom: SP.md, paddingHorizontal: SP.sm }} />
-      )}
-      <Sheet
-        visible={noteOpen}
-        onClose={() => setNoteOpen(false)}
-        title={note ? t('mobile.editNote') : t('mobile.addNote')}
-        footer={<Btn title={t('common.save')} onPress={() => { setNote(noteDraft.trim()); setNoteOpen(false); }} style={{ marginBottom: 0 }} />}
-      >
-        <Field label={t('common.notes')} value={noteDraft} onChangeText={setNoteDraft} autoFocus multiline style={{ minHeight: 90 }} />
-      </Sheet>
+      <Field label={t('common.notes')} value={note} onChangeText={setNote} multiline placeholder={t('mobile.addNote')} />
       <Btn big icon="checkmark-circle" title={`${t('common.save')} ${money(paise)}`} onPress={() => void review()} busy={busy} />
       <Btn kind="ghost" title={t('common.cancel')} onPress={onDone} style={{ marginBottom: 0 }} />
     </Card>
@@ -490,7 +471,7 @@ function VisitForm({ customer, routeId, onDone }: { customer: DayCustomer; route
         { label: t('common.customer'), value: customer.name },
         { label: t('collection.noPayment'), value: t(`collection.outcomes.${outcome}`) },
         ...(outcome === 'PROMISED' ? [{ label: t('collection.promiseDate'), value: dateIN(promiseDate) }] : []),
-        ...(note ? [{ label: t('common.notes'), value: note }] : []),
+        ...(note.trim() ? [{ label: t('common.notes'), value: note.trim() }] : []),
       ],
       confirmText: t('common.save'),
     });

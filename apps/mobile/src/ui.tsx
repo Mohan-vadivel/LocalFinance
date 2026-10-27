@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useState, type ComponentProps, ty
 import { useTranslation } from 'react-i18next';
 import { BackHandler, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ActivityIndicator, Appbar, Button, Chip, IconButton as PaperIconButton, SegmentedButtons, Searchbar, Surface, Text, TextInput as PaperTextInput, TouchableRipple } from 'react-native-paper';
+import { ActivityIndicator, Appbar, Button, Chip, IconButton as PaperIconButton, Searchbar, Surface, Text, TextInput as PaperTextInput, TouchableRipple } from 'react-native-paper';
 import { formatINR } from '@localfinance/shared';
 import { ApiError } from './api';
 import type { PinStatus } from './store';
@@ -359,26 +359,25 @@ export function SearchBar({ value = '', onChangeText, onPress, placeholder, labe
  */
 export function Chips<T extends string>({ value, onChange, items, segmented }: { value: T; onChange: (v: T) => void; items: { key: T; label: string }[]; segmented?: boolean }) {
   if (segmented) {
+    // A sliding-pill switch: a soft track, with the chosen part filled in the brand colour.
     return (
-      <SegmentedButtons
-        value={value}
-        onValueChange={(v) => onChange(v as T)}
-        style={s.segment}
-        buttons={items.map((i) => {
+      <View style={s.segment} accessibilityRole="tablist">
+        {items.map((i) => {
           const on = value === i.key;
-          return {
-            value: i.key,
-            label: i.label,
-            accessibilityLabel: i.label,
-            checked: on,
-            showSelectedCheck: false,
-            style: [s.segmentItem, on && s.segmentOn],
-            labelStyle: [s.segmentText, on && { color: C.brandInk }],
-            checkedColor: C.brandInk,
-            uncheckedColor: C.muted,
-          };
+          return (
+            <Pressable
+              key={i.key}
+              onPress={() => onChange(i.key)}
+              accessibilityRole="tab"
+              accessibilityLabel={i.label}
+              accessibilityState={{ selected: on }}
+              style={({ pressed }) => [s.segmentItem, on && s.segmentOn, pressed && !on && { opacity: 0.7 }]}
+            >
+              <Text numberOfLines={1} style={[s.segmentText, on && { color: C.onBrand }]}>{i.label}</Text>
+            </Pressable>
+          );
         })}
-      />
+      </View>
     );
   }
   return (
@@ -718,9 +717,9 @@ export const s = StyleSheet.create({
   chip: { height: 38, flexDirection: 'column', justifyContent: 'center', borderWidth: 1.5, borderColor: C.lineStrong, borderRadius: R.pill, backgroundColor: C.panel },
   chipOn: { backgroundColor: C.brand, borderColor: C.brand },
   chipText: { fontSize: 14, color: C.ink, fontWeight: '600', lineHeight: 20, marginVertical: 0, textAlignVertical: 'center' },
-  segment: { backgroundColor: C.surface, borderRadius: R.pill, marginBottom: SP.md },
-  segmentItem: { flex: 1, minHeight: 38, borderRadius: R.pill, borderWidth: 0 },
-  segmentOn: { backgroundColor: C.panel },
+  segment: { flexDirection: 'row', backgroundColor: C.surface, borderRadius: R.pill, padding: 4, gap: 4, marginBottom: SP.md },
+  segmentItem: { flex: 1, minHeight: 36, borderRadius: R.pill, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SP.sm },
+  segmentOn: { backgroundColor: C.brand, boxShadow: '0px 2px 6px rgba(15, 118, 110, 0.3)' },
   segmentText: { fontSize: 14, fontWeight: '700', color: C.muted, textAlign: 'center' },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 7, gap: SP.md },
   rowDivider: { borderTopWidth: 1, borderTopColor: C.line, marginTop: SP.xs, paddingTop: SP.md },
