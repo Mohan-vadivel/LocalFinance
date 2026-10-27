@@ -5,6 +5,7 @@
   "description": "Multi-tenant loans and collections platform: API, web admin and Android collection app",
   "packageManager": "pnpm@10.28.0",
   "scripts": {
+    "prebuild": "node -e \"if(!require('fs').existsSync('node_modules/typescript')){console.error('\\nnode_modules is missing. Run this first, in the LocalFinance folder:\\n\\n  pnpm install\\n');process.exit(1)}\"",
     "build": "pnpm -r --filter ./packages/** --filter ./apps/api --filter ./apps/web build",
     "build:shared": "pnpm --filter @localfinance/shared build",
     "typecheck": "pnpm -r typecheck",
@@ -12,6 +13,7 @@
     "dev:api": "pnpm --filter @localfinance/api dev",
     "dev:web": "pnpm --filter @localfinance/web dev",
     "dev:mobile": "pnpm --filter @localfinance/mobile start",
-    "bundle:api": "node apps/api/bundle/bundle-api.mjs"
+    "bundle:api": "node apps/api/bundle/bundle-api.mjs",
+    "prebundle:api": "node -e \"if(!require('fs').existsSync('node_modules/typescript')){console.error('\\nnode_modules is missing. Run this first, in the LocalFinance folder:\\n\\n  pnpm install\\n');process.exit(1)}\""
   }
 }

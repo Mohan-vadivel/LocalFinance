@@ -2,7 +2,7 @@
 // pnpm or Docker. It is committed, so a server only needs `git pull`. The shared package is copied in under vendor/shared.
 // Run from the repo root after any change to apps/api or packages/shared: pnpm bundle:api
 import { execSync } from 'node:child_process';
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = process.cwd();
@@ -21,13 +21,19 @@ cpSync(join(root, 'apps/api/dist'), join(out, 'dist'), { recursive: true });
 cpSync(join(root, 'apps/api/prisma'), join(out, 'prisma'), { recursive: true });
 cpSync(join(root, 'packages/shared/dist'), join(out, 'vendor/shared/dist'), { recursive: true });
 
+// The server only runs the code: source maps and type files are left out
+for (const d of ['dist', 'vendor/shared/dist']) {
+  for (const f of readdirSync(join(out, d), { recursive: true })) {
+    if (/\.(map|d\.ts)$/.test(f)) rmSync(join(out, d, f));
+  }
+}
+
 const shared = readJson('packages/shared/package.json');
 writeJson('vendor/shared/package.json', {
   name: shared.name,
   version: shared.version,
   private: true,
   main: shared.main,
-  types: shared.types,
   dependencies: shared.dependencies,
 });
 
