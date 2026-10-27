@@ -2,9 +2,9 @@ import { useContext, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Platform, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Surface, Text } from 'react-native-paper';
+import { Text } from 'react-native-paper';
 import { useSession } from './session';
-import { C, Icon, MenuCtx, SP, useLayout, useNav, type IconName } from './ui';
+import { C, Icon, MenuCtx, R, SP, useLayout, useNav, type IconName } from './ui';
 
 interface Tab { key: string; icon: IconName; iconOn: IconName; label: string; onPress: () => void; show: boolean; active: boolean }
 
@@ -33,30 +33,33 @@ export function TabBar() {
     { key: 'More', icon: 'grid-outline', iconOn: 'grid', label: t('mobile.tabs.more'), onPress: menu.open, show: true, active: false },
   ];
   return (
-    <Surface
-      accessibilityRole="tablist"
-      elevation={1}
-      style={{ flexDirection: 'row', backgroundColor: C.panel, borderTopWidth: 1, borderTopColor: C.line, paddingBottom: Math.max(insets.bottom, SP.xs), paddingTop: SP.xs }}
-    >
-      {tabs.filter((x) => x.show).map((x) => (
-        <Pressable
-          key={x.key}
-          onPress={x.onPress}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: x.active }}
-          accessibilityLabel={x.label}
-          android_ripple={{ color: C.surface, borderless: true }}
-          style={({ pressed }) => [{ flex: 1, minWidth: 0, minHeight: 58, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 4, gap: 3 }, pressed && { opacity: 0.7 }]}
-        >
-          {/* The active tab gets a soft pill behind its icon, as on Android's own navigation bars. */}
-          <View style={{ width: 56, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: x.active ? C.brandSoft : 'transparent' }}>
-            <Icon name={x.active ? x.iconOn : x.icon} size={22} color={x.active ? C.brand : C.ink2} />
-          </View>
-          {/* Up to two short lines, so "Customers" and long Tamil labels are never cut on a 320dp phone. */}
-          <Text variant="labelMedium" numberOfLines={2} style={{ fontSize: narrow ? 11 : 12, lineHeight: narrow ? 14 : 15, textAlign: 'center', fontWeight: x.active ? '800' : '600', color: x.active ? C.brandInk : C.ink2, paddingHorizontal: 2 }}>{x.label}</Text>
-        </Pressable>
-      ))}
-    </Surface>
+    // A floating, rounded bar: the active tab is a filled pill with its icon and label, the others stay quiet.
+    <View style={{ backgroundColor: C.bg, paddingHorizontal: SP.md, paddingTop: SP.xs, paddingBottom: Math.max(insets.bottom, SP.sm) }}>
+      <View
+        accessibilityRole="tablist"
+        style={{ flexDirection: 'row', gap: 4, padding: 6, backgroundColor: C.panel, borderRadius: R.lg + 10, borderWidth: 1, borderColor: C.line, boxShadow: '0px 6px 20px rgba(7, 30, 28, 0.12)' }}
+      >
+        {tabs.filter((x) => x.show).map((x) => (
+          <Pressable
+            key={x.key}
+            onPress={x.onPress}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: x.active }}
+            accessibilityLabel={x.label}
+            android_ripple={{ color: C.surface, borderless: false }}
+            style={({ pressed }) => [
+              { flex: 1, minWidth: 0, minHeight: 54, borderRadius: R.lg + 4, alignItems: 'center', justifyContent: 'center', paddingVertical: 6, gap: 2, overflow: 'hidden' },
+              x.active && { backgroundColor: C.brand, boxShadow: '0px 3px 8px rgba(15, 118, 110, 0.3)' },
+              pressed && !x.active && { backgroundColor: C.surface },
+            ]}
+          >
+            <Icon name={x.active ? x.iconOn : x.icon} size={22} color={x.active ? C.onBrand : C.ink2} />
+            {/* Up to two short lines, so "Customers" and long Tamil labels are never cut on a 320dp phone. */}
+            <Text variant="labelMedium" numberOfLines={2} style={{ fontSize: narrow ? 10 : 11, lineHeight: narrow ? 13 : 14, textAlign: 'center', fontWeight: x.active ? '800' : '600', color: x.active ? C.onBrand : C.ink2, paddingHorizontal: 2 }}>{x.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
   );
 }
 

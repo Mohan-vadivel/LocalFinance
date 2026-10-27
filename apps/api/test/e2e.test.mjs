@@ -386,6 +386,30 @@ describe('loans', () => {
     assert.equal(r.data.code, 'fund.insufficient');
   });
 
+  test('a processing fee typed for the loan comes off the cash paid out, and the full loan is repaid', async () => {
+    const c = await ok(api('POST', '/customers', { token: officer, body: { name: 'Fee Person', phone: '9123456782', address: '7 New Street', locationId: (await ok(api('GET', '/locations', { token: officer })))[0].id } }));
+    const product = (await ok(api('GET', '/products', { token: officer }))).find((p) => p.frequency === 'MONTHLY');
+    const preview = await ok(api('POST', '/loans/preview', { token: officer, body: { productId: product.id, principal: 2_000_000, processingFee: 20_000 } }));
+    assert.equal(preview.summary.fee, 20_000);
+    assert.equal(preview.summary.netDisbursed, 2_000_000 - 20_000 - preview.summary.upfrontInterest);
+    const req = await ok(api('POST', '/loans', { token: officer, body: { customerId: c.id, productId: product.id, principal: 2_000_000, processingFee: 20_000 } }));
+    assert.equal(req.feePercent, 0);
+    assert.equal(req.feeFlat, 20_000);
+    // A fee bigger than the loan is refused.
+    assert.equal((await api('POST', '/loans', { token: officer, body: { customerId: c.id, productId: product.id, principal: 2_000_000, processingFee: 2_000_000 } })).status, 400);
+    // Resubmitted without a fee, the fee typed before stays.
+    const again = await ok(api('PUT', `/loans/${req.id}`, { token: officer, body: { customerId: c.id, productId: product.id, principal: 2_000_000 } }));
+    assert.equal(again.feeFlat, 20_000);
+    const byLoan = await ok(api('POST', '/loans/preview', { token: owner, body: { productId: product.id, principal: 2_000_000, loanId: req.id } }));
+    assert.equal(byLoan.summary.fee, 20_000);
+    await ok(api('POST', `/loans/${req.id}/decision`, { token: manager, body: { decision: 'APPROVE' } }));
+    const loan = await ok(api('POST', `/loans/${req.id}/disburse`, { token: owner, body: { disbursedOn: today(), mode: 'CASH', fundId } }));
+    assert.equal(loan.fee, 20_000);
+    assert.equal(loan.netDisbursed, 2_000_000 - 20_000 - loan.upfrontInterest);
+    const repay = loan.instalments.reduce((sum, i) => sum + i.principalDue, 0);
+    assert.equal(repay, 2_000_000, 'the customer repays the full loan amount');
+  });
+
   test('foreclosure needs the exact amount and closes the loan', async () => {
     const l = await ok(api('GET', `/loans/${loanId}`, { token: owner }));
     const wrong = await api('POST', `/loans/${loanId}/foreclose`, { token: owner, body: { date: today(), mode: 'CASH', amount: 1, interestWaived: 0 } });

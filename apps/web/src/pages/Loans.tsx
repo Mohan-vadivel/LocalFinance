@@ -24,6 +24,9 @@ export interface LoanRow {
   principal: number;
   frequency: string;
   tenure: number;
+  /** Fee terms copied onto the loan when requested (a fee typed for the loan is a flat amount). */
+  feePercent: number;
+  feeFlat: number;
   status: string;
   stage: string;
   purpose: string | null;
@@ -118,7 +121,9 @@ export function SchedulePreview({ summary, schedule }: { summary: Summary; sched
 export function LoanRequestForm({ customerId, customerName, loan, onClose, onSaved }: { customerId?: string; customerName?: string; loan?: LoanRow; onClose: () => void; onSaved: (l: { id: string }) => void }) {
   const { t } = useTranslation();
   const [customer, setCustomer] = useState<{ id: string; name: string } | null>(customerId ? { id: customerId, name: customerName ?? '' } : loan ? { id: loan.customerId, name: loan.customer.name } : null);
-  const [f, setF] = useState({ productId: loan?.productId ?? '', principal: toRupeesInput(loan?.principal ?? null), purpose: loan?.purpose ?? '', notes: loan?.notes ?? '' });
+  // A fee typed for this loan replaces the product's fee; a loan sent back keeps the fee it was asked with.
+  const [f, setF] = useState({ productId: loan?.productId ?? '', principal: toRupeesInput(loan?.principal ?? null), processingFee: loan && !loan.feePercent && loan.feeFlat ? toRupeesInput(loan.feeFlat) : '', purpose: loan?.purpose ?? '', notes: loan?.notes ?? '' });
+  const fee = f.processingFee.trim() === '' ? null : toPaise(f.processingFee);
   const [preview, setPreview] = useState<{ summary: Summary; schedule: ScheduleRow[] } | null>(null);
   const [previewError, setPreviewError] = useState<unknown>(null);
   // The amount asked for lets the risk score say when it is much bigger than any loan repaid before.
@@ -129,10 +134,10 @@ export function LoanRequestForm({ customerId, customerName, loan, onClose, onSav
     setPreviewError(null);
     if (!f.productId || !Number(f.principal)) return;
     const h = setTimeout(() => {
-      post<{ summary: Summary; schedule: ScheduleRow[] }>('/loans/preview', { productId: f.productId, principal: toPaise(f.principal) }).then(setPreview).catch(setPreviewError);
+      post<{ summary: Summary; schedule: ScheduleRow[] }>('/loans/preview', { productId: f.productId, principal: toPaise(f.principal), ...(fee != null ? { processingFee: fee } : {}) }).then(setPreview).catch(setPreviewError);
     }, 300);
     return () => clearTimeout(h);
-  }, [f.productId, f.principal]);
+  }, [f.productId, f.principal, fee]);
   return (
     <FormModal
       wide
@@ -141,7 +146,7 @@ export function LoanRequestForm({ customerId, customerName, loan, onClose, onSav
       onClose={onClose}
       onSubmit={async () => {
         if (!customer) throw new Error(t('loanMod.chooseCustomer'));
-        const body = { customerId: customer.id, productId: f.productId, principal: toPaise(f.principal), purpose: f.purpose || null, notes: f.notes || null };
+        const body = { customerId: customer.id, productId: f.productId, principal: toPaise(f.principal), processingFee: fee, purpose: f.purpose || null, notes: f.notes || null };
         const l = loan ? await put<{ id: string }>(`/loans/${loan.id}`, body) : await post<{ id: string }>('/loans', body);
         onSaved(l);
       }}
@@ -151,6 +156,7 @@ export function LoanRequestForm({ customerId, customerName, loan, onClose, onSav
       </Field>
       <Field label={t('common.product')}><ProductPicker value={f.productId} onChange={(v) => setF({ ...f, productId: v })} /></Field>
       <Field label={t('loanMod.principal')}><input type="number" min="1" value={f.principal} onChange={(e) => setF({ ...f, principal: e.target.value })} /></Field>
+      <Field label={t('loanMod.processingFee')}><input type="number" min="0" value={f.processingFee} placeholder={preview && fee == null ? String(preview.summary.fee / 100) : '0'} title={`${t('loanMod.processingFeeHelp')} ${t('loanMod.processingFeeDefault')}`} onChange={(e) => setF({ ...f, processingFee: e.target.value })} /></Field>
       <Field label={t('loanMod.purpose')}><input value={f.purpose} onChange={(e) => setF({ ...f, purpose: e.target.value })} /></Field>
       <Field label={t('common.notes')}><input value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></Field>
       <div className="full">
@@ -724,8 +730,8 @@ function DisburseForm({ loan, onClose, onSaved }: { loan: LoanRow; onClose: () =
   const [preview, setPreview] = useState<{ summary: Summary; schedule: ScheduleRow[] } | null>(null);
   const funds = useFunds(loan.branchId);
   useEffect(() => {
-    post<{ summary: Summary; schedule: ScheduleRow[] }>('/loans/preview', { productId: loan.productId, principal: loan.principal, disbursedOn: f.disbursedOn }).then(setPreview).catch(() => setPreview(null));
-  }, [loan.productId, loan.principal, f.disbursedOn]);
+    post<{ summary: Summary; schedule: ScheduleRow[] }>('/loans/preview', { productId: loan.productId, principal: loan.principal, disbursedOn: f.disbursedOn, loanId: loan.id }).then(setPreview).catch(() => setPreview(null));
+  }, [loan.productId, loan.principal, loan.id, f.disbursedOn]);
   return (
     <ConfirmFormModal
       wide

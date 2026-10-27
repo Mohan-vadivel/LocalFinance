@@ -2,6 +2,7 @@ import { Body, Controller, Get, Injectable, Param, Post, Put, Query } from '@nes
 import {
   defaultFirstDue,
   disburseSchema,
+  feeTerms,
   forecloseSchema,
   formatINR,
   generateSchedule,
@@ -132,9 +133,18 @@ export class LoansService {
   }
 
   /** Shows the schedule and cash to customer before a request is raised. */
-  async preview(ctx: Ctx, input: { productId: string; principal: number; disbursedOn?: string }) {
-    const product = await this.product(ctx, input.productId);
-    const terms = { ...termsOf({ ...product, principal: input.principal }) };
+  async preview(ctx: Ctx, input: z.infer<typeof previewSchema>) {
+    let terms: LoanTerms;
+    if (input.loanId) {
+      // A loan already requested: its own terms, including a processing fee typed for it.
+      const l = await this.prisma.loan.findFirst({ where: { id: input.loanId, tenantId: ctx.tenantId } });
+      if (!l) throw notFound('Loan');
+      assertBranch(ctx, l.branchId);
+      terms = termsOf(l);
+    } else {
+      const product = await this.product(ctx, input.productId);
+      terms = termsOf({ ...product, principal: input.principal, ...feeTerms(product, input.processingFee) });
+    }
     const start = input.disbursedOn ?? todayIST();
     return rule(() => ({
       summary: summarize(terms),
@@ -163,7 +173,8 @@ export class LoansService {
     if (input.principal < product.minAmount || input.principal > product.maxAmount) {
       throw bad(`Amount must be between ${formatINR(product.minAmount)} and ${formatINR(product.maxAmount)}`);
     }
-    rule(() => summarize(termsOf({ ...product, principal: input.principal })));
+    const fee = feeTerms(product, input.processingFee);
+    rule(() => summarize(termsOf({ ...product, principal: input.principal, ...fee })));
     const t = await this.prisma.tenant.findUniqueOrThrow({ where: { id: ctx.tenantId } });
     if ((await this.prisma.loan.count({ where: { tenantId: ctx.tenantId, status: 'ACTIVE' } })) >= t.maxActiveLoans) {
       throw bad(`Your plan allows ${t.maxActiveLoans} active loans`);
@@ -183,8 +194,7 @@ export class LoansService {
           tenure: product.tenure,
           interestMethod: product.interestMethod,
           interestRate: product.interestRate,
-          feePercent: product.feePercent,
-          feeFlat: product.feeFlat,
+          ...fee,
           penaltyType: product.penaltyType,
           penaltyValue: product.penaltyValue,
           graceDays: product.graceDays,
@@ -209,6 +219,10 @@ export class LoansService {
     if (!['SENT_BACK', 'REQUESTED'].includes(l.status)) throw bad('Only open requests can be changed');
     const product = await this.product(ctx, input.productId);
     if (input.principal < product.minAmount || input.principal > product.maxAmount) throw bad('Amount is outside the product range');
+    // Left out, a fee typed for this loan before stays (same product); a new product brings its own fee.
+    const fee =
+      input.processingFee !== undefined || product.id !== l.productId ? feeTerms(product, input.processingFee) : { feePercent: l.feePercent, feeFlat: l.feeFlat };
+    rule(() => summarize(termsOf({ ...product, principal: input.principal, ...fee })));
     const u = await this.prisma.tx(async (tx) => {
       const loan = await tx.loan.update({
         where: { id },
@@ -219,8 +233,7 @@ export class LoansService {
           tenure: product.tenure,
           interestMethod: product.interestMethod,
           interestRate: product.interestRate,
-          feePercent: product.feePercent,
-          feeFlat: product.feeFlat,
+          ...fee,
           penaltyType: product.penaltyType,
           penaltyValue: product.penaltyValue,
           graceDays: product.graceDays,
@@ -390,7 +403,15 @@ const listQuery = z.object({
   queue: z.enum(['approvals', 'mine']).optional(),
   page: z.coerce.number().int().positive().optional(),
 });
-const previewSchema = z.object({ productId: z.string(), principal: z.number().int().positive(), disbursedOn: z.string().optional() });
+const previewSchema = z.object({
+  productId: z.string(),
+  principal: z.number().int().positive(),
+  disbursedOn: z.string().optional(),
+  /** A processing fee typed for this loan (paise), in place of the product's fee. */
+  processingFee: z.number().int().nonnegative().optional().nullable(),
+  /** Preview a loan already requested, with its own terms (used before disbursing). */
+  loanId: z.string().optional(),
+});
 
 @Controller()
 export class LoansController {

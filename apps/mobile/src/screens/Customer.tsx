@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking, Pressable, Share, Text, View } from 'react-native';
+import { useDialog } from '../Dialog';
 import { addDays } from '@localfinance/shared';
 import { get, newRef } from '../api';
 import { getPrintAsk } from '../device';
@@ -8,7 +9,7 @@ import { istStamp, printReceipt, type ReceiptData } from '../print';
 import { getPosition, useSession } from '../session';
 import { getVisitOrder, nextInOrder } from '../smart';
 import { cachedRouteDay, enqueue, getSynced, isUnsent, removeQueued, routeDay, subscribe, type DayCustomer, type DayLoan } from '../store';
-import { Amount, Avatar, Badge, Btn, C, Card, Chips, Field, Icon, Notice, PIN_COLORS, R, Row, SP, Screen, dateIN, money, s, toPaise, todayIST, useNav } from '../ui';
+import { ActionRow, Amount, Avatar, Badge, Btn, C, Card, Chips, Field, Icon, Notice, PIN_COLORS, R, RoundAction, Row, SP, Screen, dateIN, money, s, toPaise, todayIST, useNav } from '../ui';
 import { ActionError, FailureState, FormProblems, LoadingState, SuccessState, fieldError, useSlowLoad, type Problem } from '../states';
 import { Reminder } from './Reminder';
 import { navigateTo } from './RouteDay';
@@ -116,12 +117,16 @@ export default function Customer({ customer: initial, customerId, routeId, amoun
             {c.landmark && <Text style={s.muted}>{c.landmark}</Text>}
           </View>
         </View>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, marginTop: SP.lg }}>
-          <Btn small kind="tonal" icon="call" title={c.phone} onPress={() => void Linking.openURL(`tel:${c.phone}`)} style={{ flexGrow: 1, flexBasis: 120 }} />
-          {c.lat != null && c.lng != null && <Btn small kind="tonal" icon="navigate" title={t('mobile.navigate')} onPress={() => navigateTo(c.lat!, c.lng!)} style={{ flexGrow: 1, flexBasis: 120 }} />}
-          {can('collection.record', 'report.view', 'customer.view') && mode !== 'reminder' && <Btn small kind="tonal" icon="chatbubble-ellipses-outline" title={t('ai.reminder.button')} onPress={() => setMode('reminder')} style={{ flexGrow: 1, flexBasis: 120 }} />}
-        </View>
+        {c.phone ? <Text style={[s.muted, { marginTop: SP.md, fontSize: 15 }]}>{c.phone}</Text> : null}
+        {/* Round buttons: call, directions, reminder and a new loan, one tap each. */}
+        <ActionRow style={{ marginTop: SP.md, borderTopWidth: 1, borderTopColor: C.line, paddingTop: SP.md }}>
+          <RoundAction icon="call" label={t('customerMod.call')} color={C.ok} onPress={() => void Linking.openURL(`tel:${c.phone}`)} />
+          {c.lat != null && c.lng != null && <RoundAction icon="navigate" label={t('mobile.navigate')} color="#2563eb" onPress={() => navigateTo(c.lat!, c.lng!)} />}
+          {can('collection.record', 'report.view', 'customer.view') && <RoundAction icon="chatbubble-ellipses" label={t('ai.reminder.button')} color="#c2410c" onPress={() => setMode(mode === 'reminder' ? 'none' : 'reminder')} />}
+          {can('loan.request') && c.status === 'ACTIVE' && <RoundAction icon="cash" label={t('mobile.requestLoan')} color="#7c3aed" onPress={() => nav.push('LoanRequest', { customerId: c.id, customerName: c.name })} />}
+        </ActionRow>
       </Card>
+      {mode === 'reminder' && <Reminder customer={c} onDone={() => setMode('none')} />}
       {c.status !== 'ACTIVE' && <Notice tone="danger" text={t(`customerMod.statuses.${c.status}`)} />}
       <Card>
         <Amount size="xl" label={t('collection.dueNow')} value={money(c.dueNow)} tone={c.dueNow > 0 ? C.ink : C.ok} />
@@ -136,7 +141,6 @@ export default function Customer({ customer: initial, customerId, routeId, amoun
           </View>
         )}
       </Card>
-      {mode === 'reminder' && <Reminder customer={c} onDone={() => setMode('none')} />}
       {c.loans.map((l) => (
         <Card key={l.id}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SP.sm, marginBottom: SP.sm, flexWrap: 'wrap' }}>
@@ -159,9 +163,6 @@ export default function Customer({ customer: initial, customerId, routeId, amoun
         </Card>
       ))}
       {c.loans.length === 0 && <Notice tone="warn" text={t('mobile.noActiveLoan')} />}
-      {mode === 'none' && can('loan.request') && c.status === 'ACTIVE' && (
-        <Btn kind="tonal" title={t('mobile.requestLoan')} onPress={() => nav.push('LoanRequest', { customerId: c.id, customerName: c.name })} />
-      )}
     </Screen>
   );
 }
@@ -265,7 +266,10 @@ function CollectSuccess({ customer, routeId, saved, onUndone, onBack }: { custom
   }, [saved]);
   const left = Math.max(0, Math.ceil((Date.parse(saved.at) + UNDO_MS - now) / 1000));
 
+  const dialog = useDialog();
   const undo = async () => {
+    const ok = await dialog.confirm({ tone: 'danger', icon: 'arrow-undo', title: t('mobile.confirm.undoTitle'), amount: money(saved.amount), text: t('mobile.confirm.undoText'), confirmText: t('mobile.undo') });
+    if (!ok) return;
     if (!(await removeQueued(saved.clientRef))) {
       setUnsent(false);
       return setError(t('mobile.undoTooLate'));
@@ -355,9 +359,8 @@ function CollectForm({ customer, routeId, initialAmount, info, onSaved, onDone }
   const [payMode, setPayMode] = useState<'CASH' | 'UPI'>('CASH');
   const [upiRef, setUpiRef] = useState('');
   const [note, setNote] = useState('');
-  const [noteOpen, setNoteOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [confirming, setConfirming] = useState(false);
+  const dialog = useDialog();
   // Problems are listed once the agent has tried to save, and then update as the amount changes.
   const [tried, setTried] = useState(false);
   const paise = toPaise(amount);
@@ -375,10 +378,26 @@ function CollectForm({ customer, routeId, initialAmount, info, onSaved, onDone }
   ].filter((q) => q.value > 0);
   const quickOn = quick.find((q) => q.value === paise)?.key ?? '';
 
-  const review = () => {
+  // Checks the form, then asks in a popup with the amount, customer, loan and mode before saving.
+  const review = async () => {
     setTried(true);
     if (problems.length) return;
-    setConfirming(true);
+    const ok = await dialog.confirm({
+      tone: paise > loan.dueNow ? 'warning' : 'question',
+      icon: 'cash-outline',
+      title: t('mobile.confirmCollection'),
+      amount: money(paise),
+      text: paise > loan.dueNow ? t('mobile.moreThanDue', { due: money(loan.dueNow) }) : undefined,
+      details: [
+        { label: t('common.customer'), value: customer.name },
+        { label: t('common.loan'), value: loan.number },
+        { label: t('common.mode'), value: `${t(`common.modes.${payMode}`)}${payMode === 'UPI' && upiRef ? ` · ${upiRef}` : ''}` },
+        ...(note.trim() ? [{ label: t('common.notes'), value: note.trim() }] : []),
+      ],
+      confirmText: `${t('common.confirm')} ${money(paise)}`,
+      cancelText: t('common.edit'),
+    });
+    if (ok) await save();
   };
 
   const save = async () => {
@@ -391,7 +410,7 @@ function CollectForm({ customer, routeId, initialAmount, info, onSaved, onDone }
       amount: paise,
       mode: payMode,
       upiRef: payMode === 'UPI' ? upiRef || null : null,
-      note: note || null,
+      note: note.trim() || null,
       collectedAt: new Date().toISOString(),
       lat: pos?.lat ?? null,
       lng: pos?.lng ?? null,
@@ -401,26 +420,9 @@ function CollectForm({ customer, routeId, initialAmount, info, onSaved, onDone }
     };
     const r = await enqueue(item);
     setBusy(false);
-    setConfirming(false);
     onSaved({ clientRef: item.clientRef, at: item.collectedAt, amount: paise, mode: payMode, upiRef: item.upiRef, loanNumber: loan.number, balance: Math.max(0, loan.outstanding - paise), offline: !!(r.offline || r.sent === 0) });
   };
 
-  if (confirming) {
-    return (
-      <Card style={{ borderColor: C.brand, borderWidth: 1.5 }}>
-        <Text style={s.h2}>{t('mobile.confirmCollection')}</Text>
-        <Amount size="xl" label={t('collection.amountCollected')} value={money(paise)} />
-        <View style={{ height: SP.sm }} />
-        <Row label={t('common.customer')} value={customer.name} divider />
-        <Row label={t('common.loan')} value={loan.number} />
-        <Row label={t('common.mode')} value={`${t(`common.modes.${payMode}`)}${payMode === 'UPI' && upiRef ? ` · ${upiRef}` : ''}`} />
-        {paise > loan.dueNow && <Notice tone="warn" text={t('mobile.moreThanDue', { due: money(loan.dueNow) })} />}
-        <View style={{ height: SP.md }} />
-        <Btn big icon="checkmark-done" title={`${t('common.confirm')} ${money(paise)}`} onPress={() => void save()} busy={busy} />
-        <Btn kind="outline" title={t('common.edit')} onPress={() => setConfirming(false)} disabled={busy} style={{ marginBottom: 0 }} />
-      </Card>
-    );
-  }
   return (
     <Card style={{ borderColor: C.brand, borderWidth: 1.5 }}>
       <Text style={s.h2}>{t('collection.record')}</Text>
@@ -439,9 +441,8 @@ function CollectForm({ customer, routeId, initialAmount, info, onSaved, onDone }
           <Text style={[s.muted, { marginTop: -SP.sm, marginBottom: SP.lg }]}>{t('collection.upiNote')}</Text>
         </>
       )}
-      {/* A note is rarely needed at the door: one tap shows the box. */}
-      {noteOpen || note ? <Field label={t('common.notes')} value={note} onChangeText={setNote} autoFocus={noteOpen && !note} /> : <Btn small kind="ghost" icon="create-outline" title={t('mobile.addNote')} onPress={() => setNoteOpen(true)} style={{ alignSelf: 'flex-start', marginBottom: SP.md, paddingHorizontal: SP.sm }} />}
-      <Btn big icon="checkmark-circle" title={`${t('common.save')} ${money(paise)}`} onPress={review} />
+      <Field label={t('common.notes')} value={note} onChangeText={setNote} multiline placeholder={t('mobile.addNote')} />
+      <Btn big icon="checkmark-circle" title={`${t('common.save')} ${money(paise)}`} onPress={() => void review()} busy={busy} />
       <Btn kind="ghost" title={t('common.cancel')} onPress={onDone} style={{ marginBottom: 0 }} />
     </Card>
   );
@@ -458,10 +459,23 @@ function VisitForm({ customer, routeId, onDone }: { customer: DayCustomer; route
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const promiseDate = when === 'other' ? typed.trim() : addDays(todayIST(), Number(when));
+  const dialog = useDialog();
   const save = async () => {
     setError(null);
     if (outcome === 'PROMISED' && !/^\d{4}-\d{2}-\d{2}$/.test(promiseDate)) return setError(t('mobile.dateFormat'));
     if (outcome === 'PROMISED' && promiseDate < todayIST()) return setError(t('mobile.dateFormat'));
+    const ok = await dialog.confirm({
+      title: t('mobile.confirm.visitTitle'),
+      icon: 'clipboard-outline',
+      details: [
+        { label: t('common.customer'), value: customer.name },
+        { label: t('collection.noPayment'), value: t(`collection.outcomes.${outcome}`) },
+        ...(outcome === 'PROMISED' ? [{ label: t('collection.promiseDate'), value: dateIN(promiseDate) }] : []),
+        ...(note.trim() ? [{ label: t('common.notes'), value: note.trim() }] : []),
+      ],
+      confirmText: t('common.save'),
+    });
+    if (!ok) return;
     setBusy(true);
     const pos = await getPosition();
     const r = await enqueue({

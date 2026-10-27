@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { get } from '../api';
+import { useDialog } from '../Dialog';
 import { MapPins } from '../MapPins';
 import { useSession } from '../session';
 import { alertValues } from '../smart';
@@ -21,7 +22,7 @@ export function Summary() {
   const [failed, setFailed] = useState<FailedItem[]>([]);
   const [synced, setSynced] = useState<SyncedItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [confirmDismiss, setConfirmDismiss] = useState<string | null>(null);
+  const dialog = useDialog();
   const [retrying, setRetrying] = useState<string | null>(null);
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -46,6 +47,18 @@ export function Summary() {
     });
   }, [load]);
   const pendingCash = queue.filter((q) => q.kind === 'collection' && q.mode === 'CASH').reduce((sum, q) => sum + (q.kind === 'collection' ? q.amount : 0), 0);
+  // Removing an entry the office refused loses it, so it asks first.
+  const dismiss = async (f: FailedItem) => {
+    const ok = await dialog.confirm({
+      tone: 'danger',
+      title: t('mobile.confirm.dismissTitle'),
+      amount: f.item.kind === 'collection' ? money(f.item.amount) : undefined,
+      text: f.item.kind === 'collection' ? t('mobile.dismissConfirm', { amount: money(f.item.amount), name: f.item.customerName }) : t('mobile.dismissConfirmVisit', { name: f.item.customerName }),
+      confirmText: t('mobile.dismissYes'),
+      cancelText: t('mobile.keep'),
+    });
+    if (ok) await dismissFailed(f.item.clientRef);
+  };
   const retry = async (ref: string) => {
     setRetrying(ref);
     await retryFailed(ref);
@@ -87,21 +100,10 @@ export function Summary() {
               <View key={f.item.clientRef} style={{ borderTopWidth: 1, borderColor: C.line, paddingVertical: SP.md }}>
                 <Text style={{ fontWeight: '800', fontSize: 16, color: C.ink, flexShrink: 1 }}>{f.item.customerName}{f.item.kind === 'collection' ? ` · ${money(f.item.amount)}` : ''}</Text>
                 <Text style={{ color: C.danger }}>{f.error}</Text>
-                {/* Dismiss asks first, inline (Alert does nothing on the web build). */}
-                {confirmDismiss === f.item.clientRef ? (
-                  <View style={{ marginTop: SP.sm }}>
-                    <Notice tone="warn" text={f.item.kind === 'collection' ? t('mobile.dismissConfirm', { amount: money(f.item.amount), name: f.item.customerName }) : t('mobile.dismissConfirmVisit', { name: f.item.customerName })} />
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm }}>
-                      <Btn small kind="danger" title={t('mobile.dismissYes')} onPress={() => { setConfirmDismiss(null); void dismissFailed(f.item.clientRef); }} style={{ flexGrow: 1 }} />
-                      <Btn small kind="outline" title={t('mobile.keep')} onPress={() => setConfirmDismiss(null)} style={{ flexGrow: 1 }} />
-                    </View>
-                  </View>
-                ) : (
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, marginTop: SP.sm }}>
-                    <Btn small kind="tonal" title={t('mobile.retry')} onPress={() => void retry(f.item.clientRef)} busy={retrying === f.item.clientRef} />
-                    <Btn small kind="outline" title={t('mobile.dismiss')} onPress={() => setConfirmDismiss(f.item.clientRef)} />
-                  </View>
-                )}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, marginTop: SP.sm }}>
+                  <Btn small kind="tonal" title={t('mobile.retry')} onPress={() => void retry(f.item.clientRef)} busy={retrying === f.item.clientRef} />
+                  <Btn small kind="outline" title={t('mobile.dismiss')} onPress={() => void dismiss(f)} />
+                </View>
               </View>
             ))}
           </Card>

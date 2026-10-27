@@ -180,6 +180,12 @@ exports.loanRequestSchema = zod_1.z.object({
     customerId: id,
     productId: id,
     principal: positivePaise,
+    /**
+     * Documentation or processing fee for this loan, in paise, in place of the product's fee. It is kept from the cash
+     * paid out (a 10,000 loan with a 100 fee pays out 9,900) and the customer still repays the full principal. Left
+     * out, the product's fee applies.
+     */
+    processingFee: paise.optional().nullable(),
     purpose: optStr,
     notes: optStr,
     clientRef: zod_1.z.string().max(100).optional(),

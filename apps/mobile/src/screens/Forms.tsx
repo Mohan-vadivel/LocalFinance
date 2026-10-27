@@ -6,7 +6,8 @@ import { LANGUAGES } from '@localfinance/shared';
 import { ApiError, get, newRef, post, put } from '../api';
 import { getPosition, useSession } from '../session';
 import { cachedRouteDay, cachedRoutes, myRoutes, type DayCustomer, type MyRoute } from '../store';
-import { Amount, Avatar, Badge, Btn, C, Card, Chevron, Chips, ErrorText, Field, Icon, Notice, Row, SP, Screen, SearchBar, dateIN, money, s, toPaise, useLayout, useNav } from '../ui';
+import { Amount, Avatar, Badge, Btn, C, Card, Chevron, Chips, Collapsible, ErrorText, Field, Icon, Notice, Row, SP, Screen, SearchBar, Select, dateIN, money, s, toPaise, useLayout, useNav } from '../ui';
+import { useDialog } from '../Dialog';
 import { ActionError, EmptyState, FailureState, FormProblems, LoadingState, NoSearchResults, SkeletonList, SuccessState, fieldError, useRequired, useSlowLoad, type Problem } from '../states';
 
 // =====================================================================
@@ -129,10 +130,23 @@ export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
     void capture();
   }, []);
 
+  const dialog = useDialog();
   const save = async () => {
     setError(null);
     setTried(true);
     if (problems.length || !route || !gps) return;
+    const ok = await dialog.confirm({
+      icon: 'person-add-outline',
+      title: t('mobile.confirm.customerTitle'),
+      details: [
+        { label: t('common.name'), value: f.name },
+        { label: t('common.phone'), value: f.phone },
+        { label: t('areas.area'), value: areaName ?? '-' },
+        { label: t('common.route'), value: route.name },
+      ],
+      confirmText: duplicate ? t('customerMod.saveAnyway') : t('common.save'),
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       const c = await post<{ id: string; name: string }>(`/customers${duplicate ? '?allowDuplicate=true' : ''}`, {
@@ -196,15 +210,13 @@ export function AddCustomer({ routes: given }: { routes: MyRoute[] }) {
         <Field label={t('customerMod.altPhone')} value={f.altPhone} onChangeText={set('altPhone')} keyboardType="phone-pad" />
         <Field label={t('common.address')} value={f.address} onChangeText={set('address')} multiline error={fieldError(shownProblems, 'address')} />
         <Field label={t('customerMod.landmark')} value={f.landmark} onChangeText={set('landmark')} />
-        <Text style={s.label}>{t('customerMod.idType')}</Text>
-        <Chips value={f.idType} onChange={set('idType')} items={ID_TYPES.map((x) => ({ key: x, label: t(`customerMod.idTypes.${x}`) }))} />
+        <Select label={t('customerMod.idType')} value={f.idType} onChange={set('idType')} items={ID_TYPES.map((x) => ({ key: x, label: t(`customerMod.idTypes.${x}`) }))} />
         <Field label={t('customerMod.idNumber')} value={f.idNumber} onChangeText={set('idNumber')} />
         <Field label={t('customerMod.occupation')} value={f.occupation} onChangeText={set('occupation')} />
         <Field label={t('customerMod.monthlyIncome')} value={f.monthlyIncome} onChangeText={set('monthlyIncome')} keyboardType="numeric" />
         <Field label={t('customerMod.guarantorName')} value={f.guarantorName} onChangeText={set('guarantorName')} />
         <Field label={t('customerMod.guarantorPhone')} value={f.guarantorPhone} onChangeText={set('guarantorPhone')} keyboardType="phone-pad" />
-        <Text style={s.label}>{t('common.language')}</Text>
-        <Chips value={f.language} onChange={set('language')} items={LANGUAGES.map((l) => ({ key: l.code, label: l.nativeName }))} />
+        <Select label={t('common.language')} value={f.language} onChange={set('language')} items={LANGUAGES.map((l) => ({ key: l.code, label: l.nativeName, sub: l.name }))} style={{ marginBottom: 0 }} />
       </Card>
       <Card>
         <Text style={s.h2}>{t('customerMod.gps')}</Text>
@@ -437,15 +449,23 @@ interface Risk { score: number | null; grade: string; reasons: { key: string; to
 interface Product { id: string; name: string; frequency: string; minAmount: number; maxAmount: number; tenure: number }
 interface Preview { summary: { netDisbursed: number; fee: number; upfrontInterest: number; totalRepayable: number }; schedule: { dueDate: string; totalDue: number }[] }
 
+/** A loan already asked for this customer, shown on the request screen so the same loan is not asked twice. */
+interface CustomerLoan { id: string; number: string; principal: number; status: string; createdAt: string; productName?: string }
+const LOAN_TONE: Record<string, string> = { REQUESTED: C.warn, SENT_BACK: C.warn, APPROVED: C.brand, ACTIVE: C.ok, REJECTED: C.danger };
+
 export function LoanRequest({ customerId, customerName }: { customerId: string; customerName: string }) {
   const { t } = useTranslation();
   const nav = useNav();
+  const dialog = useDialog();
   const [products, setProducts] = useState<Product[] | null>(null);
   const [productId, setProductId] = useState('');
   const [amount, setAmount] = useState('');
+  // Documentation or processing fee for this loan; empty uses the product's own fee.
+  const [fee, setFee] = useState('');
   const [purpose, setPurpose] = useState('');
   const [preview, setPreview] = useState<Preview | null>(null);
   const [risk, setRisk] = useState<Risk | null>(null);
+  const [requested, setRequested] = useState<CustomerLoan[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [ref] = useState(newRef);
@@ -459,29 +479,50 @@ export function LoanRequest({ customerId, customerName }: { customerId: string; 
   };
   useEffect(() => {
     loadProducts();
+    get<{ rows: CustomerLoan[] }>('/loans', { customerId, status: 'REQUESTED,SENT_BACK,APPROVED' }).then((r) => setRequested(r.rows)).catch(() => setRequested([]));
   }, [customerId]);
   // Risk score from the customer's own history; with the amount typed, it also compares it with past loans.
   const asked = toPaise(amount);
+  const feePaise = fee.trim() === '' ? null : toPaise(fee);
   useEffect(() => {
     const h = setTimeout(() => {
       get<{ summary: Risk }>(`/customers/${customerId}/history`, { amount: asked > 0 ? asked : undefined }).then((x) => setRisk(x.summary)).catch(() => undefined);
     }, asked > 0 ? 500 : 0);
     return () => clearTimeout(h);
   }, [customerId, asked]);
+  const [previewError, setPreviewError] = useState<unknown>(null);
   useEffect(() => {
     setPreview(null);
-    if (!productId || !toPaise(amount)) return;
+    setPreviewError(null);
+    if (!productId || !asked) return;
     const h = setTimeout(() => {
-      post<Preview>('/loans/preview', { productId, principal: toPaise(amount) }).then(setPreview).catch(() => setPreview(null));
+      post<Preview>('/loans/preview', { productId, principal: asked, ...(feePaise != null ? { processingFee: feePaise } : {}) }).then(setPreview).catch((e) => { setPreview(null); setPreviewError(e); });
     }, 400);
     return () => clearTimeout(h);
-  }, [productId, amount]);
+  }, [productId, asked, feePaise]);
   const product = products?.find((p) => p.id === productId);
   const submit = async () => {
+    if (!preview) return;
+    const ok = await dialog.confirm({
+      icon: 'cash-outline',
+      title: t('mobile.confirm.loanTitle'),
+      amount: money(asked),
+      text: t('mobile.confirm.loanText'),
+      details: [
+        { label: t('common.customer'), value: customerName },
+        { label: t('common.product'), value: product?.name ?? '-' },
+        { label: t('loanMod.processingFee'), value: money(preview.summary.fee) },
+        { label: t('loanMod.netDisbursed'), value: money(preview.summary.netDisbursed) },
+        { label: t('loanMod.totalRepayable'), value: money(preview.summary.totalRepayable) },
+      ],
+      confirmText: t('common.submit'),
+    });
+    if (!ok) return;
     setBusy(true);
     setError(null);
     try {
-      await post('/loans', { customerId, productId, principal: toPaise(amount), purpose: purpose || null, clientRef: ref });
+      await post('/loans', { customerId, productId, principal: asked, processingFee: feePaise, purpose: purpose || null, clientRef: ref });
+      await dialog.alert({ tone: 'success', title: t('mobile.confirm.sentTitle'), text: t('mobile.confirm.sentText') });
       nav.replace('MyRequests');
     } catch (e) {
       setError(e);
@@ -490,48 +531,79 @@ export function LoanRequest({ customerId, customerName }: { customerId: string; 
     }
   };
   if (!products) return <Screen title={t('mobile.requestLoan')}>{error ? <FailureState error={error} onRetry={loadProducts} onBack={() => nav.pop()} /> : <LoadingState slow={slow.slow} onKeepWaiting={slow.keepWaiting} onCancel={() => nav.pop()} />}</Screen>;
+  const riskTone = risk?.score == null ? C.grey : risk.score >= 70 ? C.ok : risk.score >= 45 ? C.warn : C.danger;
   return (
-    <Screen title={t('mobile.requestLoan')}>
-      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md }}>
-        <Avatar name={customerName} size={48} />
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[s.h2, { marginBottom: risk ? SP.xs : 0 }]}>{customerName}</Text>
-          {risk && <Row label={t('customerMod.riskGrade')} value={t(`history.grades.${risk.grade}`)} strong />}
-          {risk?.score != null && <Row label={t('ai.risk.score')} value={t('ai.risk.outOf', { score: risk.score })} strong tone={risk.score >= 70 ? C.ok : risk.score >= 45 ? C.warn : C.danger} />}
-        </View>
-      </Card>
-      {risk && risk.reasons.length > 0 && (
-        <Card tone="soft" style={{ marginTop: -SP.xs }}>
-          <Text style={[s.label, { marginBottom: SP.xs }]}>{t('ai.risk.why')}</Text>
-          {risk.reasons.slice(0, 2).map((r) => (
-            <View key={r.key} style={{ flexDirection: 'row', gap: SP.sm, alignItems: 'flex-start', marginBottom: 4 }}>
-              <Icon name={r.tone === 'good' ? 'arrow-up-circle' : 'arrow-down-circle'} size={18} color={r.tone === 'good' ? C.ok : C.danger} />
-              <Text style={{ flex: 1, color: r.tone === 'good' ? C.ok : C.danger, fontWeight: '700', fontSize: 15 }}>{t(`ai.risk.reasons.${r.key}`, r.values)}</Text>
+    <Screen title={t('mobile.requestLoan')} subtitle={customerName}>
+      {/* Who the loan is for, and how they have paid before (open for the reasons). */}
+      <Collapsible
+        title={customerName}
+        summary={risk ? `${t('customerMod.riskGrade')}: ${t(`history.grades.${risk.grade}`)}${risk.score != null ? ` · ${t('ai.risk.outOf', { score: risk.score })}` : ''}` : t('mobile.loan.customer')}
+        right={risk?.score != null ? <Badge text={String(risk.score)} color={riskTone} solid /> : undefined}
+      >
+        {risk && <Row label={t('customerMod.riskGrade')} value={t(`history.grades.${risk.grade}`)} strong />}
+        {risk?.score != null && <Row label={t('ai.risk.score')} value={t('ai.risk.outOf', { score: risk.score })} strong tone={riskTone} />}
+        {risk && risk.reasons.length > 0 && (
+          <View style={{ marginTop: SP.sm }}>
+            <Text style={[s.label, { marginBottom: SP.xs }]}>{t('ai.risk.why')}</Text>
+            {risk.reasons.slice(0, 3).map((r) => (
+              <View key={r.key} style={{ flexDirection: 'row', gap: SP.sm, alignItems: 'flex-start', marginBottom: 4 }}>
+                <Icon name={r.tone === 'good' ? 'arrow-up-circle' : 'arrow-down-circle'} size={18} color={r.tone === 'good' ? C.ok : C.danger} />
+                <Text style={{ flex: 1, color: r.tone === 'good' ? C.ok : C.danger, fontWeight: '700', fontSize: 15 }}>{t(`ai.risk.reasons.${r.key}`, r.values)}</Text>
+              </View>
+            ))}
+            <Text style={[s.muted, { fontSize: 13, marginTop: SP.xs }]}>{t('ai.risk.advisory')}</Text>
+          </View>
+        )}
+      </Collapsible>
+      {/* Loans already asked for this customer, so the same loan is not asked twice. */}
+      <Collapsible
+        title={t('mobile.loan.requested')}
+        icon="document-text-outline"
+        defaultOpen={false}
+        summary={requested == null ? t('common.loading') : requested.length ? requested.map((l) => money(l.principal)).join(', ') : t('mobile.loan.noneRequested')}
+        right={requested?.length ? <Badge text={String(requested.length)} color={C.warn} solid /> : undefined}
+      >
+        {requested?.length === 0 && <Text style={s.muted}>{t('mobile.loan.noneRequested')}</Text>}
+        {requested?.map((l, i) => (
+          <View key={l.id} style={{ paddingVertical: SP.sm, borderTopWidth: i ? 1 : 0, borderTopColor: C.line, gap: 4 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: SP.sm }}>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: C.ink, flexShrink: 1 }}>{l.number}</Text>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: C.ink }}>{money(l.principal)}</Text>
             </View>
-          ))}
-          <Text style={[s.muted, { fontSize: 13, marginTop: SP.xs }]}>{t('ai.risk.advisory')}</Text>
-        </Card>
-      )}
-      <Card>
+            <Text style={s.muted}>{l.productName ?? ''}{l.productName ? ' · ' : ''}{dateIN(l.createdAt.slice(0, 10))}</Text>
+            <Badge text={t(`loanMod.statuses.${l.status}`)} color={LOAN_TONE[l.status] ?? C.grey} />
+          </View>
+        ))}
+      </Collapsible>
+      <Collapsible title={t('mobile.loan.details')} icon="create-outline" defaultOpen summary={asked ? `${product?.name ?? ''} · ${money(asked)}` : undefined}>
         <Text style={s.label}>{t('common.product')}</Text>
         <Chips value={productId} onChange={setProductId} items={products.map((p) => ({ key: p.id, label: p.name }))} />
         {product && <Text style={[s.muted, { marginTop: -SP.sm, marginBottom: SP.lg }]}>{money(product.minAmount)} – {money(product.maxAmount)} · {t(`product.frequencies.${product.frequency}`)} × {product.tenure}</Text>}
         <Field label={t('loanMod.principal')} value={amount} onChangeText={setAmount} keyboardType="numeric" prefix="₹" large />
+        <Field
+          label={t('loanMod.processingFee')}
+          value={fee}
+          onChangeText={setFee}
+          keyboardType="numeric"
+          prefix="₹"
+          placeholder={preview && feePaise == null ? String(preview.summary.fee / 100) : '0'}
+          hint={`${t('loanMod.processingFeeHelp')} ${feePaise == null ? t('loanMod.processingFeeDefault') : ''}`.trim()}
+        />
         <Field label={t('loanMod.purpose')} value={purpose} onChangeText={setPurpose} />
-      </Card>
+      </Collapsible>
       {preview && (
-        <Card tone="soft">
-          <Amount label={t('loanMod.netDisbursed')} value={money(preview.summary.netDisbursed)} />
-          <View style={{ height: SP.sm }} />
-          <Row label={t('loanMod.fee')} value={money(preview.summary.fee)} />
+        <Collapsible title={t('mobile.loan.payout')} icon="wallet-outline" defaultOpen summary={`${t('loanMod.netDisbursed')}: ${money(preview.summary.netDisbursed)}`}>
+          <Amount label={t('loanMod.netDisbursed')} value={money(preview.summary.netDisbursed)} tone={C.ok} />
+          <Text style={[s.muted, { marginTop: SP.xs, marginBottom: SP.sm }]}>{t('mobile.loan.feeLine', { principal: money(asked), fee: money(preview.summary.fee), net: money(preview.summary.netDisbursed) })}</Text>
+          <Row label={t('loanMod.processingFee')} value={money(preview.summary.fee)} divider />
           {preview.summary.upfrontInterest > 0 && <Row label={t('loanMod.upfrontInterest')} value={money(preview.summary.upfrontInterest)} />}
           <Row label={t('loanMod.instalment')} value={`${money(preview.schedule[0]?.totalDue)} × ${preview.schedule.length}`} strong />
-          <Row label={t('loanMod.totalRepayable')} value={money(preview.summary.totalRepayable)} />
+          <Row label={t('loanMod.totalRepayable')} value={money(preview.summary.totalRepayable)} strong />
           <Row label={t('loanMod.lastDue')} value={dateIN(preview.schedule[preview.schedule.length - 1]?.dueDate)} />
-        </Card>
+        </Collapsible>
       )}
-      <ActionError error={error} />
-      <Btn big title={t('common.submit')} onPress={() => void submit()} busy={busy} disabled={!preview} />
+      <ActionError error={error || previewError} />
+      <Btn big icon="send" title={t('common.submit')} onPress={() => void submit()} busy={busy} disabled={!preview} />
     </Screen>
   );
 }
@@ -614,7 +686,9 @@ function Resubmit({ loan, onCancel, onDone }: { loan: MyLoanRow; onCancel: () =>
   const [purpose, setPurpose] = useState(loan.purpose ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const dialog = useDialog();
   const submit = async () => {
+    if (!(await dialog.confirm({ icon: 'refresh', title: t('mobile.confirm.resubmitTitle'), amount: money(toPaise(principal)), details: [{ label: t('common.customer'), value: loan.customer.name }], confirmText: t('loanMod.resubmit') }))) return;
     setBusy(true);
     setError(null);
     try {

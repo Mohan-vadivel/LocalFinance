@@ -63,7 +63,8 @@
             "BANK": "Bank"
         },
         "moveUp": "Move up",
-        "moveDown": "Move down"
+        "moveDown": "Move down",
+        "ok": "OK"
     },
     "auth": {
         "login": "Log in",
@@ -428,7 +429,10 @@
         "interestWaived": "Interest waived",
         "amountToCollect": "Amount to collect",
         "writeOffWarning": "{{amount}} principal will be written off as a bad debt. This cannot be undone.",
-        "intoFund": "Paid into fund"
+        "intoFund": "Paid into fund",
+        "processingFee": "Documentation / processing fee",
+        "processingFeeHelp": "Kept from the cash paid out. The customer still repays the full loan amount.",
+        "processingFeeDefault": "Leave empty to use the product's fee"
     },
     "collection": {
         "title": "Collections",
@@ -635,7 +639,43 @@
         "clearSearch": "Clear search",
         "branchToday": "Branch today",
         "chooseArea": "Choose an area",
-        "noRouteInArea": "No route in this area yet. Ask your manager to add one."
+        "noRouteInArea": "No route in this area yet. Ask your manager to add one.",
+        "syncing": "Syncing…",
+        "editNote": "Edit note",
+        "confirm": {
+            "logoutTitle": "Log out?",
+            "logoutText": "You will need your password to log in again.",
+            "visitTitle": "Save this visit?",
+            "loanTitle": "Send this loan request?",
+            "loanText": "It goes to the branch manager for approval.",
+            "resubmitTitle": "Send the corrected request again?",
+            "customerTitle": "Add this customer?",
+            "entryTitle": "Save this entry?",
+            "approveTitle": "Approve this entry?",
+            "rejectTitle": "Reject this entry?",
+            "undoTitle": "Undo this collection?",
+            "undoText": "The entry is removed from this phone before it reaches the office.",
+            "dismissTitle": "Remove this entry?",
+            "switchTitle": "Switch business?",
+            "passwordTitle": "Change your password?",
+            "sentTitle": "Request sent",
+            "sentText": "The branch manager will check it. You can follow it in My loan requests."
+        },
+        "filters": {
+            "title": "Filter and sort",
+            "status": "Show",
+            "order": "Visit order",
+            "clear": "Clear",
+            "show": "Show {{count}} customers"
+        },
+        "loan": {
+            "customer": "Customer and risk",
+            "details": "Loan details",
+            "payout": "Cash to customer and schedule",
+            "requested": "Loan requests for this customer",
+            "noneRequested": "No open loan requests for this customer.",
+            "feeLine": "{{principal}} loan − {{fee}} fee = {{net}} to the customer"
+        }
     },
     "fund": {
         "title": "Funds",
@@ -1396,7 +1436,11 @@
             "copied": "Copied",
             "whatsapp": "WhatsApp",
             "sms": "SMS",
-            "language": "Message language"
+            "language": "Message language",
+            "tone": "Tone",
+            "gentleHelp": "A polite reminder, for a payment that is due",
+            "firmHelp": "Clear and direct, for a payment that is late",
+            "toneAuto": "Picked from the dues: firm when a payment is late, gentle otherwise."
         },
         "readId": {
             "button": "Read ID card",
@@ -1437,7 +1481,9 @@
                 "dueToday": "Due today",
                 "nearby": "On the way",
                 "done": "Done for today"
-            }
+            },
+            "normalHelp": "In the order set for the route",
+            "smartHelp": "Promises and late payers first, then the nearest"
         },
         "web": {
             "tryAsking": "Try asking",

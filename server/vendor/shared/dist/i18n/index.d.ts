@@ -101,6 +101,7 @@ export declare const resources: {
                 };
                 moveUp: string;
                 moveDown: string;
+                ok: string;
             };
             auth: {
                 login: string;
@@ -466,6 +467,9 @@ export declare const resources: {
                 amountToCollect: string;
                 writeOffWarning: string;
                 intoFund: string;
+                processingFee: string;
+                processingFeeHelp: string;
+                processingFeeDefault: string;
             };
             collection: {
                 title: string;
@@ -673,6 +677,42 @@ export declare const resources: {
                 branchToday: string;
                 chooseArea: string;
                 noRouteInArea: string;
+                syncing: string;
+                editNote: string;
+                confirm: {
+                    logoutTitle: string;
+                    logoutText: string;
+                    visitTitle: string;
+                    loanTitle: string;
+                    loanText: string;
+                    resubmitTitle: string;
+                    customerTitle: string;
+                    entryTitle: string;
+                    approveTitle: string;
+                    rejectTitle: string;
+                    undoTitle: string;
+                    undoText: string;
+                    dismissTitle: string;
+                    switchTitle: string;
+                    passwordTitle: string;
+                    sentTitle: string;
+                    sentText: string;
+                };
+                filters: {
+                    title: string;
+                    status: string;
+                    order: string;
+                    clear: string;
+                    show: string;
+                };
+                loan: {
+                    customer: string;
+                    details: string;
+                    payout: string;
+                    requested: string;
+                    noneRequested: string;
+                    feeLine: string;
+                };
             };
             fund: {
                 title: string;
@@ -1434,6 +1474,10 @@ export declare const resources: {
                     whatsapp: string;
                     sms: string;
                     language: string;
+                    tone: string;
+                    gentleHelp: string;
+                    firmHelp: string;
+                    toneAuto: string;
                 };
                 readId: {
                     button: string;
@@ -1475,6 +1519,8 @@ export declare const resources: {
                         nearby: string;
                         done: string;
                     };
+                    normalHelp: string;
+                    smartHelp: string;
                 };
                 web: {
                     tryAsking: string;
@@ -1862,6 +1908,7 @@ export declare const resources: {
                 };
                 moveUp: string;
                 moveDown: string;
+                ok: string;
             };
             auth: {
                 login: string;
@@ -2227,6 +2274,9 @@ export declare const resources: {
                 amountToCollect: string;
                 writeOffWarning: string;
                 intoFund: string;
+                processingFee: string;
+                processingFeeHelp: string;
+                processingFeeDefault: string;
             };
             collection: {
                 title: string;
@@ -2434,6 +2484,42 @@ export declare const resources: {
                 branchToday: string;
                 chooseArea: string;
                 noRouteInArea: string;
+                syncing: string;
+                editNote: string;
+                confirm: {
+                    logoutTitle: string;
+                    logoutText: string;
+                    visitTitle: string;
+                    loanTitle: string;
+                    loanText: string;
+                    resubmitTitle: string;
+                    customerTitle: string;
+                    entryTitle: string;
+                    approveTitle: string;
+                    rejectTitle: string;
+                    undoTitle: string;
+                    undoText: string;
+                    dismissTitle: string;
+                    switchTitle: string;
+                    passwordTitle: string;
+                    sentTitle: string;
+                    sentText: string;
+                };
+                filters: {
+                    title: string;
+                    status: string;
+                    order: string;
+                    clear: string;
+                    show: string;
+                };
+                loan: {
+                    customer: string;
+                    details: string;
+                    payout: string;
+                    requested: string;
+                    noneRequested: string;
+                    feeLine: string;
+                };
             };
             fund: {
                 title: string;
@@ -3195,6 +3281,10 @@ export declare const resources: {
                     whatsapp: string;
                     sms: string;
                     language: string;
+                    tone: string;
+                    gentleHelp: string;
+                    firmHelp: string;
+                    toneAuto: string;
                 };
                 readId: {
                     button: string;
@@ -3236,6 +3326,8 @@ export declare const resources: {
                         nearby: string;
                         done: string;
                     };
+                    normalHelp: string;
+                    smartHelp: string;
                 };
                 web: {
                     tryAsking: string;
@@ -3623,6 +3715,7 @@ export declare const resources: {
                 };
                 moveUp: string;
                 moveDown: string;
+                ok: string;
             };
             auth: {
                 login: string;
@@ -3988,6 +4081,9 @@ export declare const resources: {
                 amountToCollect: string;
                 writeOffWarning: string;
                 intoFund: string;
+                processingFee: string;
+                processingFeeHelp: string;
+                processingFeeDefault: string;
             };
             collection: {
                 title: string;
@@ -4195,6 +4291,42 @@ export declare const resources: {
                 branchToday: string;
                 chooseArea: string;
                 noRouteInArea: string;
+                syncing: string;
+                editNote: string;
+                confirm: {
+                    logoutTitle: string;
+                    logoutText: string;
+                    visitTitle: string;
+                    loanTitle: string;
+                    loanText: string;
+                    resubmitTitle: string;
+                    customerTitle: string;
+                    entryTitle: string;
+                    approveTitle: string;
+                    rejectTitle: string;
+                    undoTitle: string;
+                    undoText: string;
+                    dismissTitle: string;
+                    switchTitle: string;
+                    passwordTitle: string;
+                    sentTitle: string;
+                    sentText: string;
+                };
+                filters: {
+                    title: string;
+                    status: string;
+                    order: string;
+                    clear: string;
+                    show: string;
+                };
+                loan: {
+                    customer: string;
+                    details: string;
+                    payout: string;
+                    requested: string;
+                    noneRequested: string;
+                    feeLine: string;
+                };
             };
             fund: {
                 title: string;
@@ -4956,6 +5088,10 @@ export declare const resources: {
                     whatsapp: string;
                     sms: string;
                     language: string;
+                    tone: string;
+                    gentleHelp: string;
+                    firmHelp: string;
+                    toneAuto: string;
                 };
                 readId: {
                     button: string;
@@ -4997,6 +5133,8 @@ export declare const resources: {
                         nearby: string;
                         done: string;
                     };
+                    normalHelp: string;
+                    smartHelp: string;
                 };
                 web: {
                     tryAsking: string;
@@ -5384,6 +5522,7 @@ export declare const resources: {
                 };
                 moveUp: string;
                 moveDown: string;
+                ok: string;
             };
             auth: {
                 login: string;
@@ -5749,6 +5888,9 @@ export declare const resources: {
                 amountToCollect: string;
                 writeOffWarning: string;
                 intoFund: string;
+                processingFee: string;
+                processingFeeHelp: string;
+                processingFeeDefault: string;
             };
             collection: {
                 title: string;
@@ -5956,6 +6098,42 @@ export declare const resources: {
                 branchToday: string;
                 chooseArea: string;
                 noRouteInArea: string;
+                syncing: string;
+                editNote: string;
+                confirm: {
+                    logoutTitle: string;
+                    logoutText: string;
+                    visitTitle: string;
+                    loanTitle: string;
+                    loanText: string;
+                    resubmitTitle: string;
+                    customerTitle: string;
+                    entryTitle: string;
+                    approveTitle: string;
+                    rejectTitle: string;
+                    undoTitle: string;
+                    undoText: string;
+                    dismissTitle: string;
+                    switchTitle: string;
+                    passwordTitle: string;
+                    sentTitle: string;
+                    sentText: string;
+                };
+                filters: {
+                    title: string;
+                    status: string;
+                    order: string;
+                    clear: string;
+                    show: string;
+                };
+                loan: {
+                    customer: string;
+                    details: string;
+                    payout: string;
+                    requested: string;
+                    noneRequested: string;
+                    feeLine: string;
+                };
             };
             fund: {
                 title: string;
@@ -6717,6 +6895,10 @@ export declare const resources: {
                     whatsapp: string;
                     sms: string;
                     language: string;
+                    tone: string;
+                    gentleHelp: string;
+                    firmHelp: string;
+                    toneAuto: string;
                 };
                 readId: {
                     button: string;
@@ -6758,6 +6940,8 @@ export declare const resources: {
                         nearby: string;
                         done: string;
                     };
+                    normalHelp: string;
+                    smartHelp: string;
                 };
                 web: {
                     tryAsking: string;
@@ -7145,6 +7329,7 @@ export declare const resources: {
                 };
                 moveUp: string;
                 moveDown: string;
+                ok: string;
             };
             auth: {
                 login: string;
@@ -7510,6 +7695,9 @@ export declare const resources: {
                 amountToCollect: string;
                 writeOffWarning: string;
                 intoFund: string;
+                processingFee: string;
+                processingFeeHelp: string;
+                processingFeeDefault: string;
             };
             collection: {
                 title: string;
@@ -7717,6 +7905,42 @@ export declare const resources: {
                 branchToday: string;
                 chooseArea: string;
                 noRouteInArea: string;
+                syncing: string;
+                editNote: string;
+                confirm: {
+                    logoutTitle: string;
+                    logoutText: string;
+                    visitTitle: string;
+                    loanTitle: string;
+                    loanText: string;
+                    resubmitTitle: string;
+                    customerTitle: string;
+                    entryTitle: string;
+                    approveTitle: string;
+                    rejectTitle: string;
+                    undoTitle: string;
+                    undoText: string;
+                    dismissTitle: string;
+                    switchTitle: string;
+                    passwordTitle: string;
+                    sentTitle: string;
+                    sentText: string;
+                };
+                filters: {
+                    title: string;
+                    status: string;
+                    order: string;
+                    clear: string;
+                    show: string;
+                };
+                loan: {
+                    customer: string;
+                    details: string;
+                    payout: string;
+                    requested: string;
+                    noneRequested: string;
+                    feeLine: string;
+                };
             };
             fund: {
                 title: string;
@@ -8478,6 +8702,10 @@ export declare const resources: {
                     whatsapp: string;
                     sms: string;
                     language: string;
+                    tone: string;
+                    gentleHelp: string;
+                    firmHelp: string;
+                    toneAuto: string;
                 };
                 readId: {
                     button: string;
@@ -8519,6 +8747,8 @@ export declare const resources: {
                         nearby: string;
                         done: string;
                     };
+                    normalHelp: string;
+                    smartHelp: string;
                 };
                 web: {
                     tryAsking: string;
@@ -8906,6 +9136,7 @@ export declare const resources: {
                 };
                 moveUp: string;
                 moveDown: string;
+                ok: string;
             };
             auth: {
                 login: string;
@@ -9271,6 +9502,9 @@ export declare const resources: {
                 amountToCollect: string;
                 writeOffWarning: string;
                 intoFund: string;
+                processingFee: string;
+                processingFeeHelp: string;
+                processingFeeDefault: string;
             };
             collection: {
                 title: string;
@@ -9478,6 +9712,42 @@ export declare const resources: {
                 branchToday: string;
                 chooseArea: string;
                 noRouteInArea: string;
+                syncing: string;
+                editNote: string;
+                confirm: {
+                    logoutTitle: string;
+                    logoutText: string;
+                    visitTitle: string;
+                    loanTitle: string;
+                    loanText: string;
+                    resubmitTitle: string;
+                    customerTitle: string;
+                    entryTitle: string;
+                    approveTitle: string;
+                    rejectTitle: string;
+                    undoTitle: string;
+                    undoText: string;
+                    dismissTitle: string;
+                    switchTitle: string;
+                    passwordTitle: string;
+                    sentTitle: string;
+                    sentText: string;
+                };
+                filters: {
+                    title: string;
+                    status: string;
+                    order: string;
+                    clear: string;
+                    show: string;
+                };
+                loan: {
+                    customer: string;
+                    details: string;
+                    payout: string;
+                    requested: string;
+                    noneRequested: string;
+                    feeLine: string;
+                };
             };
             fund: {
                 title: string;
@@ -10239,6 +10509,10 @@ export declare const resources: {
                     whatsapp: string;
                     sms: string;
                     language: string;
+                    tone: string;
+                    gentleHelp: string;
+                    firmHelp: string;
+                    toneAuto: string;
                 };
                 readId: {
                     button: string;
@@ -10280,6 +10554,8 @@ export declare const resources: {
                         nearby: string;
                         done: string;
                     };
+                    normalHelp: string;
+                    smartHelp: string;
                 };
                 web: {
                     tryAsking: string;

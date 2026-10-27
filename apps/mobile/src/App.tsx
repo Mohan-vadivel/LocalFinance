@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PaperProvider } from 'react-native-paper';
+import { DialogProvider } from './Dialog';
 import { loadLanguage } from './i18n';
 import { PaperIcon, paperTheme } from './theme';
 import Customer from './screens/Customer';
@@ -131,9 +132,11 @@ export default function App() {
       <PaperProvider theme={paperTheme} settings={{ icon: PaperIcon }}>
         <StatusBar style="dark" />
         {langReady ? (
-          <SessionProvider>
-            <Root />
-          </SessionProvider>
+          <DialogProvider>
+            <SessionProvider>
+              <Root />
+            </SessionProvider>
+          </DialogProvider>
         ) : (
           <Loading />
         )}
