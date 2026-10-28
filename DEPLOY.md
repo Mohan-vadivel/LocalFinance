@@ -81,13 +81,9 @@ VITE_API_URL=https://finance.witsapps.in/api pnpm --filter @localfinance/web bui
 ```
 
 Upload the contents of `apps/web/dist` to the domain's folder. It must be the root of a (sub)domain, not a subfolder,
-because its links start at `/`. Add these lines after the `/api` rule in the same `.htaccess`, so page refreshes work:
-
-```apache
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^ index.html [L]
-```
+because its links start at `/`. The build includes a `.htaccess` (sends `/api` to the API and makes page refreshes work).
+File managers hide files that start with a dot, so check it was uploaded: without it, refreshing a page such as
+`/tenants` shows "Not Found".
 
 Open the site, log in as the Super Admin and change the password.
 
