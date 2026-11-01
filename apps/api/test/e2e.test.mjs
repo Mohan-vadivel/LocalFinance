@@ -1034,8 +1034,8 @@ describe('import from the old system', () => {
     const dayCol = await ok(api('GET', `/reports/daily-collection?from=${today()}&to=${today()}`, { token: owner }));
     const collected = (rows) => rows.reduce((s, r) => s + r.collected, 0);
     assert.equal(collected(dayCol), collected(before.day));
-    // The imported loans do have instalments due today, so today's demand grows.
-    assert.ok(dayCol.reduce((s, r) => s + r.due, 0) > before.day.reduce((s, r) => s + r.due, 0));
+    // The imported loans do have instalments due today, so today's demand grows (nothing is due on a Sunday off).
+    if (new Date(`${today()}T00:00:00Z`).getUTCDay() !== 0) assert.ok(dayCol.reduce((s, r) => s + r.due, 0) > before.day.reduce((s, r) => s + r.due, 0));
     const stmt = await ok(api('GET', `/reports/daily-statement?from=${today()}&to=${today()}`, { token: owner }));
     assert.equal(stmt[0].loans, 0 + before.dash.newLoans);
     const branchId = (await ok(api('GET', '/branches', { token: owner })))[0].id;
