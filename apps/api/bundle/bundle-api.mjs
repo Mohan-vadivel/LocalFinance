@@ -52,6 +52,8 @@ writeJson('package.json', {
     restart: 'systemctl restart smartfinora-api',
     logs: 'journalctl -u smartfinora-api -n 50 --no-pager',
     check: 'node check.cjs',
+    backup: 'node backup.cjs',
+    'backup:daily': 'node backup.cjs daily',
   },
   dependencies: {
     ...api.dependencies,
@@ -61,7 +63,7 @@ writeJson('package.json', {
   },
 });
 
-for (const f of ['check.cjs', 'app.js', 'install-service.cjs']) cpSync(join(root, 'apps/api/bundle', f), join(out, f));
+for (const f of ['check.cjs', 'app.js', 'install-service.cjs', 'backup.cjs']) cpSync(join(root, 'apps/api/bundle', f), join(out, f));
 cpSync(join(root, 'apps/api/bundle/htaccess.txt'), join(out, '.htaccess'));
 
 // Copy the shared package into node_modules instead of linking it, so the folder can be moved
@@ -104,6 +106,7 @@ npm install
 npm run build             # creates or updates the tables and the Super Admin
 npm run service           # runs the API as a Linux service: starts on boot, restarts if it stops
 npm run check             # says what is wrong, if anything
+npm run backup:daily      # backs up the database and uploads every night, keeps 14 days
 \`\`\`
 
 Updating:
@@ -115,7 +118,7 @@ npm run build
 npm run restart
 \`\`\`
 
-\`npm run logs\` shows the last 50 log lines. \`npm start\` runs the API in the current window instead (stops when you log out).
+\`npm run logs\` shows the last 50 log lines. \`npm run backup\` makes a backup now, into backups/. \`npm start\` runs the API in the current window instead (stops when you log out).
 On cPanel's "Setup Node.js App", use \`app.js\` as the startup file instead of \`npm run service\`.
 
 Copy \`.htaccess\` into the domain's web folder: it sends /api/... to the API on port 4000 and everything else

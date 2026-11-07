@@ -12,7 +12,9 @@
     "service": "node install-service.cjs",
     "restart": "systemctl restart smartfinora-api",
     "logs": "journalctl -u smartfinora-api -n 50 --no-pager",
-    "check": "node check.cjs"
+    "check": "node check.cjs",
+    "backup": "node backup.cjs",
+    "backup:daily": "node backup.cjs daily"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

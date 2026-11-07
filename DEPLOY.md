@@ -3,7 +3,7 @@
 For a cPanel/WHM server (AlmaLinux, CentOS, CloudLinux) with root access. No Docker, pnpm or PM2 is needed on the server:
 the `server/` folder is the API, already compiled, with a `package.json` that plain `npm` installs.
 
-The examples use `finance.witsapps.in`, with the API under `https://finance.witsapps.in/api`.
+The examples use `finora.witsapps.in`, with the API under `https://finora.witsapps.in/api`.
 
 ## 1. Node.js and PostgreSQL
 
@@ -40,7 +40,7 @@ nano .env
 DATABASE_URL=postgresql://teamwork_finance:DB_PASSWORD@localhost:5432/teamwork_finance
 JWT_SECRET=the-random-string
 PORT=4000
-CORS_ORIGIN=https://finance.witsapps.in
+CORS_ORIGIN=https://finora.witsapps.in
 UPLOAD_DIR=./uploads
 SUPER_ADMIN_PHONE=9000000000
 SUPER_ADMIN_PASSWORD=ChangeMe@123
@@ -54,7 +54,11 @@ npm install
 npm run build      # creates or updates the tables and the Super Admin
 npm run service    # runs the API as a Linux service: starts on boot, restarts if it stops
 npm run check      # says what is wrong, if anything
+npm run backup:daily   # backs up the database and uploads every night at 02:30, keeps 14 days
 ```
+
+Backups go to `server/backups/`. Copy them off the server now and then (or point `BACKUP_DIR` in `.env` at another disk).
+To restore one: `gunzip -c backups/db-DATE.sql.gz | psql "$DATABASE_URL"` into an empty database.
 
 `npm run logs` shows the API's last 50 log lines, `npm run restart` restarts it.
 
@@ -70,14 +74,14 @@ RewriteRule ^api/?(.*)$ http://127.0.0.1:4000/$1 [P,L,QSA]
 ```
 
 This needs Apache's `mod_proxy` and `mod_proxy_http` (on by default in EasyApache 4). Run AutoSSL in cPanel > **SSL/TLS Status**
-for HTTPS. Check: `curl https://finance.witsapps.in/api/health` returns `{"ok":true,...}`.
+for HTTPS. Check: `curl https://finora.witsapps.in/api/health` returns `{"ok":true,...}`.
 
 ## 5. Web admin
 
 The web admin is built once on a computer with the repo and pnpm, with the API address baked in:
 
 ```bash
-VITE_API_URL=https://finance.witsapps.in/api pnpm --filter @localfinance/web build
+VITE_API_URL=https://finora.witsapps.in/api pnpm --filter @localfinance/web build
 ```
 
 Upload the contents of `apps/web/dist` to the domain's folder. It must be the root of a (sub)domain, not a subfolder,
