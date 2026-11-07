@@ -6,7 +6,7 @@ Multi-tenant loans and collections platform for daily, weekly and monthly lendin
 | --- | --- | --- |
 | API | `apps/api` | NestJS 11, Prisma 6, PostgreSQL 16 |
 | Web admin | `apps/web` | React 19, Vite 6, Leaflet (OpenStreetMap) |
-| Android collection app | `apps/mobile` | Expo SDK 57 (React Native) |
+| Android collection app | `apps/mobile` | Expo SDK 58 (React Native) |
 | Shared code | `packages/shared` | Validation, loan maths, language files |
 
 Languages live in `packages/shared/src/i18n/*.json` (English `en.json`, Tamil `ta.json`). To add a language, copy `en.json`, translate the values and add it to `LANGUAGES` in `packages/shared/src/i18n/index.ts`. `pnpm test` fails if a key is missing.
@@ -14,7 +14,7 @@ Languages live in `packages/shared/src/i18n/*.json` (English `en.json`, Tamil `t
 ## Requirements
 
 - Node.js 22 or newer and pnpm 10 (`corepack enable`)
-- PostgreSQL 16 (or Docker: `docker compose up -d`)
+- PostgreSQL 16
 - For the phone app: the Expo Go app or an Android emulator, and an Expo account to build the APK
 
 ## First run
@@ -74,14 +74,9 @@ Collections and no-payment visits work offline: they are saved on the phone and 
 
 ## Live server
 
-`deploy/` holds a Docker Compose stack (Postgres, API, and Caddy serving the web admin with automatic HTTPS):
-
-```bash
-cp deploy/.env.example deploy/.env           # set both domains, passwords and JWT_SECRET
-docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
-```
-
-`deploy/backup.sh` backs up the database and uploaded files, `deploy/restore.sh` puts a backup back, and `deploy/update.sh` backs up, pulls and rebuilds. The full step-by-step VPS guide is in [docs/DEPLOY.md](docs/DEPLOY.md), and [docs/DEPLOY-CPANEL.md](docs/DEPLOY-CPANEL.md) covers cPanel servers without Docker.
+`server/` is the API ready to run on a server with `git pull` and plain `npm` (no pnpm, Docker or PM2).
+After changing `apps/api` or `packages/shared`, run `pnpm bundle:api` and commit `server/`.
+The step-by-step server guide is [DEPLOY.md](DEPLOY.md).
 
 ## Production notes
 

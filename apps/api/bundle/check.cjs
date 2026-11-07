@@ -26,7 +26,7 @@ async function main() {
   if (!env.DATABASE_URL || env.DATABASE_URL.includes('USER:PASSWORD')) bad('DATABASE_URL is not set', 'postgresql://user:password@localhost:5432/database');
   if (!env.JWT_SECRET || env.JWT_SECRET === 'change-me' || env.JWT_SECRET.length < 32) bad('JWT_SECRET is missing or shorter than 32 characters', 'openssl rand -hex 32');
   else ok('JWT_SECRET set');
-  if (!env.CORS_ORIGIN || env.CORS_ORIGIN.includes('example.com')) bad('CORS_ORIGIN is not set to your web address', 'e.g. CORS_ORIGIN=https://finance.witsapps.in');
+  if (!env.CORS_ORIGIN || env.CORS_ORIGIN.includes('example.com')) bad('CORS_ORIGIN is not set to your web address', 'e.g. CORS_ORIGIN=https://finora.witsapps.in');
   else ok(`CORS_ORIGIN ${env.CORS_ORIGIN}`);
 
   if (!existsSync(join(__dirname, 'node_modules'))) return bad('node_modules is missing', 'npm install');

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   allocatePayment,
   dueDates,
+  feeTerms,
   generateSchedule,
   loanPosition,
   penaltyCharged,
@@ -51,6 +52,17 @@ describe('schedules', () => {
     const s = summarize({ principal: 1_000_000, frequency: 'DAILY', tenure: 100, interestMethod: 'UPFRONT', interestRate: 10 });
     expect(s.netDisbursed).toBe(900_000);
     expect(s.totalRepayable).toBe(1_000_000);
+  });
+
+  it('processing fee: 10,000 loan with a 100 fee pays out 9,900 and the customer repays 10,000', () => {
+    const fee = feeTerms({ feePercent: 2, feeFlat: 5_000 }, 10_000);
+    expect(fee).toEqual({ feePercent: 0, feeFlat: 10_000 });
+    const s = summarize({ principal: 1_000_000, frequency: 'DAILY', tenure: 100, interestMethod: 'FLAT', interestRate: 0, ...fee });
+    expect(s.fee).toBe(10_000);
+    expect(s.netDisbursed).toBe(990_000);
+    expect(s.totalRepayable).toBe(1_000_000);
+    // Left out, the product's own fee applies.
+    expect(feeTerms({ feePercent: 2, feeFlat: 5_000 }, null)).toEqual({ feePercent: 2, feeFlat: 5_000 });
   });
 
   it('rejects fees bigger than the loan', () => {

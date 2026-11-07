@@ -11,6 +11,7 @@ npm install
 npm run build             # creates or updates the tables and the Super Admin
 npm run service           # runs the API as a Linux service: starts on boot, restarts if it stops
 npm run check             # says what is wrong, if anything
+npm run backup:daily      # backs up the database and uploads every night, keeps 14 days
 ```
 
 Updating:
@@ -22,8 +23,8 @@ npm run build
 npm run restart
 ```
 
-`npm run logs` shows the last 50 log lines. `npm start` runs the API in the current window instead (stops when you log out).
+`npm run logs` shows the last 50 log lines. `npm run backup` makes a backup now, into backups/. `npm start` runs the API in the current window instead (stops when you log out).
 On cPanel's "Setup Node.js App", use `app.js` as the startup file instead of `npm run service`.
 
-Copy `.htaccess` into the web folder for the API (for example `public_html/finance`). It sends every request
-to the API on port 4000, so no file there can be downloaded.
+Copy `.htaccess` into the domain's web folder: it sends /api/... to the API on port 4000 and everything else
+to the web admin. Keep this folder outside public_html, so .env cannot be downloaded. Full guide: DEPLOY.md in the repo root.

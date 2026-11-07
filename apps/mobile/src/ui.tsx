@@ -1,9 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { createContext, useContext, useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BackHandler, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
+import { BackHandler, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ActivityIndicator, Appbar, Button, Card as PaperCard, Chip, IconButton as PaperIconButton, SegmentedButtons, Searchbar, Surface, Text, TextInput as PaperTextInput, TouchableRipple } from 'react-native-paper';
+import { ActivityIndicator, Appbar, Button, Chip, IconButton as PaperIconButton, Searchbar, Surface, Text, TextInput as PaperTextInput, TouchableRipple } from 'react-native-paper';
 import { formatINR } from '@localfinance/shared';
 import { ApiError } from './api';
 import type { PinStatus } from './store';
@@ -183,15 +183,34 @@ export function Screen({ title, children, right, scroll = true, back = true, sub
   );
 }
 
+/** Card style keys that belong to the outer box (size, place, border and shadow); the rest lay out the content. */
+const OUTER = /^(margin|width|maxWidth|minWidth|height|maxHeight|flex$|flexGrow|flexShrink|flexBasis|alignSelf|backgroundColor|border|boxShadow|position|top|left|right|bottom|opacity|zIndex)/;
+
 /**
- * A rounded surface (Paper Card, elevation 1). With `onPress` it becomes a tappable list item with the Paper ripple.
+ * A rounded surface. With `onPress` it becomes a tappable list item with a ripple. Layout styles (`flexDirection`,
+ * `gap`, `padding`, `alignItems`…) apply to the children, so a card can lay its content out in a row.
+ *
+ * Not Paper's Card: that one copies `index` and other props onto each child, which React warns about for fragments.
  */
 export function Card({ children, style, onPress, tone, accessibilityLabel }: { children: ReactNode; style?: StyleProp<ViewStyle>; onPress?: () => void; tone?: 'default' | 'brand' | 'soft'; accessibilityLabel?: string }) {
   const toneStyle = tone === 'brand' ? s.cardBrand : tone === 'soft' ? s.cardSoft : null;
+  const flat = StyleSheet.flatten([s.card, toneStyle, style]) as Record<string, unknown>;
+  const outer: Record<string, unknown> = {};
+  const inner: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(flat)) (OUTER.test(k) ? outer : inner)[k] = v;
+  if (!onPress) return <View style={[outer, inner] as StyleProp<ViewStyle>}>{children}</View>;
   return (
-    <PaperCard mode="elevated" elevation={1} onPress={onPress} accessibilityLabel={accessibilityLabel} style={[s.card, toneStyle, style]}>
-      {children}
-    </PaperCard>
+    <View style={[outer, { overflow: 'hidden' }] as StyleProp<ViewStyle>}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        android_ripple={{ color: tone === 'brand' ? 'rgba(255,255,255,0.18)' : 'rgba(15,26,26,0.06)' }}
+        style={({ pressed }) => [{ flexGrow: 1 }, inner as ViewStyle, pressed && { opacity: 0.92 }]}
+      >
+        {children}
+      </Pressable>
+    </View>
   );
 }
 
@@ -208,8 +227,8 @@ type BtnKind = 'primary' | 'plain' | 'danger' | 'tonal' | 'outline' | 'ghost' | 
 export function Btn({ title, onPress, kind = 'primary', disabled, busy, small, style, big, textStyle, accessibilityLabel, icon }: { title: string; onPress: () => void; kind?: BtnKind; disabled?: boolean; busy?: boolean; small?: boolean; style?: StyleProp<ViewStyle>; big?: boolean; textStyle?: StyleProp<TextStyle>; accessibilityLabel?: string; icon?: IconName }) {
   const v = BTN[kind];
   const off = disabled || busy;
-  const minH = big ? 60 : small ? 48 : 52;
-  const fontSize = big ? 18 : small ? 14 : 16;
+  const minH = big ? 48 : small ? 36 : 42;
+  const fontSize = big ? 16 : small ? 13 : 15;
   const weight: TextStyle['fontWeight'] = big ? '800' : '700';
   const iconEl = icon ? ({ size, color }: { size: number; color: string }) => <Icon name={icon} size={size} color={color} /> : undefined;
   const label: TextStyle = { fontSize, fontWeight: weight, color: v.fg, textAlign: 'center' };
@@ -227,7 +246,7 @@ export function Btn({ title, onPress, kind = 'primary', disabled, busy, small, s
         buttonColor={v.bg}
         textColor={v.fg}
         theme={{ colors: { surfaceDisabled: v.bg, onSurfaceDisabled: v.fg } }}
-        contentStyle={{ minHeight: minH, paddingHorizontal: 8 }}
+        contentStyle={{ minHeight: minH, paddingHorizontal: 6 }}
         labelStyle={[label, textStyle]}
         accessibilityLabel={accessibilityLabel}
         style={[s.btn, big && s.btnBig, small && s.btnSmall, v.mode === 'outlined' && { borderColor: v.border }, dim, style]}
@@ -247,10 +266,10 @@ export function Btn({ title, onPress, kind = 'primary', disabled, busy, small, s
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
         accessibilityState={{ disabled: !!off, busy: !!busy }}
-        style={{ flex: 1, minHeight: minH, justifyContent: 'center', paddingVertical: 12, paddingHorizontal: SP.lg, borderRadius: big ? R.lg : R.md }}
+        style={{ flex: 1, minHeight: minH, justifyContent: 'center', paddingVertical: small ? 6 : 8, paddingHorizontal: small ? SP.md : SP.lg, borderRadius: R.pill }}
       >
         <View style={s.btnRow}>
-          {busy ? <ActivityIndicator color={v.fg} /> : iconEl ? iconEl({ size: big ? 24 : small ? 19 : 21, color: v.fg }) : null}
+          {busy ? <ActivityIndicator color={v.fg} /> : iconEl ? iconEl({ size: big ? 20 : small ? 16 : 18, color: v.fg }) : null}
           <Text style={[label, { flexShrink: 1 }, textStyle]}>{title}</Text>
         </View>
       </TouchableRipple>
@@ -274,20 +293,21 @@ const BTN: Record<BtnKind, { mode: 'contained' | 'contained-tonal' | 'outlined' 
  */
 export function Field({ label, prefix, large, hint, style, multiline, error, ...props }: TextInputProps & { label: string; prefix?: string; large?: boolean; hint?: string; /** A problem with this box: a red outline and the message in red under it. */ error?: string }) {
   return (
-    <View style={{ marginBottom: SP.lg }}>
+    <View style={{ marginBottom: SP.md }}>
       <Text variant="labelLarge" style={s.label}>{label}</Text>
       <PaperTextInput
         mode="outlined"
+        dense
         error={!!error}
         outlineColor={error ? C.danger : C.lineStrong}
         activeOutlineColor={error ? C.danger : C.brand}
         outlineStyle={{ borderRadius: R.md, borderWidth: 1.5 }}
         textColor={C.ink}
         placeholderTextColor="#8b9796"
-        left={prefix ? <PaperTextInput.Affix text={prefix} textStyle={[s.prefix, large && { fontSize: 28, fontWeight: '800' }]} /> : undefined}
+        left={prefix ? <PaperTextInput.Affix text={prefix} textStyle={[s.prefix, large && { fontSize: 22, fontWeight: '800' }]} /> : undefined}
         multiline={multiline}
         {...(props as ComponentProps<typeof PaperTextInput>)}
-        style={[s.input, large && s.inputLargeText, multiline && { minHeight: 96, textAlignVertical: 'top' }, style as StyleProp<TextStyle>]}
+        style={[s.input, large && s.inputLargeText, multiline && { height: undefined, minHeight: 80, textAlignVertical: 'top' }, style as StyleProp<TextStyle>]}
       />
       {error ? <Text variant="bodyMedium" accessibilityLiveRegion="polite" style={s.fieldError}>{error}</Text> : hint ? <Text variant="bodyMedium" style={[s.muted, { marginTop: SP.xs, fontSize: 13 }]}>{hint}</Text> : null}
     </View>
@@ -339,26 +359,25 @@ export function SearchBar({ value = '', onChangeText, onPress, placeholder, labe
  */
 export function Chips<T extends string>({ value, onChange, items, segmented }: { value: T; onChange: (v: T) => void; items: { key: T; label: string }[]; segmented?: boolean }) {
   if (segmented) {
+    // A sliding-pill switch: a soft track, with the chosen part filled in the brand colour.
     return (
-      <SegmentedButtons
-        value={value}
-        onValueChange={(v) => onChange(v as T)}
-        style={s.segment}
-        buttons={items.map((i) => {
+      <View style={s.segment} accessibilityRole="tablist">
+        {items.map((i) => {
           const on = value === i.key;
-          return {
-            value: i.key,
-            label: i.label,
-            accessibilityLabel: i.label,
-            checked: on,
-            showSelectedCheck: false,
-            style: [s.segmentItem, on && s.segmentOn],
-            labelStyle: [s.segmentText, on && { color: C.brandInk }],
-            checkedColor: C.brandInk,
-            uncheckedColor: C.muted,
-          };
+          return (
+            <Pressable
+              key={i.key}
+              onPress={() => onChange(i.key)}
+              accessibilityRole="tab"
+              accessibilityLabel={i.label}
+              accessibilityState={{ selected: on }}
+              style={({ pressed }) => [s.segmentItem, on && s.segmentOn, pressed && !on && { opacity: 0.7 }]}
+            >
+              <Text numberOfLines={1} style={[s.segmentText, on && { color: C.onBrand }]}>{i.label}</Text>
+            </Pressable>
+          );
         })}
-      />
+      </View>
     );
   }
   return (
@@ -382,6 +401,160 @@ export function Chips<T extends string>({ value, onChange, items, segmented }: {
           </Chip>
         );
       })}
+    </View>
+  );
+}
+
+/**
+ * A search box and a filter button in one row (an input group), so finding and filtering take one line. The filter
+ * button shows a dot while a filter is on. `extra` adds more round buttons at the end (such as list or map).
+ */
+export function SearchFilter({ value, onChangeText, placeholder, label, onFilter, filtered, extra }: { value: string; onChangeText: (v: string) => void; placeholder: string; label?: string; onFilter?: () => void; filtered?: boolean; extra?: ReactNode }) {
+  const { t } = useTranslation();
+  return (
+    <View style={s.searchRow}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <SearchBar value={value} onChangeText={onChangeText} placeholder={placeholder} label={label} style={{ marginBottom: 0, borderTopRightRadius: onFilter ? 0 : R.pill, borderBottomRightRadius: onFilter ? 0 : R.pill, borderRightWidth: onFilter ? 0 : 1.5 }} />
+      </View>
+      {onFilter ? (
+        <Pressable
+          onPress={onFilter}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.filter')}
+          accessibilityState={{ selected: !!filtered }}
+          android_ripple={{ color: C.brandSoft }}
+          style={({ pressed }) => [s.filterBtn, filtered && { backgroundColor: C.brand, borderColor: C.brand }, pressed && { opacity: 0.85 }]}
+        >
+          <Icon name="options-outline" size={22} color={filtered ? C.onBrand : C.brandInk} />
+          {filtered ? <View style={s.filterDot} /> : null}
+        </Pressable>
+      ) : null}
+      {extra}
+    </View>
+  );
+}
+
+/** A small square-ish toggle button for a toolbar row (list or map, and the like). */
+export function ToolButton({ icon, label, onPress, on }: { icon: IconName; label: string; onPress: () => void; on?: boolean }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: !!on }} android_ripple={{ color: C.brandSoft, borderless: true }} style={({ pressed }) => [s.toolBtn, on && { backgroundColor: C.brandSoft, borderColor: C.brand }, pressed && { opacity: 0.85 }]}>
+      <Icon name={icon} size={22} color={on ? C.brandInk : C.ink2} />
+    </Pressable>
+  );
+}
+
+/**
+ * A round icon button with a short label under it, for a row of actions (call, directions, reminder; WhatsApp, SMS,
+ * share). Put several in an `ActionRow`.
+ */
+export function RoundAction({ icon, label, onPress, color = C.brand, disabled, busy }: { icon: IconName; label: string; onPress: () => void; color?: string; disabled?: boolean; busy?: boolean }) {
+  const off = disabled || busy;
+  return (
+    <Pressable onPress={onPress} disabled={off} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled: !!off, busy: !!busy }} style={({ pressed }) => [{ alignItems: 'center', gap: 6, flex: 1, minWidth: 64, maxWidth: 110, opacity: disabled ? 0.45 : 1 }, pressed && { opacity: 0.7 }]}>
+      <View style={{ width: 54, height: 54, borderRadius: 27, backgroundColor: tint(color, 0.12), borderWidth: 1, borderColor: tint(color, 0.28), alignItems: 'center', justifyContent: 'center' }}>
+        {busy ? <ActivityIndicator color={color} size={20} /> : <Icon name={icon} size={24} color={color} />}
+      </View>
+      <Text numberOfLines={2} style={{ fontSize: 12.5, lineHeight: 16, fontWeight: '700', color: C.ink2, textAlign: 'center' }}>{label}</Text>
+    </Pressable>
+  );
+}
+
+/** A row of `RoundAction`s, evenly spread. */
+export function ActionRow({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+  return <View style={[{ flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-start', gap: SP.xs }, style]}>{children}</View>;
+}
+
+/**
+ * A panel that slides up from the bottom over a dimmed backdrop (filters, choosing from a list, a short note). It
+ * moves up with the keyboard, so a text box in it stays in view without the page behind scrolling.
+ */
+export function Sheet({ visible, onClose, title, children, footer }: { visible: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode }) {
+  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(7, 30, 28, 0.45)' }}>
+        <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.close')} />
+        <View style={s.sheet}>
+          <View style={s.sheetGrip} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.sm, paddingHorizontal: SP.lg, paddingBottom: SP.sm }}>
+            <Text accessibilityRole="header" style={[s.h2, { flex: 1, minWidth: 0, marginBottom: 0 }]}>{title}</Text>
+            <IconButton icon="close" label={t('common.close')} onPress={onClose} color={C.ink2} />
+          </View>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: SP.lg, paddingBottom: footer ? SP.sm : SP.lg + insets.bottom }} keyboardShouldPersistTaps="handled">
+            {children}
+          </ScrollView>
+          {footer ? <View style={{ paddingHorizontal: SP.lg, paddingTop: SP.sm, paddingBottom: SP.md + insets.bottom, borderTopWidth: 1, borderTopColor: C.line }}>{footer}</View> : null}
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+/** One choice in a `Sheet`: a full-width row with a tick on the chosen one. */
+export function SheetOption({ label, sub, on, onPress, icon }: { label: string; sub?: string; on: boolean; onPress: () => void; icon?: IconName }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="radio" accessibilityState={{ selected: on }} android_ripple={{ color: C.surface }} style={({ pressed }) => [s.option, on && { backgroundColor: C.brandSoft, borderColor: C.brand }, pressed && { opacity: 0.85 }]}>
+      {icon ? <Icon name={icon} size={20} color={on ? C.brandInk : C.ink2} /> : null}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontSize: 16, fontWeight: on ? '800' : '600', color: on ? C.brandInk : C.ink }}>{label}</Text>
+        {sub ? <Text style={[s.muted, { fontSize: 13, marginTop: 1 }]}>{sub}</Text> : null}
+      </View>
+      <Icon name={on ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={on ? C.brand : C.lineStrong} />
+    </Pressable>
+  );
+}
+
+/**
+ * A drop-down: a box showing the chosen option that opens a list to pick from. For longer lists (languages, ID
+ * types) where a row of chips would take too much room.
+ */
+export function Select<T extends string>({ label, value, items, onChange, style }: { label?: string; value: T; items: { key: T; label: string; sub?: string }[]; onChange: (v: T) => void; style?: StyleProp<ViewStyle> }) {
+  const [open, setOpen] = useState(false);
+  const chosen = items.find((i) => i.key === value);
+  return (
+    <View style={[{ marginBottom: SP.md }, style]}>
+      {label ? <Text variant="labelLarge" style={s.label}>{label}</Text> : null}
+      <Pressable onPress={() => setOpen(true)} accessibilityRole="button" accessibilityLabel={`${label ?? ''} ${chosen?.label ?? ''}`.trim()} android_ripple={{ color: C.surface }} style={({ pressed }) => [s.select, pressed && { borderColor: C.brand }]}>
+        <Text style={{ flex: 1, minWidth: 0, fontSize: 15, color: chosen ? C.ink : C.muted, fontWeight: '600' }} numberOfLines={1}>{chosen?.label ?? '-'}</Text>
+        <Icon name="chevron-down" size={20} color={C.muted} />
+      </Pressable>
+      <Sheet visible={open} onClose={() => setOpen(false)} title={label ?? ''}>
+        {items.map((i) => (
+          <SheetOption key={i.key} label={i.label} sub={i.sub} on={i.key === value} onPress={() => { setOpen(false); onChange(i.key); }} />
+        ))}
+      </Sheet>
+    </View>
+  );
+}
+
+/**
+ * A card with a heading that opens and closes its content, so a long form shows one part at a time. `summary` is a
+ * short line shown under the heading while closed.
+ */
+export function Collapsible({ title, icon, summary, open: given, onToggle, children, right, defaultOpen = false }: { title: string; icon?: IconName; summary?: string; open?: boolean; onToggle?: (open: boolean) => void; children: ReactNode; right?: ReactNode; defaultOpen?: boolean }) {
+  const [mine, setMine] = useState(defaultOpen);
+  const open = given ?? mine;
+  const toggle = () => {
+    setMine(!open);
+    onToggle?.(!open);
+  };
+  return (
+    <View style={[s.card, { padding: 0 }]}>
+      <Pressable onPress={toggle} accessibilityRole="button" accessibilityState={{ expanded: open }} android_ripple={{ color: C.surface }} style={{ flexDirection: 'row', alignItems: 'center', gap: SP.md, padding: SP.lg, minHeight: 60 }}>
+        {icon ? (
+          <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: C.brandSoft, alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name={icon} size={21} color={C.brand} />
+          </View>
+        ) : null}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ fontSize: 17, fontWeight: '800', color: C.ink }}>{title}</Text>
+          {summary && !open ? <Text style={[s.muted, { marginTop: 2 }]} numberOfLines={2}>{summary}</Text> : null}
+        </View>
+        {right}
+        <Icon name={open ? 'chevron-up' : 'chevron-down'} size={22} color={C.muted} />
+      </Pressable>
+      {open ? <View style={{ paddingHorizontal: SP.lg, paddingBottom: SP.lg }}>{children}</View> : null}
     </View>
   );
 }
@@ -522,32 +695,32 @@ export const s = StyleSheet.create({
   card: { backgroundColor: C.panel, borderRadius: R.lg, borderWidth: 1, borderColor: C.line, padding: SP.lg, marginBottom: SP.md, boxShadow: shadow },
   cardBrand: { backgroundColor: C.brand, borderColor: C.brand, boxShadow: '0px 4px 14px rgba(15, 118, 110, 0.25)' },
   cardSoft: { backgroundColor: C.surface, borderColor: C.surface, boxShadow: 'none' },
-  btn: { minHeight: 52, borderRadius: R.md, marginBottom: SP.sm },
-  btnSmall: { minHeight: 48, marginBottom: 0, borderRadius: R.md },
-  btnBig: { minHeight: 60, borderRadius: R.lg },
+  btn: { minHeight: 42, borderRadius: R.pill, marginBottom: SP.sm },
+  btnSmall: { minHeight: 36, marginBottom: 0, borderRadius: R.pill },
+  btnBig: { minHeight: 48, borderRadius: R.pill },
   btnText: { fontSize: 16, fontWeight: '700', textAlign: 'center' },
   btnRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SP.sm, maxWidth: '100%' },
-  search: { minHeight: 54, borderRadius: R.pill, borderWidth: 1.5, borderColor: C.lineStrong, backgroundColor: C.panel, marginBottom: SP.md },
+  search: { minHeight: 44, height: 44, borderRadius: R.pill, borderWidth: 1.5, borderColor: C.lineStrong, backgroundColor: C.panel, marginBottom: SP.md },
   searchPress: { marginBottom: 0 },
   searchText: { flex: 1, minWidth: 0, fontSize: 16, color: C.ink },
-  searchInput: { fontSize: 16, color: C.ink, minHeight: 50 },
+  searchInput: { fontSize: 15, color: C.ink, minHeight: 0, alignSelf: 'center' },
   searchClear: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   fieldError: { color: C.danger, fontSize: 14, fontWeight: '700', marginTop: SP.xs, lineHeight: 19 },
   btnTextSmall: { fontSize: 14 },
   btnTextBig: { fontSize: 18, fontWeight: '800' },
-  label: { fontSize: 14, color: C.ink2, fontWeight: '600', marginBottom: 6 },
-  input: { backgroundColor: C.panel, fontSize: 17, color: C.ink, minHeight: 56 },
+  label: { fontSize: 13, color: C.ink2, fontWeight: '600', marginBottom: 4 },
+  input: { backgroundColor: C.panel, fontSize: 15, color: C.ink, height: 44 },
   inputFocus: { borderColor: C.brand },
-  inputLargeText: { fontSize: 28, fontWeight: '800', color: C.ink },
-  prefix: { fontSize: 17, color: C.muted, fontWeight: '700' },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, marginBottom: SP.lg },
-  chip: { height: 48, flexDirection: 'column', justifyContent: 'center', borderWidth: 1.5, borderColor: C.lineStrong, borderRadius: R.pill, backgroundColor: C.panel },
+  inputLargeText: { fontSize: 22, fontWeight: '800', color: C.ink, height: 52 },
+  prefix: { fontSize: 15, color: C.muted, fontWeight: '700' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, marginBottom: SP.md },
+  chip: { height: 38, flexDirection: 'column', justifyContent: 'center', borderWidth: 1.5, borderColor: C.lineStrong, borderRadius: R.pill, backgroundColor: C.panel },
   chipOn: { backgroundColor: C.brand, borderColor: C.brand },
-  chipText: { fontSize: 15, color: C.ink, fontWeight: '600', lineHeight: 20, marginVertical: 0, textAlignVertical: 'center' },
-  segment: { backgroundColor: C.surface, borderRadius: R.md, marginBottom: SP.lg },
-  segmentItem: { flex: 1, minHeight: 46, borderRadius: R.sm, borderWidth: 0 },
-  segmentOn: { backgroundColor: C.panel },
-  segmentText: { fontSize: 15, fontWeight: '700', color: C.muted, textAlign: 'center' },
+  chipText: { fontSize: 14, color: C.ink, fontWeight: '600', lineHeight: 20, marginVertical: 0, textAlignVertical: 'center' },
+  segment: { flexDirection: 'row', backgroundColor: C.surface, borderRadius: R.pill, padding: 4, gap: 4, marginBottom: SP.md },
+  segmentItem: { flex: 1, minHeight: 36, borderRadius: R.pill, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SP.sm },
+  segmentOn: { backgroundColor: C.brand, boxShadow: '0px 2px 6px rgba(15, 118, 110, 0.3)' },
+  segmentText: { fontSize: 14, fontWeight: '700', color: C.muted, textAlign: 'center' },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 7, gap: SP.md },
   rowDivider: { borderTopWidth: 1, borderTopColor: C.line, marginTop: SP.xs, paddingTop: SP.md },
   rowLabel: { color: C.muted, fontSize: 15, flexShrink: 1, flexGrow: 1, flexBasis: 0, minWidth: 0 },
@@ -573,4 +746,12 @@ export const s = StyleSheet.create({
   stat: { flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 104, backgroundColor: C.panel, borderRadius: R.md, borderWidth: 1, borderColor: C.line, paddingVertical: SP.md, paddingHorizontal: SP.md },
   statValue: { fontSize: 20, fontWeight: '800', color: C.ink, fontVariant: ['tabular-nums'] },
   statLabel: { fontSize: 13, color: C.muted, fontWeight: '600', marginTop: 2 },
+  searchRow: { flexDirection: 'row', alignItems: 'stretch', gap: 0, marginBottom: SP.md },
+  filterBtn: { width: 48, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: C.lineStrong, backgroundColor: C.brandSoft, borderTopRightRadius: R.pill, borderBottomRightRadius: R.pill, marginRight: 0 },
+  filterDot: { position: 'absolute', top: 10, right: 14, width: 9, height: 9, borderRadius: 5, backgroundColor: '#fbbf24', borderWidth: 1.5, borderColor: C.brand },
+  toolBtn: { width: 44, minHeight: 44, marginLeft: SP.sm, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: C.lineStrong, backgroundColor: C.panel },
+  sheet: { backgroundColor: C.panel, borderTopLeftRadius: R.lg + 6, borderTopRightRadius: R.lg + 6, maxHeight: '88%', width: '100%', maxWidth: MAX_W, alignSelf: 'center', boxShadow: '0px -4px 24px rgba(7, 30, 28, 0.2)' },
+  sheetGrip: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: C.lineStrong, marginTop: SP.sm, marginBottom: SP.sm },
+  option: { flexDirection: 'row', alignItems: 'center', gap: SP.md, minHeight: 48, paddingHorizontal: SP.md, paddingVertical: SP.sm, borderRadius: R.md, borderWidth: 1.5, borderColor: C.line, marginBottom: SP.sm, backgroundColor: C.panel },
+  select: { flexDirection: 'row', alignItems: 'center', gap: SP.sm, minHeight: 44, paddingHorizontal: SP.md, borderRadius: R.md, borderWidth: 1.5, borderColor: C.lineStrong, backgroundColor: C.panel },
 });

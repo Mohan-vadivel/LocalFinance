@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AGEING_BUCKETS = exports.instalmentDue = void 0;
 exports.dueDates = dueDates;
+exports.feeTerms = feeTerms;
 exports.summarize = summarize;
 exports.generateSchedule = generateSchedule;
 exports.defaultFirstDue = defaultFirstDue;
@@ -51,6 +52,13 @@ function split(total, n) {
     return parts;
 }
 const periodsPerYear = { DAILY: 365, WEEKLY: 52, MONTHLY: 12 };
+/**
+ * The fee part of a loan's terms. A documentation or processing fee typed for the loan (paise) replaces the product's
+ * percentage and flat fee; left out, the product's fee applies.
+ */
+function feeTerms(product, processingFee) {
+    return processingFee == null ? { feePercent: product.feePercent, feeFlat: product.feeFlat } : { feePercent: 0, feeFlat: processingFee };
+}
 function summarize(terms) {
     const fee = Math.round((terms.principal * (terms.feePercent ?? 0)) / 100) + (terms.feeFlat ?? 0);
     let totalInterest = 0;

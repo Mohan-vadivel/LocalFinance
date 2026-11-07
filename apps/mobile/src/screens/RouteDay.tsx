@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Linking, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Linking, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { MapPins } from '../MapPins';
 import { getPosition, useSession } from '../session';
 import { getVisitOrder, lastKnownHere, onVisitOrder, orderDay, setVisitOrder, type VisitOrder } from '../smart';
 import { areaText, routeDay, subscribe, type DayCustomer, type PinStatus, type RouteDay as Day } from '../store';
-import { AmountPair, Badge, Btn, C, Card, Chevron, Chips, Icon, IconButton, Notice, PIN_COLORS, Progress, R, SP, Screen, SearchBar, dateIN, money, s, useLayout, useNav } from '../ui';
+import { AmountPair, Badge, Btn, C, Card, Chevron, Icon, IconButton, Notice, PIN_COLORS, Progress, R, SP, Screen, SearchFilter, Sheet, SheetOption, ToolButton, dateIN, money, s, useLayout, useNav, type IconName } from '../ui';
 import { EmptyState, FailureState, LoadingState, NoSearchResults, useSlowLoad } from '../states';
-import { SyncBar } from './Home';
+import { FailedNotice, SyncButton } from './Home';
 import { VoiceSheet } from './Voice';
 
 /** Opens turn-by-turn directions in Google Maps (or any maps app). */
@@ -35,6 +35,7 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
   const [order, setOrder] = useState<VisitOrder>('route');
   const [here, setHere] = useState<{ lat: number; lng: number } | null>(null);
   const [speaking, setSpeaking] = useState(false);
+  const [filtering, setFiltering] = useState(false);
   useEffect(() => {
     void getVisitOrder().then(setOrder);
     void lastKnownHere().then(setHere);
@@ -74,29 +75,38 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
     (c) => (show === 'all' || c.pin === show) && (!needle || c.name.toLowerCase().includes(needle) || (digits.length >= 3 && c.phone.replace(/\D/g, '').includes(digits))),
   );
 
+  const filtered = show !== 'all' || order === 'smart';
+  const counts = (k: 'all' | PinStatus) => (k === 'all' ? list.length : list.filter((c) => c.pin === k).length);
+  const statusKeys = ['all', 'PENDING', 'PARTIAL', 'MISSED', 'PAID'] as const;
+
   return (
     <Screen
       title={name}
       subtitle={areaText(day.route) ? `${areaText(day.route)} · ${dateIN(day.date)}` : dateIN(day.date)}
       scroll={false}
       right={
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.xs }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: compact ? 2 : SP.xs }}>
           <IconButton icon="document-text-outline" label={t('mobile.sheet.button')} color={C.brandInk} onPress={() => nav.push('LineSheet', { routeId })} />
-          {can('collection.record') && compact && (
-            <View style={{ backgroundColor: C.brandSoft, borderRadius: 24 }}>
-              <IconButton icon="mic" label={t('ai.voice.button')} color={C.brandInk} onPress={() => setSpeaking(true)} />
-            </View>
-          )}
-          {can('collection.record') && !compact && (
-            <Btn small kind="tonal" icon="mic" title={t('ai.voice.button')} onPress={() => setSpeaking(true)} style={{ marginBottom: 0 }} />
-          )}
+          {can('collection.record') && <IconButton icon="mic-outline" label={t('ai.voice.button')} color={C.brandInk} onPress={() => setSpeaking(true)} />}
+          <SyncButton />
         </View>
       }
     >
       <VoiceSheet visible={speaking} customers={list} onClose={() => setSpeaking(false)} onCollect={(c, amount) => { setSpeaking(false); nav.push('Customer', { customer: c, routeId, amount }); }} />
-      <ScrollView contentContainerStyle={s.body} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} colors={[C.brand]} />}>
+      <FilterSheet
+        visible={filtering}
+        onClose={() => setFiltering(false)}
+        show={show}
+        setShow={setShow}
+        order={order}
+        statusKeys={statusKeys}
+        counts={counts}
+        shownCount={shown.length}
+      />
+      <ScrollView contentContainerStyle={s.body} keyboardShouldPersistTaps="handled" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load()} colors={[C.brand]} />}>
         {offline && <Notice tone="warn" text={t('mobile.offlineCopy')} />}
         {error ? <FailureState error={error} onRetry={() => void load()} onBack={() => nav.pop()} /> : null}
+        <FailedNotice />
         <Card tone="brand" style={{ padding: SP.lg }}>
           <AmountPair onBrand main={{ label: t('report.collected'), value: money(collected) }} side={{ label: t('report.due'), value: money(due) }} />
           <View style={{ marginTop: SP.md }}>
@@ -114,30 +124,21 @@ export default function RouteDay({ routeId, name }: { routeId: string; name: str
             )}
           </View>
         )}
-        <SyncBar />
-        {/* Find first: the search box and the "not visited" filter sit above the list, where the thumb is. */}
-        <SearchBar value={q} onChangeText={setQ} placeholder={compact ? t('common.search') : t('mobile.filterRoute')} label={t('mobile.filterRoute')} />
-        {/* Status filter: one tap to see only the customers still to visit, or only the missed ones. */}
-        <Chips value={show} onChange={setShow} items={[
-          { key: 'all', label: `${t('common.all')} (${list.length})` },
-          { key: 'PENDING', label: `${t('mobile.pins.PENDING')} (${list.filter((c) => c.pin === 'PENDING').length})` },
-          { key: 'PARTIAL', label: `${t('mobile.pins.PARTIAL')} (${list.filter((c) => c.pin === 'PARTIAL').length})` },
-          { key: 'MISSED', label: `${t('mobile.pins.MISSED')} (${list.filter((c) => c.pin === 'MISSED').length})` },
-          { key: 'PAID', label: `${t('mobile.pins.PAID')} (${list.filter((c) => c.pin === 'PAID').length})` },
-        ]} />
-        {/* List or map, and route or smart order, side by side (stacked on a narrow phone with long labels). */}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: SP.sm }}>
-          <View style={{ flexGrow: 1, flexBasis: 136 }}>
-            <Chips segmented value={view} onChange={setView} items={[{ key: 'list', label: t('mobile.listView') }, { key: 'map', label: t('mobile.mapView') }]} />
-          </View>
-          <View style={{ flexGrow: 1, flexBasis: 136 }}>
-            <Chips segmented value={order} onChange={(o) => void setVisitOrder(o)} items={[{ key: 'route', label: t('ai.visit.normal') }, { key: 'smart', label: t('ai.visit.smart') }]} />
-          </View>
-        </View>
-        {order === 'smart' && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: -SP.sm, marginBottom: SP.md, paddingHorizontal: SP.xs }}>
-            <Icon name="sparkles" size={16} color={C.brand} />
-            <Text style={{ color: C.brandInk, fontWeight: '600', fontSize: 14, flexShrink: 1 }}>{t('ai.visit.smartOn')}</Text>
+        {/* Search, filter and list or map in one row, above the list where the thumb is. */}
+        <SearchFilter
+          value={q}
+          onChangeText={setQ}
+          placeholder={compact ? t('common.search') : t('mobile.filterRoute')}
+          label={t('mobile.filterRoute')}
+          onFilter={() => setFiltering(true)}
+          filtered={filtered}
+          extra={<ToolButton icon={view === 'map' ? 'list-outline' : 'map-outline'} label={view === 'map' ? t('mobile.listView') : t('mobile.mapView')} onPress={() => setView(view === 'map' ? 'list' : 'map')} on={view === 'map'} />}
+        />
+        {/* The filters in use, each with a cross to take it off. */}
+        {filtered && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm, marginTop: -SP.xs, marginBottom: SP.md }}>
+            {show !== 'all' && <FilterTag icon="funnel" text={`${t(`mobile.pins.${show}`)} (${counts(show)})`} onClear={() => setShow('all')} label={t('mobile.filters.clear')} />}
+            {order === 'smart' && <FilterTag icon="sparkles" text={t('ai.visit.smart')} onClear={() => void setVisitOrder('route')} label={t('mobile.filters.clear')} />}
           </View>
         )}
         {/* The colour key is for the map pins; list rows carry their status in words. */}
@@ -220,5 +221,43 @@ function ReasonChip({ reason }: { reason: { key: string; values?: Record<string,
       <Icon name={reason.key === 'done' ? 'checkmark' : 'sparkles'} size={13} color={tone} />
       <Text style={{ color: tone, fontSize: 13, fontWeight: '700', flexShrink: 1 }} numberOfLines={1}>{t(`ai.visit.reasons.${reason.key}`, reason.values)}</Text>
     </View>
+  );
+}
+
+/** A filter in use, shown under the search row with a cross that takes it off. */
+function FilterTag({ icon, text, onClear, label }: { icon: IconName; text: string; onClear: () => void; label: string }) {
+  return (
+    <Pressable onPress={onClear} accessibilityRole="button" accessibilityLabel={`${label}: ${text}`} style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.brandSoft, borderRadius: R.pill, paddingLeft: 12, paddingRight: 8, minHeight: 36 }, pressed && { opacity: 0.8 }]}>
+      <Icon name={icon} size={15} color={C.brandInk} />
+      <Text style={{ color: C.brandInk, fontWeight: '700', fontSize: 14 }}>{text}</Text>
+      <Icon name="close-circle" size={18} color={C.brandInk} />
+    </Pressable>
+  );
+}
+
+/** Which customers to show (by today's status) and in what order, in one panel from the filter button. */
+function FilterSheet({ visible, onClose, show, setShow, order, statusKeys, counts, shownCount }: { visible: boolean; onClose: () => void; show: 'all' | PinStatus; setShow: (v: 'all' | PinStatus) => void; order: VisitOrder; statusKeys: readonly ('all' | PinStatus)[]; counts: (k: 'all' | PinStatus) => number; shownCount: number }) {
+  const { t } = useTranslation();
+  const icons: Record<string, IconName> = { all: 'people-outline', PENDING: 'time-outline', PARTIAL: 'pie-chart-outline', MISSED: 'close-circle-outline', PAID: 'checkmark-circle-outline' };
+  return (
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title={t('mobile.filters.title')}
+      footer={
+        <View style={{ flexDirection: 'row', gap: SP.sm }}>
+          <Btn kind="outline" title={t('mobile.filters.clear')} onPress={() => { setShow('all'); void setVisitOrder('route'); }} style={{ flexGrow: 1, flexBasis: 100, marginBottom: 0 }} />
+          <Btn title={t('mobile.filters.show', { count: shownCount })} onPress={onClose} style={{ flexGrow: 2, flexBasis: 160, marginBottom: 0 }} />
+        </View>
+      }
+    >
+      <Text style={[s.label, { marginBottom: SP.sm }]}>{t('mobile.filters.status')}</Text>
+      {statusKeys.map((k) => (
+        <SheetOption key={k} icon={icons[k]} label={`${k === 'all' ? t('common.all') : t(`mobile.pins.${k}`)} (${counts(k)})`} on={show === k} onPress={() => setShow(k)} />
+      ))}
+      <Text style={[s.label, { marginTop: SP.md, marginBottom: SP.sm }]}>{t('mobile.filters.order')}</Text>
+      <SheetOption icon="list-outline" label={t('ai.visit.normal')} sub={t('ai.visit.normalHelp')} on={order === 'route'} onPress={() => void setVisitOrder('route')} />
+      <SheetOption icon="sparkles-outline" label={t('ai.visit.smart')} sub={t('ai.visit.smartHelp')} on={order === 'smart'} onPress={() => void setVisitOrder('smart')} />
+    </Sheet>
   );
 }

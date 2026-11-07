@@ -16,3 +16,4 @@ dist-check/
 !server/dist/
 !server/vendor/shared/dist/
 server/uploads/
+server/backups/

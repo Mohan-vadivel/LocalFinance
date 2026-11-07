@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { ApiError, get, post } from '../api';
+import { useDialog } from '../Dialog';
 import { useSession } from '../session';
 import { Badge, Btn, C, Card, Chips, ErrorText, Field, Notice, Row, SP, Screen, Section, dateIN, money, s, toPaise, todayIST } from '../ui';
 import { ActionError, EmptyState, FailureState, FormProblems, LoadingState, SkeletonList, fieldError, useRequired, type Problem } from '../states';
@@ -110,7 +111,7 @@ function RejectedTotals({ rows }: { rows: Req[] }) {
 function RequestCard({ r, canDecide, onDecided }: { r: Req; canDecide: boolean; onDecided: () => void }) {
   const { t } = useTranslation();
   const [rejecting, setRejecting] = useState(false);
-  const [confirming, setConfirming] = useState(false);
+  const dialog = useDialog();
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -125,6 +126,19 @@ function RequestCard({ r, canDecide, onDecided }: { r: Req; canDecide: boolean; 
     } finally {
       setBusy(false);
     }
+  };
+  const details = [
+    { label: t('daybook.category'), value: r.categoryName ?? '-' },
+    { label: t('daybook.enteredBy'), value: r.requestedByName ?? '-' },
+    { label: t('daybook.particulars'), value: r.particulars },
+  ];
+  const approve = async () => {
+    const ok = await dialog.confirm({ icon: 'checkmark-done', title: t('mobile.confirm.approveTitle'), amount: money(r.amount), text: t('daybook.confirmApprove', { amount: money(r.amount), name: r.requestedByName ?? '' }), details, confirmText: t('daybook.approve') });
+    if (ok) await act(`/daybook/requests/${r.id}/approve`, {});
+  };
+  const reject = async () => {
+    const ok = await dialog.confirm({ tone: 'danger', icon: 'close', title: t('mobile.confirm.rejectTitle'), amount: money(r.amount), details: [...details, { label: t('daybook.reason'), value: reason.trim() }], confirmText: t('daybook.reject') });
+    if (ok) await act(`/daybook/requests/${r.id}/reject`, { reason: reason.trim() });
   };
   return (
     <Card>
@@ -146,20 +160,10 @@ function RequestCard({ r, canDecide, onDecided }: { r: Req; canDecide: boolean; 
         <Badge text={t(`daybook.statuses.${r.status}`)} color={TONE[r.status]} />
       </View>
       <ErrorText error={error} />
-      {canDecide && !rejecting && !confirming && (
+      {canDecide && !rejecting && (
         <View style={{ flexDirection: 'row', gap: SP.sm, marginTop: SP.md }}>
-          <Btn small title={t('daybook.approve')} onPress={() => setConfirming(true)} style={{ flexGrow: 1 }} />
+          <Btn small title={t('daybook.approve')} busy={busy} onPress={() => void approve()} style={{ flexGrow: 1 }} />
           <Btn small kind="outline" title={t('daybook.reject')} onPress={() => setRejecting(true)} style={{ flexGrow: 1 }} />
-        </View>
-      )}
-      {/* Asks inline (Alert does nothing on the web build). */}
-      {confirming && (
-        <View style={{ marginTop: SP.md }}>
-          <Notice tone="info" text={t('daybook.confirmApprove', { amount: money(r.amount), name: r.requestedByName ?? '' })} />
-          <View style={{ flexDirection: 'row', gap: SP.sm }}>
-            <Btn small title={t('daybook.approve')} busy={busy} onPress={() => void act(`/daybook/requests/${r.id}/approve`, {})} style={{ flexGrow: 1 }} />
-            <Btn small kind="outline" title={t('common.cancel')} onPress={() => setConfirming(false)} style={{ flexGrow: 1 }} />
-          </View>
         </View>
       )}
       {rejecting && (
@@ -167,7 +171,7 @@ function RequestCard({ r, canDecide, onDecided }: { r: Req; canDecide: boolean; 
           <Field label={t('daybook.reason')} value={reason} onChangeText={setReason} autoFocus />
           <Text style={[s.muted, { marginBottom: SP.sm }]}>{t('daybook.responsible')}: {r.requestedByName}</Text>
           <View style={{ flexDirection: 'row', gap: SP.sm }}>
-            <Btn small kind="danger" title={t('daybook.reject')} busy={busy} disabled={reason.trim().length < 3} onPress={() => void act(`/daybook/requests/${r.id}/reject`, { reason: reason.trim() })} style={{ flexGrow: 1 }} />
+            <Btn small kind="danger" title={t('daybook.reject')} busy={busy} disabled={reason.trim().length < 3} onPress={() => void reject()} style={{ flexGrow: 1 }} />
             <Btn small kind="outline" title={t('common.cancel')} onPress={() => setRejecting(false)} style={{ flexGrow: 1 }} />
           </View>
         </View>
@@ -201,9 +205,23 @@ function EntryForm({ approver, branches, onCancel, onDone }: { approver: boolean
   if (toPaise(amount) <= 0) problems.push({ field: 'amount', text: req(t('common.amount')) });
   if (particulars.trim().length < 2) problems.push({ field: 'particulars', text: t('states.form.tooShort', { field: t('daybook.particulars'), min: 2 }) });
   const shownProblems = tried ? problems : [];
+  const dialog = useDialog();
   const save = async () => {
     setTried(true);
     if (problems.length) return;
+    const ok = await dialog.confirm({
+      icon: direction === 'IN' ? 'arrow-down-circle-outline' : 'arrow-up-circle-outline',
+      title: t('mobile.confirm.entryTitle'),
+      amount: `${direction === 'IN' ? '+' : '−'}${money(toPaise(amount))}`,
+      text: approver ? undefined : t('daybook.needsApproval'),
+      details: [
+        { label: t('daybook.category'), value: options.find((c) => c.id === categoryId)?.name ?? '-' },
+        { label: t('common.mode'), value: t(`common.modes.${mode}`) },
+        { label: t('daybook.particulars'), value: particulars.trim() },
+      ],
+      confirmText: approver ? t('common.save') : t('daybook.send'),
+    });
+    if (!ok) return;
     setBusy(true);
     setError(null);
     try {

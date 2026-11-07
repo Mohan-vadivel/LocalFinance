@@ -4,11 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, Switch, Text, View } from 'react-native';
 import { LANGUAGES, LEGAL_SECTIONS, type LegalPage } from '@localfinance/shared';
 import { BASE, get, post } from '../api';
+import { useDialog } from '../Dialog';
 import { askBiometric, biometricReady, getBiometricLock, getPrintAsk, onDevicePrefs, setBiometricLock, setPrintAsk } from '../device';
 import { setLanguage } from '../i18n';
 import { useSession } from '../session';
 import { getFailed, sync } from '../store';
-import { Avatar, Btn, C, Chips, ErrorText, Field, Icon, Notice, R, SP, Screen, s, useNav, type IconName } from '../ui';
+import { Avatar, Btn, C, Chips, ErrorText, Field, Icon, Notice, R, SP, Screen, Sheet, SheetOption, s, useNav, type IconName } from '../ui';
 import { useSyncState } from './Home';
 
 // =====================================================================
@@ -45,9 +46,21 @@ export default function Settings() {
     if (on && !(await askBiometric(t('mobile.settings.biometricConfirm'), t('common.cancel')))) return setLockError(t('mobile.lock.failed'));
     await setBiometricLock(on);
   };
-  const changeLang = async (code: string) => {
-    await setLanguage(code);
-    await post('/auth/language', { language: code }).catch(() => undefined);
+  const [langOpen, setLangOpen] = useState(false);
+  const [langDraft, setLangDraft] = useState(i18n.language);
+  const [langBusy, setLangBusy] = useState(false);
+  // Saved on the phone and on the account, so the web and the next login use it too.
+  const saveLang = async () => {
+    setLangBusy(true);
+    await setLanguage(langDraft);
+    await post('/auth/language', { language: langDraft }).catch(() => undefined);
+    setLangBusy(false);
+    setLangOpen(false);
+    void dialog.alert({ tone: 'success', title: t('common.saved'), timer: 1400 });
+  };
+  const dialog = useDialog();
+  const askLogout = async () => {
+    if (await dialog.confirm({ tone: 'warning', icon: 'log-out-outline', title: t('mobile.confirm.logoutTitle'), text: t('mobile.confirm.logoutText'), confirmText: t('common.logout') })) await logout();
   };
   const runSync = async () => {
     setSyncing(true);
@@ -76,6 +89,8 @@ export default function Settings() {
       </Group>
 
       <Group title={t('mobile.settings.account')}>
+        {/* Language: one row showing the current language; it opens a list, and Save applies the choice. */}
+        <Item icon="language-outline" title={t('common.language')} subtitle={LANGUAGES.find((l) => l.code === i18n.language)?.nativeName ?? i18n.language} onPress={() => { setLangDraft(i18n.language); setLangOpen(true); }} />
         <Item icon="key-outline" title={t('auth.changePassword')} onPress={() => setOpen(open === 'password' ? null : 'password')} expanded={open === 'password'} />
         {open === 'password' && <ChangePassword />}
         {others.length > 0 && (
@@ -93,11 +108,16 @@ export default function Settings() {
         </Group>
       )}
 
-      <Group title={t('common.language')}>
-        <View style={{ paddingHorizontal: SP.lg, paddingTop: SP.md }}>
-          <Chips value={i18n.language} onChange={(c) => void changeLang(c)} items={LANGUAGES.map((l) => ({ key: l.code, label: l.nativeName }))} />
-        </View>
-      </Group>
+      <Sheet
+        visible={langOpen}
+        onClose={() => setLangOpen(false)}
+        title={t('common.language')}
+        footer={<Btn title={t('common.save')} onPress={() => void saveLang()} busy={langBusy} style={{ marginBottom: 0 }} />}
+      >
+        {LANGUAGES.map((l) => (
+          <SheetOption key={l.code} label={l.nativeName} sub={l.name} on={langDraft === l.code} onPress={() => setLangDraft(l.code)} />
+        ))}
+      </Sheet>
 
       <Group title={t('mobile.settings.printer')}>
         <Item icon="print-outline" title={t('mobile.settings.printAsk')} subtitle={t('mobile.settings.printAskHelp')} toggle={{ value: printAsk, onChange: (v) => void setPrintAsk(v) }} />
@@ -127,7 +147,7 @@ export default function Settings() {
 
       <View style={[s.card, { padding: 0, overflow: 'hidden' }]}>
         {st.pending > 0 && <Text style={{ color: C.danger, fontSize: 13, fontWeight: '600', paddingHorizontal: SP.lg, paddingTop: SP.md }}>{t('mobile.logoutPending', { count: st.pending })}</Text>}
-        <Item icon="log-out-outline" title={t('common.logout')} danger disabled={st.pending > 0} onPress={() => void logout()} />
+        <Item icon="log-out-outline" title={t('common.logout')} danger disabled={st.pending > 0} onPress={() => void askLogout()} />
       </View>
     </Screen>
   );
@@ -206,7 +226,9 @@ function ChangePassword() {
   const [msg, setMsg] = useState('');
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const dialog = useDialog();
   const changePassword = async () => {
+    if (!(await dialog.confirm({ tone: 'warning', icon: 'key-outline', title: t('mobile.confirm.passwordTitle'), text: t('mobile.settings.passwordHelp'), confirmText: t('common.save') }))) return;
     setBusy(true);
     setError(null);
     try {
@@ -250,7 +272,9 @@ function SwitchBusiness({ others }: { others: { tenantId: string; name: string }
   }, [st.pending, st.failed]);
   const target = others.find((o) => o.tenantId === chosen) ?? others[0];
   const blocked = st.pending > 0 || failed > 0;
+  const dialog = useDialog();
   const go = async () => {
+    if (!(await dialog.confirm({ icon: 'swap-horizontal', title: t('mobile.confirm.switchTitle'), text: t('mobile.settings.switchTo', { name: target.name }), confirmText: t('common.confirm') }))) return;
     setBusy(true);
     setError(null);
     try {

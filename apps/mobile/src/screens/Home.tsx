@@ -1,6 +1,7 @@
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { Animated, Easing, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { useDialog } from '../Dialog';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Appbar, Text } from 'react-native-paper';
 import { get } from '../api';
@@ -23,59 +24,76 @@ export function useSyncState() {
   return state;
 }
 
-export function SyncBar() {
+/**
+ * Sync now, as a round button for the top bar. A badge shows how many entries wait on the phone (orange) or were
+ * refused by the office (red); the arrows turn while it runs. With refused entries and nothing waiting, it opens the
+ * day summary where they are retried or removed.
+ */
+export function SyncButton({ onBrand }: { onBrand?: boolean }) {
+  const { t } = useTranslation();
+  const nav = useNav();
+  const dialog = useDialog();
+  const st = useSyncState();
+  const [busy, setBusy] = useState(false);
+  const spin = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!busy) return;
+    const loop = Animated.loop(Animated.timing(spin, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: true }));
+    loop.start();
+    return () => {
+      loop.stop();
+      spin.setValue(0);
+    };
+  }, [busy, spin]);
+  const run = async () => {
+    if (st.failed > 0 && !st.pending) return nav.push('Summary');
+    setBusy(true);
+    const r = await sync();
+    setBusy(false);
+    if (r.offline) void dialog.alert({ tone: 'warning', icon: 'cloud-offline-outline', title: t('states.offline.title'), text: t('states.offline.safe') });
+    else if (r.failed > 0) void dialog.alert({ tone: 'danger', icon: 'alert', title: t('mobile.failedTitle'), text: t('mobile.failedItems', { count: r.failed }) });
+    else if (r.sent > 0) void dialog.alert({ tone: 'success', title: t('mobile.allSynced'), timer: 1600 });
+  };
+  const count = st.pending || st.failed;
+  const badge = st.failed > 0 && !st.pending ? C.danger : C.warn;
+  const fg = onBrand ? C.onBrand : C.brandInk;
+  const time = st.lastSync ? new Date(st.lastSync).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '-';
+  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  return (
+    <Pressable
+      onPress={() => void run()}
+      disabled={busy}
+      hitSlop={4}
+      accessibilityRole="button"
+      accessibilityLabel={`${busy ? t('mobile.syncing') : t('mobile.syncNow')}. ${count ? `${t('mobile.pendingSync')}: ${count}` : t('mobile.allSynced')}. ${t('mobile.lastSync')}: ${time}`}
+      style={({ pressed }) => [{ width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', backgroundColor: onBrand ? 'rgba(255,255,255,0.16)' : C.brandSoft }, pressed && { opacity: 0.75 }]}
+    >
+      <Animated.View style={{ transform: [{ rotate }] }}>
+        <Icon name="sync" size={23} color={fg} />
+      </Animated.View>
+      {count ? (
+        <View style={{ position: 'absolute', top: -2, right: -2, minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: badge, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.panel }}>
+          <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800', lineHeight: 13 }}>{count > 99 ? '99+' : count}</Text>
+        </View>
+      ) : (
+        <View style={{ position: 'absolute', top: 2, right: 2, width: 12, height: 12, borderRadius: 6, backgroundColor: C.ok, borderWidth: 2, borderColor: C.panel }} />
+      )}
+    </Pressable>
+  );
+}
+
+/** A slim warning under the header while the office has refused entries; opens the day summary to fix them. */
+export function FailedNotice() {
   const { t } = useTranslation();
   const nav = useNav();
   const st = useSyncState();
-  const { compact } = useLayout();
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState('');
-  const run = async () => {
-    setBusy(true);
-    const r = await sync();
-    setMsg(r.offline ? t('common.offline') : '');
-    setBusy(false);
-  };
-  const tone = st.failed > 0 ? C.danger : st.pending ? C.warn : C.ok;
-  const time = st.lastSync ? new Date(st.lastSync).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '-';
-  // Nothing waiting: one slim line with a round sync button, so the screen's real work stays near the top.
-  if (!st.pending && !st.failed) {
-    return (
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: SP.sm, marginBottom: SP.md, paddingLeft: SP.md, paddingRight: SP.xs, minHeight: 48, borderRadius: R.pill, backgroundColor: C.okSoft }}>
-        <Icon name="checkmark-circle" size={20} color={C.ok} />
-        <Text style={{ flex: 1, minWidth: 0, color: C.ok, fontWeight: '700', fontSize: 14 }}>
-          {t('mobile.allSynced')}
-          {st.lastSync || msg ? <Text style={{ color: C.ink2, fontWeight: '500' }}>{st.lastSync ? ` · ${t('mobile.lastSync')}: ${time}` : ''}{msg ? ` · ${msg}` : ''}</Text> : null}
-        </Text>
-        <Pressable onPress={() => void run()} disabled={busy} accessibilityRole="button" accessibilityLabel={t('mobile.syncNow')} hitSlop={4} style={({ pressed }) => [{ width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' }, (pressed || busy) && { backgroundColor: 'rgba(6,118,71,0.12)' }]}>
-          <Icon name="sync" size={22} color={C.ok} />
-        </Pressable>
-      </View>
-    );
-  }
+  if (!st.failed) return null;
   return (
-    <Card style={[{ flexDirection: 'row', alignItems: 'center', gap: SP.md, paddingVertical: SP.md }, compact && { flexWrap: 'wrap', rowGap: SP.sm }]}>
-      <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: tone, boxShadow: `0px 0px 0px 4px ${tone}22` }} />
-      {/* On a small phone the button drops under the text (full width) instead of squeezing it. */}
-      <View style={{ flex: 1, minWidth: compact ? 150 : 0 }}>
-        {/* Never "everything is synced" while the office has refused something. */}
-        <Text style={{ fontWeight: '800', fontSize: 15, color: st.pending ? C.warn : st.failed ? C.danger : C.ok }}>
-          {st.pending ? `${t('mobile.pendingSync')}: ${st.pending}` : st.failed ? t('mobile.failedTitle') : t('mobile.allSynced')}
-        </Text>
-        <Text style={[s.muted, { fontSize: 13 }]}>
-          {t('mobile.lastSync')}: {time} {msg ? `· ${msg}` : ''}
-        </Text>
-        {st.failed > 0 && (
-          <Pressable onPress={() => nav.push('Summary')} hitSlop={8} style={{ minHeight: 48, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <View style={{ minWidth: 22, height: 22, borderRadius: 11, backgroundColor: C.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}>
-              <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>{st.failed}</Text>
-            </View>
-            <Text style={{ color: C.danger, fontWeight: '700', flexShrink: 1 }}>{t('mobile.failedItems', { count: st.failed })}</Text>
-          </Pressable>
-        )}
-      </View>
-      <Btn small kind="primary" icon="sync" title={t('mobile.syncNow')} onPress={() => void run()} busy={busy} style={compact ? { flexGrow: 1 } : undefined} />
-    </Card>
+    <Pressable onPress={() => nav.push('Summary')} accessibilityRole="button" style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: SP.sm, backgroundColor: C.dangerSoft, borderRadius: R.md, paddingHorizontal: SP.md, minHeight: 48, marginBottom: SP.md }, pressed && { opacity: 0.85 }]}>
+      <Icon name="alert-circle" size={20} color={C.danger} />
+      <Text style={{ flex: 1, color: C.danger, fontWeight: '700' }}>{t('mobile.failedItems', { count: st.failed })}</Text>
+      <Chevron color={C.danger} />
+    </Pressable>
   );
 }
 
@@ -256,8 +274,8 @@ export default function Home() {
   const main = (
     <>
       {canSearch && <SearchBar placeholder={t('mobile.search')} onPress={() => nav.push('Search')} />}
+      <FailedNotice />
       {todayCard}
-      <SyncBar />
       {/* No connection and nothing downloaded yet, or a failed load: say so in place of the route list. */}
       {error || (offline && !routes?.length) ? <FailureState error={error} offline={offline} onRetry={() => void load()} /> : null}
       {offline && !!routes?.length && <Notice tone="warn" text={t('mobile.offlineCopy')} />}
@@ -279,7 +297,8 @@ export default function Home() {
             <Text variant="labelMedium" style={s.eyebrow}>{profile?.tenant?.name ?? t('common.appName')}</Text>
             <Text variant="titleLarge" style={[s.title, { fontSize: 20, lineHeight: 26 }]}>{t('mobile.hello', { name: profile?.name?.split(' (')[0] ?? '' })}</Text>
           </View>
-          <Pressable onPress={menu.open} accessibilityRole="button" accessibilityLabel={t('mobile.openMenu')} hitSlop={6}>
+          <SyncButton />
+          <Pressable onPress={() => nav.open('Settings')} accessibilityRole="button" accessibilityLabel={t('mobile.settings.title')} hitSlop={6}>
             <Avatar name={profile?.name ?? '?'} size={44} />
           </Pressable>
         </View>

@@ -1,0 +1,17 @@
+# Web admin on Apache (cPanel, Webuzo): comes with every build, so refreshing a page like /tenants opens the app
+# instead of "Not Found". /api/... goes to the API on port 4000 (change it if PORT in the API's .env is different).
+Options -MultiViews
+ErrorDocument 404 /index.html
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+
+RewriteCond %{HTTPS} off
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+
+RewriteRule ^api/?(.*)$ http://127.0.0.1:4000/$1 [P,L,QSA]
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.html [L]
+</IfModule>
